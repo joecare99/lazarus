@@ -5,7 +5,7 @@ on:
   - cron:  "*/15 * * * *"
 jobs:
   repo-sync:
-    runs-on: lazarus
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
     - name: repo-sync
@@ -15,3 +15,7 @@ jobs:
         source_branch: "upstream"
         destination_branch: "upstram"
         github_token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run a multi-line script
+      run: |
+        echo Add other actions to build,
+        echo test, and deploy your project.
