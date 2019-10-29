@@ -1,0 +1,17 @@
+# File: .github/workflows/repo-sync.yml
+
+on:
+  schedule:
+  - cron:  "*/15 * * * *"
+jobs:
+  repo-sync:
+    runs-on: lazarus
+    steps:
+    - uses: actions/checkout@master
+    - name: repo-sync
+      uses: repo-sync/github-sync@v2
+      with:
+        source_repo: "graemeg/lazarus"
+        source_branch: "upstream"
+        destination_branch: "upstram"
+        github_token: ${{ secrets.GITHUB_TOKEN }}
