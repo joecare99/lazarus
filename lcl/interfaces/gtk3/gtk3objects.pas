@@ -64,6 +64,7 @@ type
     constructor Create(ACairo: Pcairo_t; AWidget: PGtkWidget = nil);
     constructor Create(ALogFont: TLogFont; const ALongFontName: String);
     destructor Destroy; override;
+    procedure UpdateLogFont;
     property FontName: String read FFontName write SetFontName;
     property Handle: PPangoFontDescription read FHandle;
     property Layout: PPangoLayout read FLayout;
@@ -425,6 +426,61 @@ begin
   FFontName:=AValue;
 end;
 
+procedure TGtk3Font.UpdateLogFont;
+var
+  sz:integer;
+  members:TPangoFontMask;
+  AStyle: TPangoStyle;
+  AGravity: TPangoGravity;
+begin
+  if not Assigned(fHandle) then exit;
+  fillchar(fLogFont,sizeof(fLogFont),0);
+  members:=fHandle^.get_set_fields;
+  if (PANGO_FONT_MASK_FAMILY and members<>0) then
+  begin
+    fLogFont.lfFaceName:=PChar(fHandle^.get_family);
+  end;
+  if (PANGO_FONT_MASK_STYLE and members<>0) then
+  begin
+    AStyle := fHandle^.get_style;
+    if AStyle = PANGO_STYLE_ITALIC then
+      fLogFont.lfItalic:=1;
+  end;
+  if (PANGO_FONT_MASK_WEIGHT and members<>0) then
+  begin
+    fLogFont.lfWeight:=fHandle^.get_weight();
+  end;
+  if (PANGO_FONT_MASK_GRAVITY and members<>0) then
+  begin
+    AGravity := fHandle^.get_gravity;
+    if AGravity = PANGO_GRAVITY_SOUTH then
+      fLogFont.lfOrientation := 0
+    else
+    if AGravity = PANGO_GRAVITY_EAST then
+      fLogFont.lfOrientation := 900
+    else
+    if AGravity = PANGO_GRAVITY_NORTH then
+      fLogFont.lfOrientation := 1800
+    else
+    if AGravity = PANGO_GRAVITY_WEST then
+      fLogFont.lfOrientation := 2700;
+  end;
+  if (PANGO_FONT_MASK_SIZE and members<>0) then
+  begin
+    sz:=fHandle^.get_size;
+    if fHandle^.get_size_is_absolute then
+    begin
+      sz:=12;// sz div PANGO_SCALE;
+    end else
+    begin
+      { in points }
+      sz:=round(96*sz/PANGO_SCALE/72);//round(2.03*sz/PANGO_SCALE);
+    end;
+
+    fLogFont.lfHeight:=sz;//round(sz/PANGO_SCALE);
+  end;
+end;
+
 constructor TGtk3Font.Create(ACairo: Pcairo_t; AWidget: PGtkWidget);
 var
   AContext: PPangoContext;
@@ -451,6 +507,7 @@ begin
     // writeln('**TGtk3Font.Create size is absolute ',FFontName,' size ',FHandle^.get_size);
   end else
   begin
+    FHandle^.set_size(FHandle^.get_size);
     // writeln('*TGtk3Font.Create size is not absolute ',FFontName,' size ',FHandle^.get_size);
   end;
 

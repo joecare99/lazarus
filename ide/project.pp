@@ -605,6 +605,7 @@ type
     FAssigning: Boolean;
     FSessionMatrixOptions: TBuildMatrixOptions;
     FSharedMatrixOptions: TBuildMatrixOptions;
+    FManyBuildModes: TStringList;  // User selection of many modes.
     fSavedChangeStamp: int64;
     fItems: TFPList;
     FLazProject: TProject;
@@ -667,6 +668,7 @@ type
     property Modified: boolean read GetModified write SetModified;
     property SharedMatrixOptions: TBuildMatrixOptions read FSharedMatrixOptions;
     property SessionMatrixOptions: TBuildMatrixOptions read FSessionMatrixOptions;
+    property ManyBuildModes: TStringList read FManyBuildModes;
   end;
 
   { TProjectIDEOptions }
@@ -5245,8 +5247,7 @@ begin
       if (pfMainUnitIsPascalSource in Flags) then
       begin
         // rename unit in program uses section
-        CodeToolBoss.RenameUsedUnit(MainUnitInfo.Source, OldUnitName,
-          NewUnitName, '');
+        CodeToolBoss.RenameUsedUnit(MainUnitInfo.Source, OldUnitName, NewUnitName, '');
       end;
       if MainUnitInfo = AnUnitInfo then
       begin
@@ -6958,12 +6959,14 @@ begin
   FSharedMatrixOptions.OnChanged:=@OnItemChanged;
   FSessionMatrixOptions:=TBuildMatrixOptions.Create;
   FSessionMatrixOptions.OnChanged:=@OnItemChanged;
+  FManyBuildModes:=TStringList.Create;
 end;
 
 destructor TProjectBuildModes.Destroy;
 begin
   FreeAndNil(fOnChanged);
   Clear;
+  FreeAndNil(FManyBuildModes);
   FreeAndNil(FSharedMatrixOptions);
   FreeAndNil(FSessionMatrixOptions);
   FreeAndNil(fItems);
@@ -7009,6 +7012,7 @@ begin
     end;
     SharedMatrixOptions.Assign(OtherModes.SharedMatrixOptions);
     SessionMatrixOptions.Assign(OtherModes.SessionMatrixOptions);
+    ManyBuildModes.Assign(OtherModes.ManyBuildModes);
     if WithModified then
       Modified:=OtherModes.Modified;
     FAssigning:=False;
@@ -7337,6 +7341,8 @@ begin
   if CurMode=nil then
     CurMode:=Items[0];
   LazProject.ActiveBuildMode:=CurMode;
+  // Many BuildModes selection, a comma separated list.
+  FManyBuildModes.CommaText:=FXMLConfig.GetValue(Path+'ManyBuildModesSelection/Value','');
 end;
 
 procedure TProjectBuildModes.LoadProjOptsFromXMLConfig(XMLConfig: TXMLConfig; const Path: string);
@@ -7399,6 +7405,8 @@ var
   SubPath: String;
   i, Cnt: Integer;
 begin
+  // Many BuildModes selection, a comma separated list.
+  FXMLConfig.SetDeleteValue(Path+'ManyBuildModesSelection/Value', FManyBuildModes.CommaText, '');
   // save what mode is currently active in the session
   FXMLConfig.SetDeleteValue(Path+'BuildModes/Active',
                               LazProject.ActiveBuildMode.Identifier,'default');
@@ -7455,7 +7463,6 @@ var
   i, Cnt: Integer;
 begin
   FXMLConfig := XMLConfig;
-
   Cnt:=0;
   for i:=0 to Count-1 do
     if Items[i].InSession and SaveSession then
