@@ -87,7 +87,8 @@ type
     cfNoTimeoutWarning,
     //used for old commands, TGDBMIDebuggerSimpleCommand.Create
     cfscIgnoreState, // ignore the result state of the command
-    cfscIgnoreError  // ignore errors
+    cfscIgnoreError,  // ignore errors
+    cfNoMemLimits    // do not apply either mem limit
   );
   TGDBMICommandFlags = set of TGDBMICommandFlag;
 
@@ -507,10 +508,14 @@ type
     function  GetInstanceClassName(const AInstance: TDBGPtr): String; overload;
     function  GetInstanceClassName(const AExpression: String; const AValues: array of const): String; overload;
     function  GetData(const ALocation: TDbgPtr): TDbgPtr; overload;
+    function  GetWordData(const ALocation: TDbgPtr): TDbgPtr; overload;
+    function  GetDWordData(const ALocation: TDbgPtr): TDbgPtr; overload;
     function  GetData(const AExpression: String; const AValues: array of const): TDbgPtr; overload;
-    function  GetStrValue(const AExpression: String; const AValues: array of const): String;
+    function  GetStrValue(const AExpression: String; const AValues: array of const; AFlags: TGDBMICommandFlags = []): String;
     function  GetIntValue(const AExpression: String; const AValues: array of const): Integer;
-    function  GetPtrValue(const AExpression: String; const AValues: array of const; {%H-}ConvertNegative: Boolean = False): TDbgPtr;
+    function  GetPtrValue(const AExpression: String;
+                const AValues: array of const; {%H-}ConvertNegative: Boolean = False;
+                AFlags: TGDBMICommandFlags = []): TDbgPtr;
     function  CheckHasType(TypeName: String; TypeFlag: TGDBMITargetFlag): TGDBMIExecResult;
     function  PointerTypeCast: string;
     function  FrameToLocation(const AFrame: String = ''): TDBGLocationRec;
@@ -695,6 +700,7 @@ type
     FStepBreakPoint: Integer;
     FInitialFP: TDBGPtr;
     FStepOverFixNeeded: (sofNotNeeded, sofStepAgain, sofStepOut);
+    FStepStartedInFinSub: (sfsNone, sfsStepStarted, sfsStepExited);
   protected
     procedure DoLockQueueExecute; override;
     procedure DoUnLockQueueExecute; override;
@@ -744,6 +750,7 @@ type
     FMainAddrFound: TDBGPtr;       // The address found for this named location
     FSetByAddrMethod: TInternBrkSetMethod;
     FUseForceFlag: Boolean;
+    FNoSymErr: Boolean;
     function  BreakSet(ACmd: TGDBMIDebuggerCommand; ABreakLoc: String;
                        ALoc: TInternalBreakLocation;
                        AClearIfSet: TClearOpt): Boolean;
@@ -795,29 +802,45 @@ type
 
   TGDBMIInternalAddrBreakPointList = class
   private type
-
     { TGDBMIInternalAddrBreakPointListEntry }
 
     TGDBMIInternalAddrBreakPointListEntry = record
       FAddr: TDBGPtr;
       FId: Integer;
       FCount: Integer;
+      FBasePointer: Array of TDBGPtr;
       class Operator =(a,b:TGDBMIInternalAddrBreakPointListEntry)c:Boolean;
+      procedure AddBasePointer(ABp: TDBGPtr);
+      function  IndexOfBasePointer(ABp: TDBGPtr): integer;
+      procedure DeleteBasePointer(AnIndex: Integer);
     end;
-    TBPEntryList = specialize TFPGList<TGDBMIInternalAddrBreakPointListEntry>;
+
+    { TBPEntryList }
+
+    TBPEntryList = class(specialize TFPGList<TGDBMIInternalAddrBreakPointListEntry>);
   private
     FList: TBPEntryList;
     function IndexOfAddr(AnAddr: TDBGPtr): Integer;
     function IndexOfId(AnId: integer): Integer;
     procedure RemoveIndex(ACmd: TGDBMIDebuggerCommand; AnIndex: Integer);
+    function SetBreak(ACmd: TGDBMIDebuggerCommand; AnAddr: TDBGPtr): Integer; virtual;
   public
     constructor Create;
     destructor Destroy; override;
-    procedure AddAddr(ACmd: TGDBMIDebuggerCommand; AnAddr: TDBGPtr);
+    procedure AddAddr(ACmd: TGDBMIDebuggerCommand; AnAddr: TDBGPtr; ABasePtr: TDBGPtr = 0);
     procedure RemoveAddr(ACmd: TGDBMIDebuggerCommand; AnAddr: TDBGPtr);
     procedure RemoveId(ACmd: TGDBMIDebuggerCommand; AnId: Integer);
+    procedure RemoveFrameFromId(ACmd: TGDBMIDebuggerCommand; AnId: Integer; ABasePtr: TDBGPtr);
+    function IndexOfAddrWithFrame(AnAddr: TDBGPtr; ABasePtr: TDBGPtr): Integer;
     procedure ClearAll(ACmd: TGDBMIDebuggerCommand);
     function HasBreakId(AnId: Integer): boolean;
+  end;
+
+  { TGDBMIInternalSehFinallyBreakPointList }
+
+  TGDBMIInternalSehFinallyBreakPointList = class(TGDBMIInternalAddrBreakPointList)
+  private
+    function SetBreak(ACmd: TGDBMIDebuggerCommand; AnAddr: TDBGPtr): Integer; override;
   end;
 
   { TGDBMIWatches }
@@ -884,10 +907,10 @@ type
     FRunErrorBreak: TGDBMIInternalBreakPoint;
     FExceptionBreak: TGDBMIInternalBreakPoint;
     FPopExceptStack, FCatchesBreak, FReRaiseBreak: TGDBMIInternalBreakPoint;
-    FRtlUnwindExBreak: TGDBMIInternalBreakPoint; // SEH, win64
-    FSehRaiseBreaks: TGDBMIInternalAddrBreakPointList;
+    FRtlUnwindExBreak, FFpcSpecificHandler, FFpcSpecificHandlerCallFin: TGDBMIInternalBreakPoint; // SEH, win64
+    FSehFinallyBreaks, FSehCatchesBreaks: TGDBMIInternalAddrBreakPointList;
     FPauseWaitState: TGDBMIPauseWaitState;
-    FStoppedReason: (srNone, srRaiseExcept, srReRaiseExcept, srPopExceptStack, srCatches, srRtlUnwind, srSehCatches);
+    FStoppedReason: (srNone, srRaiseExcept, srReRaiseExcept, srPopExceptStack, srCatches, srRtlUnwind, srSehFpcSpecificHndl, srSeh64CallFinally, srSehFinally, srSehCatches);
     FInExecuteCount: Integer;
     FInIdle: Boolean;
     FRunQueueOnUnlock: Boolean;
@@ -1104,9 +1127,12 @@ type
   TGDBMIMemoryDumpResultList = class(TGDBMINameValueBasedList)
   private
     FAddr: TDBGPtr;
+    function GetDWordAtIdx(Index: Integer): Cardinal;
     function GetItem(Index: Integer): TPCharWithLen;
     function GetItemNum(Index: Integer): Integer;
     function GetItemTxt(Index: Integer): string;
+    function GetQWordAtIdx(Index: Integer): Cardinal;
+    function GetWordAtIdx(Index: Integer): Cardinal;
   protected
     procedure PreParse; override;
   public
@@ -1115,6 +1141,9 @@ type
     property Item[Index: Integer]: TPCharWithLen read GetItem;
     property ItemTxt[Index: Integer]: string  read GetItemTxt;
     property ItemNum[Index: Integer]: Integer read GetItemNum;
+    property WordAtIdx[Index: Integer]: Cardinal read GetWordAtIdx;
+    property DWordAtIdx[Index: Integer]: Cardinal read GetDWordAtIdx;
+    property QWordAtIdx[Index: Integer]: Cardinal read GetQWordAtIdx;
     property Addr: TDBGPtr read FAddr;
     function AsText(AStartOffs, ACount: Integer; AAddrWidth: Integer): string;
   end;
@@ -1272,6 +1301,7 @@ type
     FBreakID: Integer;
     FHitCnt: Integer;
     FValid: TValidState;
+    FBaseValid: TValidState; // insert-state / without condition or other attribs
     FWatchData: String;
     FWatchKind: TDBGWatchPointKind;
     FWatchScope: TDBGWatchPointScope;
@@ -1325,6 +1355,7 @@ type
     FExpression: string;
     FUpdateEnabled: Boolean;
     FUpdateExpression: Boolean;
+    FValid: TValidState;
   protected
     function DoExecute: Boolean; override;
   public
@@ -1349,6 +1380,7 @@ type
     FParsedExpression: String;
     FCurrentCmd: TGDBMIDebuggerCommandBreakPointBase;
     FUpdateFlags: TGDBMIBreakPointUpdateFlags;
+    FBaseValid: TValidState; // insert-state / without condition or other attribs
     procedure DoLogExpressionCallback(Sender: TObject; ASuccess: Boolean;
       ResultText: String; ResultDBGType: TDBGType);
     procedure SetBreakPoint;
@@ -2162,7 +2194,10 @@ begin
   FTheDebugger.FCatchesBreak.Clear(Self);
   FTheDebugger.FReRaiseBreak.Clear(Self);
   FTheDebugger.FRtlUnwindExBreak.Clear(Self);
-  FTheDebugger.FSehRaiseBreaks.ClearAll(Self);
+  FTheDebugger.FFpcSpecificHandlerCallFin.Clear(Self);
+  FTheDebugger.FFpcSpecificHandler.Clear(Self);
+  FTheDebugger.FSehFinallyBreaks.ClearAll(Self);
+  FTheDebugger.FSehCatchesBreaks.ClearAll(Self);
   if DebuggerState = dsError then Exit;
 end;
 
@@ -4192,6 +4227,12 @@ begin
   Result := FNameValueList.Items[Index]^.Name;
 end;
 
+function TGDBMIMemoryDumpResultList.GetDWordAtIdx(Index: Integer): Cardinal;
+begin
+  // TODO: currently only LittleEndian
+  Result := WordAtIdx[Index] + (WordAtIdx[Index+2] << 16);
+end;
+
 function TGDBMIMemoryDumpResultList.GetItemTxt(Index: Integer): string;
 var
   itm: PGDBMINameValue;
@@ -4200,6 +4241,18 @@ begin
   if itm <> nil
   then Result := PCLenToString(itm^.Name, True)
   else Result := '';
+end;
+
+function TGDBMIMemoryDumpResultList.GetQWordAtIdx(Index: Integer): Cardinal;
+begin
+  // TODO: currently only LittleEndian
+  Result := DWordAtIdx[Index] + (DWordAtIdx[Index+4] << 32);
+end;
+
+function TGDBMIMemoryDumpResultList.GetWordAtIdx(Index: Integer): Cardinal;
+begin
+  // TODO: currently only LittleEndian
+  Result := ItemNum[Index] + (ItemNum[Index+1] << 8);
 end;
 
 procedure TGDBMIMemoryDumpResultList.PreParse;
@@ -5591,6 +5644,8 @@ begin
     FTheDebugger.FExceptionBreak.SetByAddrMethod := DbgProp.InternalExceptionBrkSetMethod;
     FTheDebugger.FPopExceptStack.SetByAddrMethod := DbgProp.InternalExceptionBrkSetMethod;
     FTheDebugger.FRtlUnwindExBreak.SetByAddrMethod := DbgProp.InternalExceptionBrkSetMethod;
+    FTheDebugger.FFpcSpecificHandlerCallFin.SetByAddrMethod := ibmAddrDirect;
+    FTheDebugger.FFpcSpecificHandler.SetByAddrMethod := ibmAddrIndirect; // must be at first asm line
 
 {$IFdef WITH_GDB_FORCE_EXCEPTBREAK}
     FTheDebugger.FExceptionBreak.SetByAddr(Self, True);
@@ -6264,6 +6319,21 @@ function TGDBMIDebuggerCommandExecute.ProcessStopped(const AParams: String;
     FStepOverFixNeeded := sofStepAgain;
   end;
 
+  procedure CheckSehFinallyExited(const AFrame: String);
+  var
+    Location: TDBGLocationRec;
+  begin
+    if not (FStepStartedInFinSub = sfsStepStarted) then
+      exit;
+    Location := FrameToLocation(AFrame);
+
+    if IsSehFinallyFuncName(FTheDebugger.FCurrentLocation.FuncName) then // check if we left the seh handler
+      exit;
+
+    Result := True;
+    FStepStartedInFinSub := sfsStepExited;
+  end;
+
   procedure ProcessBreakPoint(ABreakId: Integer; const List: TGDBMINameValueList;
     AReason: TGDBMIBreakpointReason; AOldVal: String = ''; ANewVal: String = '');
   var
@@ -6375,6 +6445,7 @@ var
   List, List2: TGDBMINameValueList;
   Reason: String;
   BreakID: Integer;
+  Addr: TDBGPtr;
   CanContinue: Boolean;
   i: Integer;
   s: String;
@@ -6528,10 +6599,33 @@ begin
         Exit;
       end;
 
-      if FTheDebugger.FSehRaiseBreaks.HasBreakId(BreakID)
+      if FTheDebugger.FFpcSpecificHandler.MatchId(BreakID)
+      then begin
+        FTheDebugger.FStoppedReason := srSehFpcSpecificHndl;
+        Result := True;
+        Exit;
+      end;
+
+      if FTheDebugger.FFpcSpecificHandlerCallFin.MatchId(BreakID)
+      then begin
+        FTheDebugger.FStoppedReason := srSeh64CallFinally;
+        Result := True;
+        Exit;
+      end;
+
+      if FTheDebugger.FSehFinallyBreaks.HasBreakId(BreakID)
+      then begin
+        FTheDebugger.FStoppedReason := srSehFinally;
+        Result := True;
+        Exit;
+      end;
+
+      if FTheDebugger.FSehCatchesBreaks.HasBreakId(BreakID)
       then begin
         FTheDebugger.FStoppedReason := srSehCatches;
-        FTheDebugger.FSehRaiseBreaks.RemoveId(Self, BreakID);
+        // no context, as this is always the current context
+        Addr := GetPtrValue('$sp', [], False, [cfNoThreadContext, cfNoStackContext]);
+        FTheDebugger.FSehCatchesBreaks.RemoveFrameFromId(Self, BreakID, Addr);
         Result := True;
         Exit;
       end;
@@ -6557,14 +6651,19 @@ begin
 
     if Reason = 'function-finished'
     then begin
-      SetDebuggerState(dsPause);
-      ProcessFrame(List.Values['frame'], False);
+      CheckSehFinallyExited(List.Values['frame']);
+      if not Result then begin
+        SetDebuggerState(dsPause);
+        ProcessFrame(List.Values['frame'], False);
+      end;
       Exit;
     end;
 
     if Reason = 'end-stepping-range'
     then begin
       CheckIncorrectStepOver;
+      if not Result then
+        CheckSehFinallyExited(List.Values['frame']);
       if not Result then begin
         SetDebuggerState(dsPause);
         ProcessFrame(List.Values['frame'], False);
@@ -6805,11 +6904,20 @@ const
   procedure EnablePopCatches; inline;
   begin
     FTheDebugger.FPopExceptStack.EnableOrSetByAddr(Self, True);
+    if (TargetInfo^.TargetOS = osWindows) and (TargetInfo^.TargetPtrSize = 8) and
+       (not FTheDebugger.FPopExceptStack.Enabled)
+    then
+      exit; // break not avail under Win 64bit
     FTheDebugger.FCatchesBreak.EnableOrSetByAddr(Self, True);
+  end;
+  procedure EnableFpcSpecificHandler; inline;
+  begin
+    if (TargetInfo^.TargetOS = osWindows) and (TargetInfo^.TargetPtrSize = 8) then // 64 bit SEH only
+      FTheDebugger.FFpcSpecificHandler.EnableOrSetByAddr(Self);
   end;
   procedure EnableRtlUnwind; inline;
   begin
-    if TargetInfo^.TargetOS = osWindows then
+    if (TargetInfo^.TargetOS = osWindows) and (TargetInfo^.TargetPtrSize = 8) then // 64 bit SEH only
       FTheDebugger.FRtlUnwindExBreak.EnableOrSetByAddr(Self);
   end;
   procedure DisablePopCatches; inline;
@@ -6818,9 +6926,91 @@ const
     FTheDebugger.FCatchesBreak.Disable(Self);
   end;
 
+  (* PARSE __FPC_specific_handler // Win, 64 bit only
+    RCX =>    var rec: TExceptionRecord;
+    RDX =>    frame: Pointer;
+    R8  =>    var context: TCONTEXT;
+    R9  =>    var dispatch: TDispatcherContext
+  *)
+  function GetFinallyBasePtr: TDbgPtr; // AT __FPC_specific_handler
+  begin
+     // RPB at finally
+    Result := GetPtrValue(
+      Format('^%s($r8+160)^', [PointerTypeCast]), // 56 = TargetInfo^.TargetPtrSize * 7
+      []);
+  end;
+
+  procedure GetFinallyBreakPoints64; // AT __FPC_specific_handler
+  const MaxFinallyHandlerCnt = 256; // more finally in a single proc is not probable....
+  var
+    HData, Cnt, IBase, Typ, Addr: TDBGPtr;
+    i: Integer;
+    R: TGDBMIExecResult;
+    MemDump: TGDBMIMemoryDumpResultList;
+  begin
+(*
+skip if
+  if (rec.ExceptionFlags and EXCEPTION_UNWIND)=0 then
+'^%s($rcx+4)^'  and $66 = 0
+*)
+    HData := GetPtrValue(
+      Format('^%s($r9+56)^', [PointerTypeCast]), // 56 = TargetInfo^.TargetPtrSize * 7
+      []);
+    if HData = 0 then
+      exit;
+    Cnt := GetDWordData(HData);
+    if (Cnt = 0) or (Cnt > MaxFinallyHandlerCnt) then
+      exit;
+
+    IBase := GetPtrValue( Format('^%s($r9+8)^', [PointerTypeCast]), []); // ImageBase
+
+    HData := HData + 4;
+    if not ExecuteCommand('-data-read-memory %u x 1 1 %u', [HData, Cnt*16], R, [cfNoThreadContext, cfNoStackContext, cfNoMemLimits])
+    then
+      exit;
+    if R.State = dsError then exit;
+
+    MemDump := TGDBMIMemoryDumpResultList.Create(R);
+    if MemDump.Count <> Cnt*16 then begin
+      MemDump.Free;
+      exit;
+    end;
+
+    for i := 0 to Integer(Cnt) - 1 do begin
+      Typ := MemDump.DWordAtIdx[i*16]; // GetDWordData(HData);
+//      if (Typ <> 0) and (Typ <> 1) then
+      if (Typ <> 0) then
+        Continue;
+
+      Addr := MemDump.DWordAtIdx[i*16+12]; // GetDWordData(HData+12);
+// todo line info
+      if Addr = 0 then
+        break;
+
+      {$PUSH}{$Q-}
+      FTheDebugger.FSehFinallyBreaks.AddAddr(Self, IBase + Addr);
+
+      HData := HData + 16; // sizeof(TScopeRec)
+      {$POP}
+    end;
+
+    MemDump.Free;
+  end;
+
 var
   FP: TDBGPtr;
   CurThreadId: Integer;
+
+  function GetCurrentFp: TDBGPtr;
+  begin
+    FContext.ThreadContext := ccUseLocal;
+    FContext.StackContext := ccUseLocal;
+    FContext.StackFrame := 0;
+    FContext.ThreadId := CurThreadId;
+    Result := GetPtrValue('$fp', []);
+    FContext.ThreadContext := ccNotRequired;
+    FContext.StackContext := ccNotRequired;
+  end;
 
   function DoContinueStepping: Boolean;
     procedure DoEndStepping;
@@ -6836,55 +7026,107 @@ var
   var
     cnt, i: Integer;
     R: TGDBMIExecResult;
-    Address: TDBGPtr;
+    Address, FrameAddr: TDBGPtr;
+    MemDump: TGDBMIMemoryDumpResultList;
   begin
     // TODO: an exception can skip the step-end breakpoint....
     // TODO: the "break" breakpoint can stop on the current, instead of the next instruction
 
     Result := False;
 
-    // RtlUnwind, set a breakpoint at next except handler (instead of srPopExceptStack/srCatches)
-    if FTheDebugger.FStoppedReason = srRtlUnwind then begin
-      Address := GetPtrValue(TargetInfo^.TargetRegisters[r1], []);
-      if Address <> 0 then
-        FTheDebugger.FSehRaiseBreaks.AddAddr(Self, Address);
-      FCurrentExecCmd := ectContinue;
-      Result := True;
-
-      // because we can get more exceptions in finally blocks
-      // TODO: remove if finally blocks are entered
-      if RunMode = rmStepToFinally then
-        FTheDebugger.FRtlUnwindExBreak.Disable(Self);
+    // Did we just leave an SEH finally block?
+    if (FStepStartedInFinSub = sfsStepExited) and (FTheDebugger.FStoppedReason = srNone) then begin
+      if (UpperCase(FTheDebugger.FCurrentLocation.FuncName) <> '__FPC_SPECIFIC_HANDLER') and
+         (FTheDebugger.FCurrentLocation.SrcFile <> '')
+      then begin
+        DoEndStepping;
+        exit;
+      end;
+      // run to next finally
+      if ExecuteCommand('-data-read-memory $pc-2 x 1 1 2', [], R, [cfNoThreadContext, cfNoStackContext, cfNoMemLimits]) and
+         (r.State <> dsError)
+      then begin
+        MemDump := TGDBMIMemoryDumpResultList.Create(R);
+        if (MemDump.Count = 2) and
+          // check for known signature => depends on generated code => more code signatures can be added, if needed
+          (* ffd0                     callq  *%rax                        *)
+          (MemDump.WordAtIdx[0] = $d0ff)
+        then begin
+          FTheDebugger.FFpcSpecificHandlerCallFin.Clear(Self);
+          FTheDebugger.FFpcSpecificHandlerCallFin.SetAtCustomAddr(Self, MemDump.Addr);
+          FStepStartedInFinSub := sfsNone;
+          FCurrentExecCmd := ectContinue;
+          EnableFpcSpecificHandler;
+          Result := True;
+        end
+        else
+          DoEndStepping;
+        MemDump.Free;
+      end
+      else begin
+        DoEndStepping;
+      end;
       exit;
+    end;
+
+    // RtlUnwind, set a breakpoint at next except handler (instead of srPopExceptStack/srCatches)
+    case FTheDebugger.FStoppedReason of
+      srRtlUnwind: begin
+          FrameAddr := GetPtrValue(TargetInfo^.TargetRegisters[r0], []); // RSP at "except"
+          Address := GetPtrValue(TargetInfo^.TargetRegisters[r1], []);
+          if (Address <> 0) and (FrameAddr <> 0) and
+             (FTheDebugger.FSehCatchesBreaks.IndexOfAddrWithFrame(Address, FrameAddr) < 0)
+          then
+            FTheDebugger.FSehCatchesBreaks.AddAddr(Self, Address, FrameAddr);
+          FTheDebugger.FRtlUnwindExBreak.Disable(Self);
+          FCurrentExecCmd := ectContinue;
+          Result := True;
+          exit;
+        end;
+      // SEH
+      srSehFinally: begin
+          DoEndStepping;
+          exit;
+        end;
+      srSeh64CallFinally: begin
+          FInitialFP := 0;  // prevent FixIncorrectStepOver from stepping out
+          FCurrentExecCmd := ectStepInto;
+          Result := True;
+          exit;
+        end;
     end;
 
     // F7 or F8 was used in raise exception, stop at next finally or except handler
     //   ecContinue has stopped
     if RunMode = rmStepToFinally then begin
-      if FTheDebugger.FStoppedReason in [srRaiseExcept, srReRaiseExcept] then begin
-        // should not happen, but with SEH it can happen in finally blocks => continue to except handler
-        FCurrentExecCmd := ectContinue;
-        Result := True;
-        exit;
+      case FTheDebugger.FStoppedReason of
+        srRaiseExcept, srReRaiseExcept: begin
+            // should not happen, but with SEH it can happen in finally blocks => continue to except handler
+            FCurrentExecCmd := ectContinue;
+            Result := True;
+          end;
+        // NONE SEH (if SEH falls through, it will pause as it is not an Pop/Catches)
+        // if NOT at srPopExceptStack/srCatches then ecStepOut should have finished => dsPause
+        srPopExceptStack, srCatches: begin
+            Result := True;
+            FCurrentExecCmd := ectStepOut;
+          end;
+        srSehFpcSpecificHndl: begin
+            GetFinallyBreakPoints64;
+            FInitialFP := 0;  // prevent FixIncorrectStepOver from stepping out
+            FCurrentExecCmd := ectContinue;
+            Result := True;
+          end;
       end;
-      // SEH
-      if FTheDebugger.FStoppedReason = srSehCatches then begin
-        DoEndStepping;
-        exit;
-      end;
-      // NONE SEH (if SEH falls through, it will pause as it is not an Pop/Catches)
-      // if NOT at srPopExceptStack/srCatches then ecStepOut should have finished => dsPause
-      Result := FTheDebugger.FStoppedReason in [srPopExceptStack, srCatches];
-      if Result then
-        FCurrentExecCmd := ectStepOut;
       exit;
     end;
 
+    // Not stepping to finally
     case FTheDebugger.FStoppedReason of
       // reraise is only enabled while stepping, so no need to check
       srReRaiseExcept: begin
           EnablePopCatches;
-          EnableRtlUnwind;
+          EnableFpcSpecificHandler;
           FCurrentExecCmd := ectContinue;
           Result := True;
           exit;
@@ -6893,15 +7135,29 @@ var
         if (FExecType in [ectStepOver, ectStepOverInstruction, ectStepOut, ectStepInto])  // ectRunTo
         then begin
           EnablePopCatches;
+          EnableFpcSpecificHandler;
           EnableRtlUnwind;
+          // Continue below => set a breakpoint at the end of the intended stepping range
         end;
       // Check the stackframe, if the "current" function has been exited
+      srSehFpcSpecificHndl: begin
+          FrameAddr := GetFinallyBasePtr;
+          if (FrameAddr <> 0) and (FrameAddr >= FInitialFP) then begin
+            GetFinallyBreakPoints64;
+          end;
+          FCurrentExecCmd := ectContinue;
+          Result := True;
+          exit;
+        end;
       srSehCatches: begin
-          i := FindStackFrame(Fp, 0, 1); // -2 already stepped out of the desired frame, enter dsPause
-          if (i = 0) or (i = -2) then begin
+          FrameAddr := GetCurrentFp;
+          if (FrameAddr = 0) or (FrameAddr >= FInitialFP) then begin
             DoEndStepping;
             exit;
           end;
+          FCurrentExecCmd := ectContinue;
+          Result := True;
+          exit;
         end;
       // Check the stackframe, if the "current" function has been exited
       srPopExceptStack, srCatches: begin
@@ -6915,6 +7171,7 @@ var
         end;
     end;
 
+    // should be srRaiseExcept;
     case FExecType of
       ectContinue, ectRun:
         begin
@@ -6963,14 +7220,17 @@ var
             then inc(i);
           end;
 
-          if (i = 0) or (i = -2)  // -2 already stepped out of the desired frame, enter dsPause
+          if (i = 0) or (i = -2)  // -2 already stepped out of the desired frame => NO FStepBreakPoint
           then begin
-            DoEndStepping;
+            Result := True;
+            FCurrentExecCmd := ectContinue;
+            FCurrentExecArg := '';
+            if FTheDebugger.FStoppedReason <> srRaiseExcept then DoEndStepping; // should not be needed...
             exit;
           end;
 
           if i > 0
-          then begin
+          then begin  // set FStepBreakPoint
 // TODO: move to queue
             // must use none gdbmi commands
             FContext.ThreadContext := ccUseGlobal;
@@ -7010,17 +7270,6 @@ var
       ectReturn:
         DoEndStepping;
     end;
-  end;
-
-  function GetCurrentFp: TDBGPtr;
-  begin
-    FContext.ThreadContext := ccUseLocal;
-    FContext.StackContext := ccUseLocal;
-    FContext.StackFrame := 0;
-    FContext.ThreadId := CurThreadId;
-    Result := GetPtrValue('$fp', []);
-    FContext.ThreadContext := ccNotRequired;
-    FContext.StackContext := ccNotRequired;
   end;
 
   function DoExecCommand(AnExecCmd:  TGDBMIExecCommandType; AnExecArg: String): Boolean;
@@ -7078,6 +7327,53 @@ var
     Result := True;
   end;
 
+  procedure CheckWin64StepOverFinally;
+  var
+    R: TGDBMIExecResult;
+    DisAsm: TGDBMIDisassembleResultList;
+    i: Integer;
+  begin
+    if (not (FExecType in [ectStepOver, ectStepInto, ectStepOut])) or
+       (TargetInfo^.TargetOS <> osWindows) or
+       (TargetInfo^.TargetPtrSize <> 8)
+    then
+      exit;
+    if (not ExecuteCommand('-data-disassemble -s $pc -e $pc+12 -- 0', [], R)) or
+       (R.State = dsError)
+    then
+      exit;
+
+    DisAsm := TGDBMIDisassembleResultList.Create(R);
+    try
+      if (FExecType in [ectStepOver, ectStepInto, ectStepOut]) and
+         IsSehFinallyFuncName(DisAsm.Item[0]^.FuncName)
+      then begin
+        FStepStartedInFinSub := sfsStepStarted;
+        EnableFpcSpecificHandler;
+      end;
+
+      i := 0;
+      if (DisAsm.Count > i) and (DisAsm.Item[i]^.Statement = 'nop') then
+        inc(i);
+
+      if (DisAsm.Count <= i) or (copy(DisAsm.Item[i]^.Statement, 1,3) <> 'mov') then
+        exit;
+      inc(i);
+      if (DisAsm.Count > i) and (copy(DisAsm.Item[i]^.Statement, 1,3) = 'mov') then
+        inc(i);
+
+      if (DisAsm.Count <= i) or (copy(DisAsm.Item[i]^.Statement, 1,4) <> 'call') or
+         (pos('fin$', DisAsm.Item[i]^.Statement) <= 0)
+      then
+        exit;
+
+      FExecType := ectStepInto;
+      FCurrentExecCmd := ectStepInto;
+    finally
+      DisAsm.Free;
+    end;
+  end;
+
 var
   StoppedParams, RunWarnings: String;
   ContinueExecution, ContinueStep: Boolean;
@@ -7091,20 +7387,26 @@ begin
   FNextExecQueued := False;
   FP := 0;
   FInitialFP := FP;
+  FStepStartedInFinSub := sfsNone;
   CurThreadId := FTheDebugger.FCurrentThreadId;
   if not FTheDebugger.FCurrentThreadIdValid then CurThreadId := 1; // TODO, but we need something
   ContinueStep := False; // A step command was interupted, and is continued on breakpoint
   FStepBreakPoint := -1;
   RunMode := rmNormal;
+
   if (FExecType in [ectStepOver, ectStepInto, ectStepOut]) and
      (FTheDebugger.FStoppedReason = srRaiseExcept)
   then begin
     RunMode := rmStepToFinally;
     FCurrentExecCmd := ectContinue;
     EnablePopCatches;
+    EnableFpcSpecificHandler;
     EnableRtlUnwind;
-  end;
-  if (FExecType in [ectRunTo, ectStepOver{, ectStepInto}, ectStepOut, ectStepOverInstruction {, ectStepIntoInstruction}]) and
+  end
+  else
+    CheckWin64StepOverFinally; // Finally is in a subroutine, and may need step into
+
+  if (FExecType in [ectRunTo, ectStepOver, ectStepInto, ectStepOut, ectStepOverInstruction {, ectStepIntoInstruction}]) and
      (ieRaiseBreakPoint in TGDBMIDebuggerPropertiesBase(FTheDebugger.GetProperties).InternalExceptionBreakPoints)
   then
     FTheDebugger.FReRaiseBreak.EnableOrSetByAddr(Self, True)
@@ -7116,11 +7418,18 @@ begin
       FTheDebugger.CancelBeforeRun; // TODO: see comment on top of TGDBMIDebuggerBase.QueueCommand
       FTheDebugger.QueueExecuteLock; // prevent other commands from executing
       try
-        if (not ContinueStep) and (not (RunMode in [rmStepToFinally])) and
-           (FExecType in [ectStepOver, ectStepInto, ectStepOut, ectStepOverInstruction, ectStepIntoInstruction])
-        then
-          FP := GetCurrentFp;
-          FInitialFP := FP;
+        if (not ContinueStep) and (not (RunMode in [rmStepToFinally])) then begin
+          if (FExecType in [ectStepOver, ectStepInto, ectStepOut, ectStepOverInstruction, ectStepIntoInstruction])
+          then begin
+            FP := GetCurrentFp;
+            FInitialFP := FP;
+            //FTheDebugger.FSehFinallyBreaks.ClearAllAboveFramePtr(Self, FP);
+          end;
+          //else
+          //if FExecType in [ectContinue] then begin
+          //  FTheDebugger.FSehFinallyBreaks.ClearAll(Self);
+          //end;
+        end;
 
         FTheDebugger.FCurrentStackFrameValid := False;
         FTheDebugger.FCurrentThreadIdValid   := False;
@@ -7164,6 +7473,9 @@ begin
       if StoppedParams <> ''
       then ContinueExecution := ProcessStopped(StoppedParams, FTheDebugger.PauseWaitState = pwsInternal);
 
+      // FFpcSpecificHandlerCallFin was either hit, or the handler was exited
+      FTheDebugger.FFpcSpecificHandlerCallFin.Clear(Self);
+
       if ContinueExecution
       then begin
         ContinueStep := DoContinueStepping; // will set dsPause, if step has finished
@@ -7189,8 +7501,8 @@ begin
     then ExecuteCommand('-break-delete %d', [FStepBreakPoint], [cfNoThreadContext]);
     FStepBreakPoint := -1;
     DisablePopCatches;
-    FTheDebugger.FRtlUnwindExBreak.Disable(Self);
-    FTheDebugger.FSehRaiseBreaks.ClearAll(Self);
+    FTheDebugger.FFpcSpecificHandler.Disable(Self);
+    FTheDebugger.FSehFinallyBreaks.ClearAll(Self);
     FTheDebugger.FMainAddrBreak.Clear(Self);
 
     if (not ContinueExecution) and (DebuggerState = dsRun) and
@@ -8013,7 +8325,10 @@ begin
   FCatchesBreak    := TGDBMIInternalBreakPoint.Create('FPC_CATCHES');
   FReRaiseBreak    := TGDBMIInternalBreakPoint.Create('FPC_RERAISE');
   FRtlUnwindExBreak:= TGDBMIInternalBreakPoint.Create('RtlUnwindEx');
-  FSehRaiseBreaks  := TGDBMIInternalAddrBreakPointList.Create;
+  FFpcSpecificHandler := TGDBMIInternalBreakPoint.Create('__FPC_specific_handler');
+  FFpcSpecificHandlerCallFin:= TGDBMIInternalBreakPoint.Create('');
+  FSehFinallyBreaks  := TGDBMIInternalSehFinallyBreakPointList.Create;
+  FSehCatchesBreaks  := TGDBMIInternalAddrBreakPointList.Create;
 {$IFdef WITH_GDB_FORCE_EXCEPTBREAK}
   FBreakErrorBreak.UseForceFlag := True;
   FRunErrorBreak.UseForceFlag := True;
@@ -8132,7 +8447,10 @@ begin
   FreeAndNil(FCatchesBreak);
   FreeAndNil(FReRaiseBreak);
   FreeAndNil(FRtlUnwindExBreak);
-  FreeAndNil(FSehRaiseBreaks);
+  FreeAndNil(FFpcSpecificHandler);
+  FreeAndNil(FFpcSpecificHandlerCallFin);
+  FreeAndNil(FSehFinallyBreaks);
+  FreeAndNil(FSehCatchesBreaks);
 end;
 
 procedure TGDBMIDebuggerBase.Done;
@@ -9767,11 +10085,14 @@ end;
 
 function TGDBMIDebuggerCommandBreakPointBase.ExecBreakCondition(ABreakId: Integer;
   AnExpression: string): Boolean;
+var
+  R: TGDBMIExecResult;
 begin
   Result := False;
   if ABreakID = 0 then Exit;
 
-  Result := ExecuteCommand('-break-condition %d %s', [ABreakID, UpperCaseSymbols(AnExpression)], []);
+  Result := ExecuteCommand('-break-condition %d %s', [ABreakID, UpperCaseSymbols(AnExpression)], R) and
+    (R.State <> dsError);
 end;
 
 { TGDBMIDebuggerCommandBreakInsert }
@@ -9895,6 +10216,7 @@ begin
   FContext.StackContext := ccNotRequired;
 
   FValid := vsInvalid;
+  FBaseValid := vsInvalid;
   DefaultTimeOut := DebuggerProperties.TimeoutForEval;
   try
     if FReplaceId <> 0
@@ -9902,12 +10224,15 @@ begin
 
     if ExecBreakInsert(FBreakID, FHitCnt, FAddr, Pending) then
       FValid := vsValid;
+    FBaseValid := FValid;
     if FValid = vsInvalid then Exit;
     if Pending then
       FValid := vsPending;
 
-    if (FExpression <> '') and not (dcsCanceled in SeenStates)
-    then ExecBreakCondition(FBreakID, FExpression);
+    if (FExpression <> '') and not (dcsCanceled in SeenStates) then begin
+      if not ExecBreakCondition(FBreakID, FExpression) then
+        FValid := vsInvalid;
+    end;
 
     if not (dcsCanceled in SeenStates)
     then ExecBreakEnabled(FBreakID, FEnabled);
@@ -10008,13 +10333,16 @@ end;
 function TGDBMIDebuggerCommandBreakUpdate.DoExecute: Boolean;
 begin
   Result := True;
+  FValid := vsValid;
   FContext.ThreadContext := ccNotRequired;
   FContext.StackContext := ccNotRequired;
 
   DefaultTimeOut := DebuggerProperties.TimeoutForEval;
   try
-  if FUpdateExpression
-  then ExecBreakCondition(FBreakID, FExpression);
+  if FUpdateExpression then begin
+    if not ExecBreakCondition(FBreakID, FExpression) then
+      FValid := vsInvalid;
+  end;
   if FUpdateEnabled
   then ExecBreakEnabled(FBreakID, FEnabled);
   finally
@@ -10168,7 +10496,7 @@ begin
   then SetBreakpoint;
 end;
 
-procedure TGDBMIBreakPoint.SetBreakpoint;
+procedure TGDBMIBreakPoint.SetBreakPoint;
 begin
   if Debugger = nil then Exit;
   if IsUpdating
@@ -10262,11 +10590,20 @@ begin
   if Sender = FCurrentCmd
   then FCurrentCmd := nil;
 
+  if (Sender is TGDBMIDebuggerCommandBreakUpdate) then begin
+    if TGDBMIDebuggerCommandBreakUpdate(Sender).FValid = vsInvalid then
+      SetValid(vsInvalid)
+    else
+    if FBaseValid = vsValid then
+      SetValid(vsValid);
+  end
+  else
   if (Sender is TGDBMIDebuggerCommandBreakInsert)
   then begin
     // Check Insert Result
     BeginUpdate;
 
+    FBaseValid := TGDBMIDebuggerCommandBreakInsert(Sender).FBaseValid;
     case TGDBMIDebuggerCommandBreakInsert(Sender).Valid of
       vsValid: SetValid(vsValid);
       vsPending: SetValid(vsPending);
@@ -11218,60 +11555,62 @@ begin
     Instr.AddReference;
     Instr.Cmd := Self;
 
-  if (pos('-stack-list-', ACommand) = 1) or
-     (pos('-thread-info', ACommand) = 1)
-  then begin
-    // includes locals
-    Instr.ApplyMemLimit(DebuggerProperties.GdbLocalsValueMemLimit);
-    if FTheDebugger.FGDBVersionMajor >= 7 then
-      Instr.ApplyArrayLenLimit(DebuggerProperties.MaxLocalsLengthForStaticArray);
-  end
-  else
-  if not( (Length(ACommand) < 2) or
-          ( (ACommand[1] = '-') and (
-            ( (ACommand[2] = 'd') and (
-              (pos('-data-list-register-', ACommand) = 1) or
-              (pos('-data-list-changed-registers', ACommand) = 1) or
-              (pos('-data-disassemble', ACommand) = 1) or
-              (pos('-data-read-memory', ACommand) = 1)
+  if (not (cfNoMemLimits in AFlags)) then begin
+    if (pos('-stack-list-', ACommand) = 1) or
+       (pos('-thread-info', ACommand) = 1)
+    then begin
+      // includes locals
+      Instr.ApplyMemLimit(DebuggerProperties.GdbLocalsValueMemLimit);
+      if FTheDebugger.FGDBVersionMajor >= 7 then
+        Instr.ApplyArrayLenLimit(DebuggerProperties.MaxLocalsLengthForStaticArray);
+    end
+    else
+    if not( (Length(ACommand) < 2) or
+            ( (ACommand[1] = '-') and (
+              ( (ACommand[2] = 'd') and (
+                (pos('-data-list-register-', ACommand) = 1) or
+                (pos('-data-list-changed-registers', ACommand) = 1) or
+                (pos('-data-disassemble', ACommand) = 1) or
+                (pos('-data-read-memory', ACommand) = 1)
+              )) or
+              ( (ACommand[2] = 'g') and (
+                (pos('-gdb-version ', ACommand) = 1) or
+                (pos('-gdb-set ', ACommand) = 1) or
+                (pos('-gdb-exit', ACommand) = 1)
+              )) or
+              ( (not(ACommand[2] in ['d', 'g'])) and (
+                (pos('-exec-', ACommand) = 1) or
+                (pos('-file-exec-', ACommand) = 1) or
+                (pos('-break-', ACommand) = 1)
+              ))
             )) or
-            ( (ACommand[2] = 'g') and (
-              (pos('-gdb-version ', ACommand) = 1) or
-              (pos('-gdb-set ', ACommand) = 1) or
-              (pos('-gdb-exit', ACommand) = 1)
+            ( (ACommand[1] = 'i') and (
+              (pos('info line', ACommand) = 1) or
+              (pos('info address', ACommand) = 1) or
+              (pos('info pid', ACommand) = 1) or
+              (pos('info proc', ACommand) = 1) or
+              (pos('info function', ACommand) = 1) or
+              (pos('interrupt', ACommand) = 1) or
+              (pos('info program', ACommand) = 1)
             )) or
-            ( (not(ACommand[2] in ['d', 'g'])) and (
-              (pos('-exec-', ACommand) = 1) or
-              (pos('-file-exec-', ACommand) = 1) or
-              (pos('-break-', ACommand) = 1)
+            ( (ACommand[1] = 's') and (
+              (pos('set ', ACommand) = 1) or
+              (pos('show ', ACommand) = 1)
+            )) or
+            ( (ACommand[1] = 'm') and (
+              (pos('maint ', ACommand) = 1)
             ))
-          )) or
-          ( (ACommand[1] = 'i') and (
-            (pos('info line', ACommand) = 1) or
-            (pos('info address', ACommand) = 1) or
-            (pos('info pid', ACommand) = 1) or
-            (pos('info proc', ACommand) = 1) or
-            (pos('info function', ACommand) = 1) or
-            (pos('interrupt', ACommand) = 1) or
-            (pos('info program', ACommand) = 1)
-          )) or
-          ( (ACommand[1] = 's') and (
-            (pos('set ', ACommand) = 1) or
-            (pos('show ', ACommand) = 1)
-          )) or
-          ( (ACommand[1] = 'm') and (
-            (pos('maint ', ACommand) = 1)
-          ))
-        )
-  then begin
-    Instr.ApplyMemLimit(DebuggerProperties.GdbValueMemLimit);
-    if FTheDebugger.FGDBVersionMajor >= 7 then
-      Instr.ApplyArrayLenLimit(DebuggerProperties.MaxDisplayLengthForStaticArray);
+          )
+    then begin
+      Instr.ApplyMemLimit(DebuggerProperties.GdbValueMemLimit);
+      if FTheDebugger.FGDBVersionMajor >= 7 then
+        Instr.ApplyArrayLenLimit(DebuggerProperties.MaxDisplayLengthForStaticArray);
 
-  end
-  else
-    TestForceBreak := (not (dfForceBreakDetected in FTheDebugger.DebuggerFlags)) and
-      (pos('-break-insert -f ', ACommand) = 1); // -f MUST be exactly ONE space after insert
+    end
+    else
+      TestForceBreak := (not (dfForceBreakDetected in FTheDebugger.DebuggerFlags)) and
+        (pos('-break-insert -f ', ACommand) = 1); // -f MUST be exactly ONE space after insert
+    end;
 
     FTheDebugger.FInstructionQueue.RunInstruction(Instr);
 
@@ -11611,9 +11950,9 @@ var
   List: TGDBMINameValueList;
 begin
   Result := -1;
-  if (MaxDepth < 0) and (not ExecuteCommand('-stack-info-depth', R, [cfNoStackContext]))
+  if (MaxDepth < 0) and (not ExecuteCommand('-stack-info-depth', R, [cfNoStackContext, cfNoMemLimits]))
   then exit;
-  if (MaxDepth >= 0) and (not ExecuteCommand('-stack-info-depth %d', [MaxDepth], R, [cfNoStackContext]))
+  if (MaxDepth >= 0) and (not ExecuteCommand('-stack-info-depth %d', [MaxDepth], R, [cfNoStackContext, cfNoMemLimits]))
   then exit;
   if R.State = dsError
   then exit;
@@ -11644,7 +11983,7 @@ begin
     repeat
       FContext.StackFrame := Result;
 
-      if not ExecuteCommand('-data-evaluate-expression $fp', R)
+      if not ExecuteCommand('-data-evaluate-expression $fp', R, [cfNoMemLimits])
       or (R.State = dsError)
       then begin
         Result := -1;
@@ -12010,6 +12349,32 @@ begin
   Result := GetData(S, []);
 end;
 
+function TGDBMIDebuggerCommand.GetWordData(const ALocation: TDbgPtr): TDbgPtr;
+var
+  S: String;
+  R: TGDBMIExecResult;
+  e: Integer;
+begin
+  Result := 0;
+  Str(ALocation, S);
+  if ExecuteCommand('x/hu ' + S, R, [cfNoMemLimits])
+  then Val(StripLN(GetPart('\t', '', R.Values)), Result, e);
+  if e=0 then ;
+end;
+
+function TGDBMIDebuggerCommand.GetDWordData(const ALocation: TDbgPtr): TDbgPtr;
+var
+  S: String;
+  R: TGDBMIExecResult;
+  e: Integer;
+begin
+  Result := 0;
+  Str(ALocation, S);
+  if ExecuteCommand('x/wu ' + S, R, [cfNoMemLimits])
+  then Val(StripLN(GetPart('\t', '', R.Values)), Result, e);
+  if e=0 then ;
+end;
+
 function TGDBMIDebuggerCommand.GetData(const AExpression: String;
   const AValues: array of const): TDbgPtr;
 var
@@ -12017,18 +12382,18 @@ var
   e: Integer;
 begin
   Result := 0;
-  if ExecuteCommand('x/d ' + AExpression, AValues, R)
+  if ExecuteCommand('x/d ' + AExpression, AValues, R, [cfNoMemLimits])
   then Val(StripLN(GetPart('\t', '', R.Values)), Result, e);
   if e=0 then ;
 end;
 
 function TGDBMIDebuggerCommand.GetStrValue(const AExpression: String;
-  const AValues: array of const): String;
+  const AValues: array of const; AFlags: TGDBMICommandFlags): String;
 var
   R: TGDBMIExecResult;
   ResultList: TGDBMINameValueList;
 begin
-  if ExecuteCommand('-data-evaluate-expression %s', [Format(AExpression, AValues)], R)
+  if ExecuteCommand('-data-evaluate-expression %s', [Format(AExpression, AValues)], R, AFlags)
   then begin
     ResultList := TGDBMINameValueList.Create(R);
     Result := DeleteEscapeChars(ResultList.Values['value']);
@@ -12043,19 +12408,20 @@ var
   e: Integer;
 begin
   Result := 0;
-  Val(GetStrValue(AExpression, AValues), Result, e);
+  Val(GetStrValue(AExpression, AValues, [cfNoMemLimits]), Result, e);
   if e=0 then ;
 end;
 
 function TGDBMIDebuggerCommand.GetPtrValue(const AExpression: String;
-  const AValues: array of const; ConvertNegative: Boolean = False): TDbgPtr;
+  const AValues: array of const; ConvertNegative: Boolean;
+  AFlags: TGDBMICommandFlags): TDbgPtr;
 var
   e: Integer;
   i: Int64;
   s: String;
 begin
   Result := 0;
-  s := GetStrValue(AExpression, AValues);
+  s := GetStrValue(AExpression, AValues, [cfNoMemLimits]+AFlags);
   if (s <> '') and (s[1] = '-')
   then begin
     Val(s, i, e);
@@ -12249,6 +12615,7 @@ var
   ResultList: TGDBMINameValueList;
 begin
   Result := True; // true, if already set (dsError does not matter)
+  FNoSymErr := False;
   if ACmd.DebuggerState = dsError then exit;
 
   if AClearIfSet = coClearIfSet then
@@ -12269,6 +12636,11 @@ begin
   else
     ACmd.ExecuteCommand('-break-insert %s', [ABreakLoc], R);
   Result := R.State <> dsError;
+  if (not Result) and (ALoc in [iblAsterix, iblNamed]) then begin
+    if ALoc = iblAsterix then
+      Delete(ABreakLoc, 1,1); // *name
+    FNoSymErr := pos('no symbol \"'+LowerCase(ABreakLoc)+'\" ', LowerCase(R.Values)) > 0;
+  end;
   if not Result then exit;
   FEnabled := True; // TODO: What if some bp are disabled?
 
@@ -12398,9 +12770,9 @@ begin
     SetByName(ACmd);
     exit;
   end;
-  if FSetByAddrMethod = ibmAddrDirect then begin
+  if (FSetByAddrMethod = ibmAddrDirect) then begin
     BreakSet(ACmd, '*'+FName, iblAsterix, coKeepIfSet);
-    if IsBreakSet then
+    if IsBreakSet or FNoSymErr then
       exit;
   end;
 
@@ -12544,6 +12916,35 @@ begin
 //  c := (a.FId = b.FId) and (a.FAddr = b.FAddr);
 end;
 
+procedure TGDBMIInternalAddrBreakPointList.TGDBMIInternalAddrBreakPointListEntry.AddBasePointer
+  (ABp: TDBGPtr);
+var
+  i: Integer;
+begin
+  i := Length(FBasePointer);
+  SetLength(FBasePointer, i + 1);
+  FBasePointer[i] := ABp;
+end;
+
+function TGDBMIInternalAddrBreakPointList.TGDBMIInternalAddrBreakPointListEntry.IndexOfBasePointer
+  (ABp: TDBGPtr): integer;
+begin
+  Result := high(FBasePointer);
+  while (Result >= 0) and (FBasePointer[Result] <> ABp) do
+    dec(Result);
+end;
+
+procedure TGDBMIInternalAddrBreakPointList.TGDBMIInternalAddrBreakPointListEntry.DeleteBasePointer
+  (AnIndex: Integer);
+var
+  i: Integer;
+begin
+  i := High(FBasePointer);
+  if AnIndex < i then
+    FBasePointer[AnIndex] := FBasePointer[i];
+  SetLength(FBasePointer, i);
+end;
+
 { TGDBMIInternalAddrBreakPointList }
 
 function TGDBMIInternalAddrBreakPointList.IndexOfAddr(AnAddr: TDBGPtr): Integer;
@@ -12578,6 +12979,21 @@ begin
   FList.Delete(AnIndex);
 end;
 
+function TGDBMIInternalAddrBreakPointList.SetBreak(ACmd: TGDBMIDebuggerCommand;
+  AnAddr: TDBGPtr): Integer;
+var
+  R: TGDBMIExecResult;
+  ResultList: TGDBMINameValueList;
+begin
+  Result := -1;
+  ACmd.ExecuteCommand('-break-insert *%u', [AnAddr], R);
+  if R.State <> dsError then begin
+    ResultList := TGDBMINameValueList.Create(R, ['bkpt']);
+    Result := StrToIntDef(ResultList.Values['number'], -1);
+    ResultList.Free;
+  end;
+end;
+
 constructor TGDBMIInternalAddrBreakPointList.Create;
 begin
   FList := TBPEntryList.Create;
@@ -12590,29 +13006,24 @@ begin
 end;
 
 procedure TGDBMIInternalAddrBreakPointList.AddAddr(ACmd: TGDBMIDebuggerCommand;
-  AnAddr: TDBGPtr);
+  AnAddr: TDBGPtr; ABasePtr: TDBGPtr);
 var
-  R: TGDBMIExecResult;
   E: TGDBMIInternalAddrBreakPointListEntry;
-  ResultList: TGDBMINameValueList;
   i: Integer;
 begin
   i := IndexOfAddr(AnAddr);
   if i >= 0 then begin
     FList.List^[i].FCount := FList.List^[i].FCount + 1;
+    if ABasePtr <> 0 then
+      FList.List^[i].AddBasePointer(ABasePtr);
+    exit;
   end;
 
   E.FCount := 1;
   E.FAddr := AnAddr;
-
-  ACmd.ExecuteCommand('-break-insert *%u', [AnAddr], R);
-  if R.State <> dsError then begin
-    ResultList := TGDBMINameValueList.Create(R, ['bkpt']);
-    E.FId := StrToIntDef(ResultList.Values['number'], -1);
-    ResultList.Free;
-  end
-  else
-    E.FId := -1;
+  if ABasePtr <> 0 then
+    E.AddBasePointer(ABasePtr);
+  E.FId := SetBreak(ACmd, AnAddr);
 
   FList.Add(E);
 end;
@@ -12627,6 +13038,34 @@ procedure TGDBMIInternalAddrBreakPointList.RemoveId(ACmd: TGDBMIDebuggerCommand;
   AnId: Integer);
 begin
   RemoveIndex(ACmd, IndexOfId(AnId));
+end;
+
+procedure TGDBMIInternalAddrBreakPointList.RemoveFrameFromId(
+  ACmd: TGDBMIDebuggerCommand; AnId: Integer; ABasePtr: TDBGPtr);
+var
+  i: Integer;
+  j: LongInt;
+begin
+  i := IndexOfId(AnId);
+  if i < 0 then
+    exit;
+  j := FList.List^[i].IndexOfBasePointer(ABasePtr);
+  DebugLn(j<0, 'Frame not found: %x for id %d', [ABasePtr, AnId]);
+  if j < 0 then
+    exit;
+
+  FList.List^[i].DeleteBasePointer(j);
+  RemoveIndex(ACmd, i);  // checks FCount;
+end;
+
+function TGDBMIInternalAddrBreakPointList.IndexOfAddrWithFrame(AnAddr: TDBGPtr;
+  ABasePtr: TDBGPtr): Integer;
+begin
+  Result := IndexOfAddr(AnAddr);
+  if Result < 0 then
+    exit;
+  if FList.List^[Result].IndexOfBasePointer(ABasePtr) < 0 then
+    Result := -1;
 end;
 
 procedure TGDBMIInternalAddrBreakPointList.ClearAll(ACmd: TGDBMIDebuggerCommand);
@@ -12647,6 +13086,50 @@ end;
 function TGDBMIInternalAddrBreakPointList.HasBreakId(AnId: Integer): boolean;
 begin
   Result := IndexOfId(AnId) >= 0;
+end;
+
+{ TGDBMIInternalSehFinallyBreakPointList }
+
+function TGDBMIInternalSehFinallyBreakPointList.SetBreak(
+  ACmd: TGDBMIDebuggerCommand; AnAddr: TDBGPtr): Integer;
+var
+  R: TGDBMIExecResult;
+  ResultList: TGDBMINameValueList;
+  FileName, FuncName: String;
+begin
+  if ACmd.ExecuteCommand('info line *' + IntToStr(AnAddr), R) and
+     (R.State <> dsError)
+  then begin
+    (* Line 58 of \"ExceptTestPrg.pas\" starts at address 0x100001650 <fin$0> and ends at 0x100001659 <fin$0+9>.\n"" *)
+    FileName := GetPart(' of \"', '\" starts at', R.Values, False, False);
+    FuncName := GetPart(' starts at ', ' ends at', R.Values, False, False);
+    FuncName := GetPart(' <', '> ', FuncName, False, False);
+//    FuncName := GetPart(' <', ['> ', '+'], FuncName);
+
+    if (FuncName = '') or (FileName = '') or
+       (pos(' ', FuncName) > 0) or (pos('+', FuncName) > 0) or
+       (pos(#10, FuncName) > 0) or (pos(#13, FuncName) > 0) or
+       (pos('fin$', FuncName) < 1)
+    then
+      exit;
+
+    if FuncName[1] = '$' then begin
+      Result := inherited SetBreak(ACmd, AnAddr);
+      exit;
+    end;
+
+    Result := -1;
+    ACmd.ExecuteCommand('-break-insert "\"%s\":''%s''"', [FileName, FuncName], R);
+    if R.State = dsError then
+      ACmd.ExecuteCommand('-break-insert "\"%s\":%s"', [FileName, FuncName], R);
+    if R.State <> dsError then begin
+      ResultList := TGDBMINameValueList.Create(R, ['bkpt']);
+      Result := StrToIntDef(ResultList.Values['number'], -1);
+      ResultList.Free;
+    end
+    else
+      Result := inherited SetBreak(ACmd, AnAddr);
+  end;
 end;
 
 { TGDBMIDebuggerSimpleCommand }
@@ -13203,7 +13686,7 @@ var
 
       if ParentFp = '' then begin
         // not yet evaluated
-        if ExecuteCommand('-data-evaluate-expression parentfp', R)
+        if ExecuteCommand('-data-evaluate-expression parentfp', R, [cfNoMemLimits])
         and (R.State <> dsError)
         then begin
           List := TGDBMINameValueList.Create(R);
@@ -13248,7 +13731,7 @@ var
           FContext.StackFrame := aFrameIdx;
 
           if (Fp = '') then begin
-            if not ExecuteCommand('-data-evaluate-expression $fp', R)
+            if not ExecuteCommand('-data-evaluate-expression $fp', R, [cfNoMemLimits])
             or (R.State = dsError)
             then begin
               FrameCache^.ParentFPList[aFrameIdx].Fp := '-'; // mark as no Fp (not accesible)

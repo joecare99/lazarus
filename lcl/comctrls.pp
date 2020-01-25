@@ -464,12 +464,6 @@ type
   //Delphi compatible properties
     function CanChange: Boolean; virtual;
     property DisplayRect: TRect read GetDisplayRect;
-    property HotTrack: Boolean read FHotTrack write FHotTrack default False;
-    property MultiSelect: Boolean read FMultiSelect write FMultiSelect default False;
-    property OwnerDraw: Boolean read FOwnerDraw write FOwnerDraw default False;
-    property RaggedRight: Boolean read FRaggedRight write FRaggedRight default False;
-    property ScrollOpposite: Boolean read FScrollOpposite write FScrollOpposite default False;
-    property Style: TTabStyle read FStyle write SetStyle default tsTabs;
     property Tabs: TStrings read FAccess write SetPages;
     property TabIndex: Integer read FPageIndex write SetPageIndex default -1;
     property OnChange: TNotifyEvent read FOnPageChanged write FOnPageChanged;
@@ -488,21 +482,27 @@ type
     function PageToTabIndex(AIndex: integer): integer;
   public
     procedure DoCloseTabClicked(APage: TCustomPage); virtual;
+    property HotTrack: Boolean read FHotTrack write FHotTrack default False;
     property Images: TCustomImageList read FImages write SetImages;
     property ImagesWidth: Integer read FImagesWidth write SetImagesWidth default 0;
     property MultiLine: Boolean read GetMultiLine write SetMultiLine default False;
+    property MultiSelect: Boolean read FMultiSelect write FMultiSelect default False;
     property OnChanging: TTabChangingEvent read FOnChanging write FOnChanging;
     property OnCloseTabClicked: TNotifyEvent read FOnCloseTabClicked
                                              write FOnCloseTabClicked;
     property OnGetImageIndex: TTabGetImageEvent read FOnGetImageIndex
                                                 write FOnGetImageIndex;
     property Options: TCTabControlOptions read FOptions write SetOptions default [];
+    property OwnerDraw: Boolean read FOwnerDraw write FOwnerDraw default False;
     property Page[Index: Integer]: TCustomPage read GetPage;
     property PageCount: integer read GetPageCount;
     property PageIndex: Integer read FPageIndex write SetPageIndex default -1;
     //property PageList: TList read FPageList; - iff paged
     property Pages: TStrings read FAccess write SetPages;
+    property RaggedRight: Boolean read FRaggedRight write FRaggedRight default False;
+    property ScrollOpposite: Boolean read FScrollOpposite write FScrollOpposite default False;
     property ShowTabs: Boolean read FShowTabs write SetShowTabs default True;
+    property Style: TTabStyle read FStyle write SetStyle default tsTabs;
     property TabHeight: Smallint read FTabHeight write SetTabHeight default 0;
     property TabPosition: TTabPosition read FTabPosition write SetTabPosition default tpTop;
     property TabWidth: Smallint read FTabWidth write SetTabWidth default 0;
@@ -615,7 +615,7 @@ type
     property DragMode;
     property Enabled;
     property Font;
-    //property HotTrack;
+    property HotTrack;
     property Images;
     property ImagesWidth;
     property MultiLine;
@@ -624,11 +624,11 @@ type
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
-    //property RaggedRight;
-    //property ScrollOpposite;
+    property RaggedRight;
+    property ScrollOpposite;
     property ShowHint;
     property ShowTabs;
-    //property Style;
+    property Style;
     property TabHeight;
     property TabIndex;
     property TabOrder;
@@ -818,6 +818,7 @@ type
     procedure SetTabStop(const AValue: Boolean);
     procedure SetTabWidth(AValue: Smallint);
   protected
+    class procedure WSRegisterClass; override;
     procedure SetOptions(const AValue: TCTabControlOptions); override;
     procedure AddRemovePageHandle(APage: TCustomPage); override;
     function CanChange: Boolean; override;
@@ -1187,6 +1188,8 @@ type
 
   TWidth = 0..MaxInt;
 
+  TSortIndicator = (siNone, siAscending, siDescending);
+
   TListColumn = class(TCollectionItem)
   private
     FAlignment: TAlignment;
@@ -1198,6 +1201,7 @@ type
     FWidth: TWidth;
     FImageIndex: TImageIndex;
     FTag: PtrInt;
+    FSortIndicator: TSortIndicator;
     function GetWidth: TWidth;
     procedure WSCreateColumn;
     procedure WSDestroyColumn;
@@ -1211,6 +1215,7 @@ type
     procedure SetCaption(const AValue: TTranslateString);
     procedure SetAlignment(const AValue: TAlignment);
     procedure SetImageIndex(const AValue: TImageIndex);
+    procedure SetSortIndicator(AValue: TSortIndicator);
   protected
     procedure SetIndex(AValue: Integer); override;
     function GetDisplayName: string; override;
@@ -1230,6 +1235,7 @@ type
     property Tag: PtrInt read FTag write FTag default 0;
     property Visible: Boolean read FVisible write SetVisible default true;
     property Width: TWidth read GetWidth write SetWidth default 50;
+    property SortIndicator: TSortIndicator read FSortIndicator write SetSortIndicator default siNone;
   end;
 
 
@@ -1372,6 +1378,7 @@ type
     FEditor: TCustomListViewEditor;
     FAllocBy: Integer;
     FAutoSort: Boolean;
+    FAutoSortIndicator: Boolean;
     FAutoWidthLastColumn: Boolean;
     FCanvas: TCanvas;
     FDefaultItemHeight: integer;
@@ -1536,6 +1543,7 @@ type
   protected
     property AllocBy: Integer read FAllocBy write SetAllocBy default 0;
     property AutoSort: Boolean read FAutoSort write FAutoSort default True;
+    property AutoSortIndicator: Boolean read FAutoSortIndicator write FAutoSortIndicator default False;
     property AutoWidthLastColumn: Boolean read FAutoWidthLastColumn write SetAutoWidthLastColumn default False;
     property ColumnClick: Boolean index Ord(lvpColumnClick) read GetProperty write SetProperty default True;
     property Columns: TListColumns read FColumns write SetColumns;
@@ -1654,6 +1662,7 @@ type
     property AllocBy;
     property Anchors;
     property AutoSort;
+    property AutoSortIndicator;
     property AutoWidthLastColumn: Boolean read FAutoWidthLastColumn write SetAutoWidthLastColumn default False; // resize last column to fit width of TListView
     property BorderSpacing;
     property BorderStyle;
@@ -4198,8 +4207,5 @@ begin
     RegisterWSComponent(TCustomTabControl, TWSCustomTabControl);
   Done := True;
 end;
-
-initialization
-  RegisterPropertyToSkip(TTabControl, 'OnDrawTab', 'Property streamed in older Lazarus revision','');
 
 end.

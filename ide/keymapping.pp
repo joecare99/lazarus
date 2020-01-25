@@ -414,6 +414,20 @@ begin
     ecCut                     : Result:= srkmecCut;
     ecCopy                    : Result:= srkmecCopy;
     ecPaste                   : Result:= srkmecPaste;
+    ecCopyAdd                 : Result:= srkmecCopyAdd;
+    ecCutAdd                  : Result:= srkmecCutAdd;
+    ecCopyCurrentLine         : Result:= srkmecCopyCurrentLine;
+    ecCopyAddCurrentLine      : Result:= srkmecCopyAddCurrentLine;
+    ecCutCurrentLine          : Result:= srkmecCutCurrentLine;
+    ecCutAddCurrentLine       : Result:= srkmecCutAddCurrentLine;
+    ecMoveLineUp              : Result:= srkmecMoveLineUp;
+    ecMoveLineDown            : Result:= srkmecMoveLineDown;
+    ecDuplicateLine           : Result:= srkmecDuplicateLine;
+    ecMoveSelectUp            : Result:= srkmecMoveSelectUp;
+    ecMoveSelectDown          : Result:= srkmecMoveSelectDown;
+    ecMoveSelectLeft          : Result:= srkmecMoveSelectLeft;
+    ecMoveSelectRight         : Result:= srkmecMoveSelectRight;
+    ecDuplicateSelection      : Result:= srkmecDuplicateSelection;
     ecMultiPaste              : Result:= srkmecMultiPaste;
     ecScrollUp                : Result:= srkmecScrollUp;
     ecScrollDown              : Result:= srkmecScrollDown;
@@ -1008,6 +1022,23 @@ begin
   ecCopy:                SetSingle(VK_C,[XCtrl],         VK_Insert,[XCtrl]);
   ecCut:                 SetSingle(VK_X,[XCtrl],         VK_Delete,[ssShift]);
   ecPaste:               SetSingle(VK_V,[XCtrl],         VK_Insert,[ssShift]);
+
+  ecCopyAdd:             SetSingle(VK_C,[XCtrl, ssAlt]);
+  ecCutAdd:              SetSingle(VK_X,[XCtrl, ssAlt]);
+  ecCopyCurrentLine:     SetSingle(VK_Y,[ssAlt]);
+  ecCopyAddCurrentLine:  SetSingle(VK_Y,[ssAlt, ssShift]);
+  ecCutCurrentLine:      SetSingle(VK_D,[ssAlt]);
+  ecCutAddCurrentLine:   SetSingle(VK_D,[ssAlt, ssShift]);
+
+  ecMoveLineUp:          SetSingle(VK_UP,[XCtrl, ssShift, ssAlt]);
+  ecMoveLineDown:        SetSingle(VK_DOWN,[XCtrl, ssShift, ssAlt]);
+  ecDuplicateLine:       SetSingle(VK_INSERT,[XCtrl, ssShift, ssAlt]);
+  ecMoveSelectUp:        SetSingle(VK_NUMPAD8,[XCtrl, ssAlt]);
+  ecMoveSelectDown:      SetSingle(VK_NUMPAD2,[XCtrl, ssAlt]);
+  ecMoveSelectLeft:      SetSingle(VK_NUMPAD4,[XCtrl, ssAlt]);
+  ecMoveSelectRight:     SetSingle(VK_NUMPAD6,[XCtrl, ssAlt]);
+  ecDuplicateSelection:  SetSingle(VK_NUMPAD0,[XCtrl, ssAlt]);
+
   ecMultiPaste:          SetSingle(VK_UNKNOWN,[]);
   ecNormalSelect:        SetSingle(VK_UNKNOWN,[]);
   ecColumnSelect:        SetSingle(VK_UNKNOWN,[]);
@@ -2669,6 +2700,12 @@ begin
   AddDefault(C, 'Copy selection to clipboard', srkmecCopy, ecCopy);
   AddDefault(C, 'Cut selection to clipboard', srkmecCut, ecCut);
   AddDefault(C, 'Paste clipboard to current position', srkmecPaste, ecPaste);
+  AddDefault(C, 'Copy - Add to Clipboard', srkmecCopyAdd, ecCopyAdd);
+  AddDefault(C, 'Cut - Add to Clipboard', srkmecCutAdd, ecCutAdd);
+  AddDefault(C, 'Copy current line', srkmecCopyCurrentLine, ecCopyCurrentLine);
+  AddDefault(C, 'Copy current line - Add to Clipboard', srkmecCopyAddCurrentLine, ecCopyAddCurrentLine);
+  AddDefault(C, 'Cut current line', srkmecCutCurrentLine, ecCutCurrentLine);
+  AddDefault(C, 'Cut current line - Add to Clipboard', srkmecCutAddCurrentLine, ecCutAddCurrentLine);
   AddDefault(C, 'Multi paste clipboard to current position', srkmecMultiPaste, ecMultiPaste);
   AddDefault(C, 'Normal selection mode', srkmecNormalSelect, ecNormalSelect);
   AddDefault(C, 'Column selection mode', srkmecColumnSelect, ecColumnSelect);
@@ -2766,6 +2803,14 @@ begin
   AddDefault(C, 'Delete whole text', srkmecClearAll, ecClearAll);
   AddDefault(C, 'Break line and move cursor', srkmecLineBreak, ecLineBreak);
   AddDefault(C, 'Break line, leave cursor', srkmecInsertLine, ecInsertLine);
+  AddDefault(C, 'Move one line up', srkmecMoveLineUp, ecMoveLineUp);
+  AddDefault(C, 'Move one line down', srkmecMoveLineDown, ecMoveLineDown);
+  AddDefault(C, 'Move selection up', srkmecMoveSelectUp, ecMoveSelectUp);
+  AddDefault(C, 'Move selection down', srkmecMoveSelectDown, ecMoveSelectDown);
+  AddDefault(C, 'Move selection left', srkmecMoveSelectLeft, ecMoveSelectLeft);
+  AddDefault(C, 'Move selection right', srkmecMoveSelectRight, ecMoveSelectRight);
+  AddDefault(C, 'Duplicate line or lines in selection', srkmecDuplicateLine, ecDuplicateLine);
+  AddDefault(C, 'Duplicate selection', srkmecDuplicateSelection, ecDuplicateSelection);
   AddDefault(C, 'Enclose in $IFDEF', lisEncloseInIFDEF, ecSelectionEncloseIFDEF);
   AddDefault(C, 'Insert from Character Map', lisMenuInsertCharacter, ecInsertCharacter);
   AddDefault(C, 'Insert GPL notice', srkmecInsertGPLNotice, ecInsertGPLNotice);

@@ -28,6 +28,7 @@ uses
 
 const
   lrMaxBandsInReport       = 256; //temp fix. in future need remove this limit
+  lrSnapDistance: Integer  = 10;
 
 const
 // object flags
@@ -70,6 +71,7 @@ const
   fmtBoolean               = 4;
   
 type
+  TfrSetOfTyp = set of byte;
   TfrDrawMode = (drAll, drCalcHeight, drAfterCalcHeight, drPart);
   TfrBandType = (btReportTitle, btReportSummary,
                  btPageHeader, btPageFooter,
@@ -352,6 +354,7 @@ type
     procedure SetBounds(aLeft, aTop, aWidth, aHeight: Integer);
 
     function PointInView(aX,aY : Integer) : Boolean; virtual;
+    function FindAlignSide(const vert:boolean; const value: Integer; out found: Integer): boolean; virtual;
     procedure Invalidate;
 
     property Canvas : TCanvas read fCanvas write fCanvas;
@@ -3281,6 +3284,29 @@ begin
   Result:=((aX>Rc.Left) and (aX<Rc.Right) and (aY>Rc.Top) and (aY<Rc.Bottom));
 end;
 
+function TfrView.FindAlignSide(const vert: boolean; const value: Integer;
+  out found: Integer): boolean;
+begin
+  result := false;
+  if vert then
+  begin
+    found := y;
+    if abs(value-found)<=lrSnapDistance then exit(true);
+    found := y+dy;
+    if abs(value-found)<=lrSnapDistance then exit(true);
+    found := y+dy div 2;
+    if abs(value-found)<=lrSnapDistance then exit(true);
+  end else
+  begin
+    found := x;
+    if abs(value-found)<=lrSnapDistance then exit(true);
+    found := x+dx;
+    if abs(value-found)<=lrSnapDistance then exit(true);
+    found := x+dx div 2;
+    if abs(value-found)<=lrSnapDistance then exit(true);
+  end;
+end;
+
 procedure TfrView.Invalidate;
 begin
   if Assigned(Canvas) and (fUpdate=0) then
@@ -4745,23 +4771,8 @@ begin
 end;
 
 procedure TfrCustomMemoView.GetBlob(b: TfrTField);
-var
-  M: TMemoryStream;
 begin
-  // todo: TBLobField.AssignTo is not implemented yet
-  //       even if I supply a patch for 2.0.4 it will
-  //       not be integrated because it's in RC1 now
-  //       (I guess)
-  //
-  //Memo1.Assign(b);
-  M := TMemoryStream.Create;
-  try
-    TBlobField(B).SaveToStream(M);
-    M.Position := 0;
-    Memo1.LoadFromStream(M);
-  finally
-    M.Free;
-  end;
+  Memo1.Text := TBlobField(b).AsString;
 end;
 
 procedure TfrCustomMemoView.FontChange(sender: TObject);

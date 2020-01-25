@@ -494,8 +494,8 @@ end;
 
 function TDbgLinuxThread.CheckSignalForPostponing(AWaitedStatus: cint): Boolean;
 begin
-  Assert(not FIsPaused, 'Got WaitStatus while already paused');
-  assert(FExceptionSignal = 0, 'TDbgLinuxThread.CheckSignalForPostponing: FExceptionSignal = 0');
+  //Assert(not FIsPaused, 'Got WaitStatus while already paused');
+  //assert(FExceptionSignal = 0, 'TDbgLinuxThread.CheckSignalForPostponing: FExceptionSignal = 0');
   Result := FIsPaused;
   DebugLn(DBG_VERBOSE and (Result), ['Warning: Thread already paused', ID]);
   if Result then
@@ -522,6 +522,7 @@ begin
   else
   if wifexited(AWaitedStatus) and (ID <> Process.ProcessID) then begin
     Process.RemoveThread(ID); // Done, no postpone
+    Self.Free;
   end
 
   else
@@ -1029,8 +1030,6 @@ begin
     fpPTrace(PTRACE_KILL, AThread.ID, pointer(1), nil);
     TDbgLinuxThread(AThread).ResetPauseStates;
     Result := CheckNoError;
-    if not FThreadMap.HasId(AThread.ID) then
-      AThread.Free;
     exit;
   end;
 
@@ -1127,8 +1126,6 @@ begin
     Result := CheckNoError;
   end;
 
-  if not FThreadMap.HasId(AThread.ID) then
-    AThread.Free;
   {$IFDEF DebuglnLinuxDebugEvents}
   finally debuglnExit(['<<<<< TDbgLinuxProcess.Continue ' ]); end;
   {$ENDIF}

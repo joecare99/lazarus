@@ -130,7 +130,10 @@ procedure MakeMinMax(var i1, i2: integer);
 procedure CalculateLeftTopWidthHeight(X1,Y1,X2,Y2: integer;
   out Left,Top,Width,Height: integer);
 
-function DeleteAmpersands(var Str : String) : Longint;
+// Ampersands
+function DeleteAmpersands(var Str : String) : Integer;
+function RemoveAmpersands(const ASource: String): String;
+function RemoveAmpersands(Src: PChar; var LineLength: Longint): PChar;
 
 function ComparePointers(p1, p2: Pointer): integer; inline;
 function CompareHandles(h1, h2: THandle): integer;
@@ -344,10 +347,10 @@ var
   DebugNestAtBOL: Boolean;
   {$ENDIF}
 
-function DeleteAmpersands(var Str : String) : Longint;
-// Replace all &x with x
-// and return the position of the first ampersand letter in the resulting Str.
-// double ampersands && are converted to a single & and are ignored.
+function DeleteAmpersands(var Str : String) : Integer;
+// Replace all &x with x and return the position of the first accelerator letter in
+//  the resulting Str, meaning the letter following the first & in the original Str.
+// Double ampersands && are converted to a single & and ignored.
 var
   SrcPos, DestPos, SrcLen: Integer;
 begin
@@ -356,10 +359,10 @@ begin
   SrcPos:=1;
   DestPos:=1;
   while SrcPos<=SrcLen do begin
-    if (Str[SrcPos]='&') and (SrcPos<SrcLen) then begin
-      // & found
+    if (Str[SrcPos]='&') and (SrcPos<SrcLen) then
+    begin
       inc(SrcPos); // skip &
-      if (Str[SrcPos]<>'&') and (Result<1) then
+      if (Str[SrcPos]<>'&') and (Result<1) then  // Ignore && as accelerator
         Result:=DestPos;
     end;
     if DestPos<SrcPos then
@@ -369,6 +372,38 @@ begin
   end;
   if DestPos<SrcPos then
     SetLength(Str,DestPos-1);
+end;
+
+function RemoveAmpersands(const ASource: String): String;
+var
+  n: Integer;
+  DoubleAmp: Boolean;
+begin
+  Result := ASource;
+  n := 1;
+  while n <= Length(Result) do
+  begin
+    if Result[n] = '&' then
+    begin
+      DoubleAmp := (n < Length(Result)) and (Result[n+1] = '&');
+      Delete(Result, n, 1);
+      if DoubleAmp then
+        Inc(n);            // skip the second & of &&
+    end;
+    Inc(n);
+  end;
+end;
+
+function RemoveAmpersands(Src: PChar; var LineLength: Longint): PChar;
+var
+  s: String;
+begin
+  SetLength(s, LineLength);
+  strlcopy(PChar(s), Src, LineLength);
+  s := RemoveAmpersands(s);
+  LineLength := Length(s);
+  Result := StrAlloc(LineLength+1); // +1 for #0 char at end
+  strcopy(Result, PChar(s));
 end;
 
 //-----------------------------------------------------------------------------
@@ -569,7 +604,7 @@ const
     '', // 0xb8
     '', // 0xb9
     ';', // 0xba - VK_OEM_1 - Can vary by keyboard, US keyboard, the ';:' key
-    '+', // 0xbb - VK_OEM_PLUS - For any country/region, the '+' key
+    '=', // 0xbb - VK_OEM_PLUS - For any country/region, the '+/=' key Delphi returns '=' Issue #0036489
     ',', // 0xbc - VK_OEM_COMMA - For any country/region, the ',' key
     '-', // 0xbd - VK_OEM_MINUS - For any country/region, the '-' key
     '.', // 0xbe - VK_OEM_PERIOD - For any country/region, the '.' key

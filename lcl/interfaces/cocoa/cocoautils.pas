@@ -42,6 +42,8 @@ function NSRectToRect(const NS: NSRect): TRect;
 procedure NSToLCLRect(const ns: NSRect; ParentHeight: Single; out lcl: TRect);
 procedure LCLToNSRect(const lcl: TRect; ParentHeight: Single; out ns: NSRect);
 
+function NSScreenZeroHeight: CGFloat;
+
 function CreateParamsToNSRect(const params: TCreateParams): NSRect;
 
 function NSStringUtf8(s: PChar): NSString;
@@ -573,6 +575,11 @@ begin
   ns.size.height:=lcl.Bottom-lcl.Top;
 end;
 
+function NSScreenZeroHeight: CGFloat;
+begin
+  Result := NSScreen(NSScreen.screens.objectAtIndex(0)).frame.size.height;
+end;
+
 function CreateParamsToNSRect(const params: TCreateParams): NSRect;
 begin
   with params do Result:=GetNSRect(X,Y,Width,Height);
@@ -611,6 +618,8 @@ begin
     ns := NSStringUTF8(s);
     text.setString(ns);
     ns.release;
+    if Assigned(text.undoManager) then
+      text.undoManager.removeAllActions;
   end;
 end;
 
@@ -944,23 +953,50 @@ begin
 end;
 
 function DateTimeToNSDate(const aDateTime : TDateTime): NSDate;
-var
+{var
   ti : NSTimeInterval;
-  d  : NSDate;
 begin
   ti := (aDateTime - EncodeDate(2001, 1, 1)) * SecsPerDay;
-  d  := NSDate.alloc.init;
-  Result:= d.dateWithTimeIntervalSinceReferenceDate(ti);
+  ti := ti - double(NSTimeZone.localTimeZone.secondsFromGMT);
+  Result := NSDate.dateWithTimeIntervalSinceReferenceDate(ti);}
+var
+  cmp : NSDateComponents;
+  y,m,d: Word;
+  h,s,z: Word;
+begin
+  cmp := NSDateComponents.alloc.init;
+  DecodeDate(ADateTime, y,m,d);
+  cmp.setYear(y);
+  cmp.setMonth(m);
+  cmp.setDay(d);
+  DecodeTime(ADateTime, h, m, s,z);
+  cmp.setHour(h);
+  cmp.setMinute(m);
+  cmp.setSecond(s);
+  Result := NSCalendar.currentCalendar.dateFromComponents(cmp);
 end;
 
 function NSDateToDateTime(const aDateTime: NSDate): TDateTime;
+var
+  cmp : NSDateComponents;
+  mn : TdateTime;
+const
+  convFlag = NSYearCalendarUnit
+  or NSMonthCalendarUnit
+  or NSDayCalendarUnit
+  or NSHourCalendarUnit
+  or NSMinuteCalendarUnit
+  or NSSecondCalendarUnit;
 begin
   if aDateTime = nil then
   begin
     Result:= 0.0;
     Exit;
   end;
-  Result:= aDateTime.timeIntervalSince1970 / SecsPerDay + EncodeDate(1970, 1, 1);
+  cmp := NSCalendar.currentCalendar.components_fromDate(convFlag, aDateTime);
+  TryEncodeDate(cmp.year, cmp.month, cmp.day, Result);
+  TryEncodeTime(cmp.hour, cmp.minute, cmp.second, 0, mn);
+  Result := Result + mn;
 end;
 
 function ControlTitleToStr(const ATitle: string): String;

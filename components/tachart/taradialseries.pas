@@ -81,6 +81,7 @@ type
     FInnerRadiusPercent: Integer;
     FSlices: array of TPieSlice;
     FStartAngle: Integer;
+    FAngleRange: Integer;
     FEdgePen: TPen;
     FExploded: Boolean;
     FFixedRadius: TChartDistance;
@@ -89,6 +90,7 @@ type
     function FixAspectRatio(P: TPoint): TPoint;
     function GetViewAngle: Integer;
     procedure Measure(ADrawer: IChartDrawer);
+    procedure SetAngleRange(AValue: Integer);
     procedure SetEdgePen(AValue: TPen);
     procedure SetExploded(AValue: Boolean);
     procedure SetFixedRadius(AValue: TChartDistance);
@@ -115,6 +117,8 @@ type
     property Radius: Integer read FRadius;
     property StartAngle: Integer
       read FStartAngle write SetStartAngle default 0;
+    property AngleRange: Integer
+      read FAngleRange write SetAngleRange default 360;
     property ViewAngle: Integer
       read GetViewAngle write SetViewAngle default 60;
     property OnCustomDrawPie: TCustomDrawPieEvent
@@ -333,6 +337,7 @@ constructor TCustomPieSeries.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   ViewAngle := 60;
+  FAngleRange := 360;
   FEdgePen := TPen.Create;
   FEdgePen.OnChange := @StyleChanged;
 
@@ -661,11 +666,19 @@ begin
 end;
 
 function TCustomPieSeries.FindContainingSlice(const APoint: TPoint): Integer;
+const
+  Neighbors: array[0..7] of TPoint = (
+    (x:-1; y:-1), (x:0; y:-1), (x:1; y:-1),
+    (x:-1; y:0),               (x:1; y:0),
+    (x:-1; y:1),  (x:0; y:1),  (x:1; y:1)
+  );
 var
   c: TPoint;
   pointAngle: Double;
+  minAngle, maxAngle: Double;
   ps: TPieSlice;
   innerRadius: Integer;
+  neighbor: TPoint;
 begin
   innerRadius := CalcInnerRadius;
   for ps in FSlices do begin
@@ -680,7 +693,18 @@ begin
     if not InRange(sqr(c.X) + sqr(c.Y), sqr(innerRadius), sqr(FRadius)) then
       continue;
     pointAngle := NormalizeAngle(ArcTan2(-c.Y, c.X));
-    if ps.FNextAngle <= ps.FPrevAngle then begin
+    if ps.FNextAngle = ps.FPrevAngle then begin
+      minAngle := pointAngle;
+      maxAngle := pointAngle;
+      for neighbor in Neighbors do begin
+        pointAngle := NormalizeAngle(ArcTan2(-c.Y + neighbor.Y, c.X + neighbor.X));
+        minAngle := Min(minAngle, pointAngle);
+        maxAngle := Max(maxAngle, pointAngle);
+      end;
+      if InRange(ps.FPrevAngle, minAngle, maxAngle) then
+        exit(ps.FOrigIndex);
+    end else
+    if ps.FNextAngle < ps.FPrevAngle then begin
       if InRange(pointAngle, ps.FPrevAngle - TWO_PI, ps.FNextAngle) or
          InRange(pointAngle, ps.FPrevAngle, ps.FNextAngle + TWO_PI)
       then
@@ -803,6 +827,16 @@ begin
       FDragOrigin := p;
     end;
   end;
+end;
+
+procedure TCustomPieSeries.SetAngleRange(AValue: Integer);
+begin
+  if FAngleRange = AValue then exit;
+  if AValue = 0 then
+    FAngleRange := 360
+  else
+    FAngleRange := EnsureRange(AValue, 1, 360);
+  UpdateParentChart;
 end;
 
 procedure TCustomPieSeries.SetEdgePen(AValue: TPen);
@@ -1125,6 +1159,7 @@ begin
   total := Source.ValuesTotal;
   if total = 0 then
     exit;
+  total := total * 360 / FAngleRange;
   prevAngle := start_angle;
   for i := 0 to Count - 1 do begin
     di := Source[i];

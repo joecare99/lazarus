@@ -4616,6 +4616,23 @@ begin
   end;
 end;
 
+procedure TWinControl.FixDesignFontsPPIWithChildren(const ADesignTimePPI: Integer);
+  procedure FixChildren(const AParent: TWinControl);
+  var
+    I: Integer;
+  begin
+    for I := 0 to AParent.ControlCount-1 do
+    begin
+      AParent.Controls[I].FixDesignFontsPPI(ADesignTimePPI);
+      if AParent.Controls[I] is TWinControl then
+        FixChildren(TWinControl(AParent.Controls[I]));
+    end;
+  end;
+begin
+  FixDesignFontsPPI(ADesignTimePPI);
+  FixChildren(Self);
+end;
+
 procedure TWinControl.SelectFirst;
 var
   Form : TCustomForm;
@@ -7260,8 +7277,7 @@ begin
   //debugln('TWinControl.CNChar B ',DbgSName(Self),' ',dbgs(Message.CharCode),' ',dbgs(IntfSendsUTF8KeyPress));
   if Widgetset.GetLCLCapability(lcSendsUTF8KeyPress) = LCL_CAPABILITY_NO then
   begin
-    // current interface does not (yet) send UTF8 key press notifications
-    // -> emulate
+    // current interface does not (yet) send UTF8 key press notifications -> emulate
     if (Message.CharCode < %11000000) then
     begin
       c:=chr(Message.CharCode);

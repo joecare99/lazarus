@@ -194,7 +194,8 @@ type
 
   TSynCaretAdjustMode = ( // used in TextBetweenPointsEx
     scamIgnore, // Caret stays at the same numeric values, if text is inserted before caret, the text moves, but the caret stays
-    scamAdjust, // Caret moves with text, if text is inserted
+    scamAdjust, // Caret moves with text. Except if it is at a selection boundary, in which case it stays with the selection (movement depends on setMoveBlock/setExtendBlock)
+    scamForceAdjust, // Caret moves with text. Can be used if the caret should move away from the bound of a persistent selection
     scamEnd,
     scamBegin
   );
@@ -219,6 +220,7 @@ type
   TSynStateFlag = (sfCaretChanged, sfHideCursor,
     sfEnsureCursorPos, sfEnsureCursorPosAtResize,
     sfExplicitTopLine, sfExplicitLeftChar,  // when doing EnsureCursorPos keep top/Left, if they where set explicitly after the caret (only applies before handle creation)
+    sfPreventScrollAfterSelect,
     sfIgnoreNextChar, sfPainting, sfHasPainted, sfHasScrolled,
     sfScrollbarChanged, sfHorizScrollbarVisible, sfVertScrollbarVisible,
     sfAfterLoadFromFileNeeded,
@@ -286,7 +288,8 @@ type
     eoOverwriteBlock,          // Allows to overwrite currently selected block, when pasting or typing new text
     eoAutoHideCursor,          // Hide mouse cursor, when new text is typed
     eoColorSelectionTillEol,   // Colorize selection background only till EOL of each line, not till edge of control
-    eoPersistentCaretStopBlink // only if eoPersistentCaret > do not blink, draw fixed line
+    eoPersistentCaretStopBlink,// only if eoPersistentCaret > do not blink, draw fixed line
+    eoNoScrollOnSelectRange    // SelectALl, SelectParagraph, SelectToBrace will not scroll
   );
   TSynEditorOptions2 = set of TSynEditorOption2;
 
@@ -502,6 +505,7 @@ type
     FInternalCaret: TSynEditCaret;
     //FScreenCaret: TSynEditScreenCaret;
     FInternalBlockSelection: TSynEditSelection;
+    FLastCaretXForMoveSelection: Integer;
     FOnChangeUpdating: TChangeUpdatingEvent;
     FMouseSelectionMode: TSynSelectionMode;
     FMouseSelectionCmd: TSynEditorMouseCommand;
@@ -4434,6 +4438,8 @@ begin
     LastPt.y  := 1;
   SetCaretAndSelection(LogicalToPhysicalPos(LastPt), Point(1, 1), LastPt);
   FBlockSelection.ActiveSelectionMode := smNormal;
+  if eoNoScrollOnSelectRange in FOptions2 then
+    Include(fStateFlags, sfPreventScrollAfterSelect);
   DoDecPaintLock(Self);
 end;
 
@@ -4446,7 +4452,11 @@ end;
 
 procedure TCustomSynEdit.SelectToBrace;
 begin
+  DoIncPaintLock(Self); // No editing is taking place
   FindMatchingBracket(CaretXY,true,true,true,false);
+  if eoNoScrollOnSelectRange in FOptions2 then
+    Include(fStateFlags, sfPreventScrollAfterSelect);
+  DoDecPaintLock(Self);
 end;
 
 procedure TCustomSynEdit.SelectWord;
@@ -5481,6 +5491,8 @@ begin
   FBlockSelection.ActiveSelectionMode := smNormal;
   CaretXY := FBlockSelection.EndLineBytePos;
   //DebugLn(' FFF3 ',Value.X,',',Value.Y,' BlockBegin=',BlockBegin.X,',',BlockBegin.Y,' BlockEnd=',BlockEnd.X,',',BlockEnd.Y);
+  if eoNoScrollOnSelectRange in FOptions2 then
+    Include(fStateFlags, sfPreventScrollAfterSelect);
   DoDecPaintLock(Self);
 end;
 
@@ -6042,11 +6054,26 @@ end;
 procedure TCustomSynEdit.SetTextBetweenPoints(aStartPoint, aEndPoint: TPoint;
   const AValue: String; aFlags: TSynEditTextFlags; aCaretMode: TSynCaretAdjustMode;
   aMarksMode: TSynMarksAdjustMode; aSelectionMode: TSynSelectionMode);
+var
+  CaretAtBlock: (cabNo, cabBegin, cabEnd);
 begin
   InternalBeginUndoBlock;
   try
-    if aCaretMode = scamAdjust then
-      FCaret.IncAutoMoveOnEdit;
+    CaretAtBlock := cabNo;
+    if aCaretMode = scamForceAdjust then
+      FCaret.IncAutoMoveOnEdit
+    else
+    if aCaretMode = scamAdjust then begin
+      if FBlockSelection.SelAvail then begin
+        if FCaret.IsAtLineByte(FBlockSelection.StartLineBytePos) then
+          CaretAtBlock := cabBegin
+        else
+        if FCaret.IsAtLineByte(FBlockSelection.EndLineBytePos) then
+          CaretAtBlock := cabEnd;
+      end;
+      if CaretAtBlock = cabNo then
+        FCaret.IncAutoMoveOnEdit;
+    end;
     if setPersistentBlock in aFlags then
       FBlockSelection.IncPersistentLock;
     if setMoveBlock in aFlags then
@@ -6079,13 +6106,19 @@ begin
         FBlockSelection.EndLineBytePos := Point(FBlockSelection.StartBytePos + 1, FBlockSelection.EndLinePos - 1);
     end;
   finally
+    if CaretAtBlock = cabBegin then
+      FCaret.LineBytePos := FBlockSelection.StartLineBytePos
+    else
+    if CaretAtBlock = cabEnd then
+      FCaret.LineBytePos := FBlockSelection.EndLineBytePos;
+
     if setPersistentBlock in aFlags then
       FBlockSelection.DecPersistentLock;
     if setMoveBlock in aFlags then
       FBlockSelection.DecPersistentLock;
     if setExtendBlock in aFlags then
       FBlockSelection.DecPersistentLock;
-    if aCaretMode = scamAdjust then
+    if (CaretAtBlock = cabNo) and (aCaretMode in [scamAdjust, scamForceAdjust]) then
       FCaret.DecAutoMoveOnEdit;
     InternalEndUndoBlock;
   end;
@@ -6517,28 +6550,31 @@ begin
           MaxX:=Min(PhysBlockEndXY.X,MinX+CharsInWindow-1);
       end;
     end;
-    if not (sfExplicitLeftChar in fStateFlags) then begin
-      {DebugLn('TCustomSynEdit.EnsureCursorPosVisible A CaretX=',dbgs(PhysCaretXY.X),
-        ' BlockX=',dbgs(PhysBlockBeginXY.X)+'-'+dbgs(PhysBlockEndXY.X),
-        ' CharsInWindow='+dbgs(CharsInWindow), MinX='+dbgs(MinX),' MaxX='+dbgs(MaxX),
-        ' LeftChar='+dbgs(LeftChar), '');}
-      if MinX < LeftChar then
-        LeftChar := MinX
-      else if LeftChar < MaxX - (Max(1, CharsInWindow) - 1 - FScreenCaret.ExtraLineChars) then
-        LeftChar := MaxX - (Max(1, CharsInWindow) - 1 - FScreenCaret.ExtraLineChars)
-      else
-        LeftChar := LeftChar;                                                     //mh 2000-10-19
+    if not (sfPreventScrollAfterSelect in fStateFlags) then begin
+      if not (sfExplicitLeftChar in fStateFlags) then begin
+        {DebugLn('TCustomSynEdit.EnsureCursorPosVisible A CaretX=',dbgs(PhysCaretXY.X),
+          ' BlockX=',dbgs(PhysBlockBeginXY.X)+'-'+dbgs(PhysBlockEndXY.X),
+          ' CharsInWindow='+dbgs(CharsInWindow), MinX='+dbgs(MinX),' MaxX='+dbgs(MaxX),
+          ' LeftChar='+dbgs(LeftChar), '');}
+        if MinX < LeftChar then
+          LeftChar := MinX
+        else if LeftChar < MaxX - (Max(1, CharsInWindow) - 1 - FScreenCaret.ExtraLineChars) then
+          LeftChar := MaxX - (Max(1, CharsInWindow) - 1 - FScreenCaret.ExtraLineChars)
+        else
+          LeftChar := LeftChar;                                                     //mh 2000-10-19
+      end;
+      if not (sfExplicitTopLine in fStateFlags) then begin
+        //DebugLn(['TCustomSynEdit.EnsureCursorPosVisible B LeftChar=',LeftChar,' MinX=',MinX,' MaxX=',MaxX,' CharsInWindow=',CharsInWindow]);
+        // Make sure Y is visible
+        if CaretY < TopLine then
+          TopLine := CaretY
+        else if CaretY > ScreenRowToRow(Max(1, LinesInWindow) - 1) then             //mh 2000-10-19
+          TopLine := FFoldedLinesView.TextPosAddLines(CaretY, -Max(0, LinesInWindow-1))
+        else
+          TopView := TopView;                                                       //mh 2000-10-19
+      end;
     end;
-    if not (sfExplicitTopLine in fStateFlags) then begin
-      //DebugLn(['TCustomSynEdit.EnsureCursorPosVisible B LeftChar=',LeftChar,' MinX=',MinX,' MaxX=',MaxX,' CharsInWindow=',CharsInWindow]);
-      // Make sure Y is visible
-      if CaretY < TopLine then
-        TopLine := CaretY
-      else if CaretY > ScreenRowToRow(Max(1, LinesInWindow) - 1) then             //mh 2000-10-19
-        TopLine := FFoldedLinesView.TextPosAddLines(CaretY, -Max(0, LinesInWindow-1))
-      else
-        TopView := TopView;                                                       //mh 2000-10-19
-    end;
+    Exclude(fStateFlags, sfPreventScrollAfterSelect);
   finally
     DoDecPaintLock(Self);
     //{BUG21996} DebugLnExit(['TCustomSynEdit.EnsureCursorPosVisible Caret=',dbgs(CaretXY),', BlockBegin=',dbgs(BlockBegin),' BlockEnd=',dbgs(BlockEnd), ' StateFlags=',dbgs(fStateFlags), ' paintlock', FPaintLock]);
@@ -6600,6 +6636,8 @@ begin
     DebugLn(['[TCustomSynEdit.CommandProcessor] ',Command
       ,' AChar=',AChar,' Data=',DbgS(Data)]);
     {$ENDIF}
+    if (Command <> ecMoveSelectUp) and (Command <> ecMoveSelectDown) then
+      FLastCaretXForMoveSelection := -1;
     // first the program event handler gets a chance to process the command
     InitialCmd := Command;
     if not(hcfInit in ASkipHooks) then
@@ -6664,7 +6702,7 @@ var
   Len: Integer;
   Temp: string;
   Helper: string;
-  moveBkm: boolean;
+  moveBkm, CurBack: boolean;
   WP: TPoint;
   Caret: TPoint;
   CaretNew: TPoint;
@@ -6672,6 +6710,7 @@ var
   LogCounter: integer;
   LogCaretXY: TPoint;
   CY: Integer;
+  CurSm: TSynSelectionMode;
 
 begin
   IncPaintLock;
@@ -6686,6 +6725,8 @@ begin
       FBlockSelection.ActiveSelectionMode := smColumn;
     if Command in [ecSelCmdRangeStart..ecSelCmdRangeEnd] then
       FBlockSelection.ActiveSelectionMode := FBlockSelection.SelectionMode;
+    if (Command <> ecMoveSelectUp) and (Command <> ecMoveSelectDown) then
+      FLastCaretXForMoveSelection := -1;
 
     FBlockSelection.AutoExtend := Command in [ecSelectionStart..ecSelectionEnd];
     FCaret.ChangeOnTouch;
@@ -7086,6 +7127,159 @@ begin
       ecPaste:
         begin
           if not ReadOnly then PasteFromClipboard;
+        end;
+      ecCopyAdd, ecCutAdd:
+        if SelAvail then begin
+          Temp := Clipboard.AsText;
+          Helper := SelText;
+          if (Temp <> '') and (not (Temp[Length(Temp)] in [#10,#13, #9, #32])) and
+             (not (Helper[1] in [#10,#13, #9, #32]))
+          then
+            Temp := Temp + ' ';
+          Clipboard.AsText := Temp + Helper;
+          if (not ReadOnly) and (Command = ecCutAdd) then
+            SelText := '';
+        end;
+      ecCopyCurrentLine, ecCutCurrentLine,
+      ecCopyAddCurrentLine, ecCutAddCurrentLine:
+        begin
+          FInternalBlockSelection.AssignFrom(FBlockSelection);
+          FInternalBlockSelection.ActiveSelectionMode := smLine;
+          FInternalBlockSelection.ForceSingleLineSelected := True;
+          Temp := '';
+          if (Command = ecCopyAddCurrentLine) or (Command = ecCutAddCurrentLine) then begin
+            Temp := Clipboard.AsText;
+            if (Temp <> '') and not (Temp[Length(Temp)] in [#10,#13]) then
+              Temp := Temp + LineEnding;
+          end;
+          Clipboard.AsText := Temp + FInternalBlockSelection.SelText;
+          if (not ReadOnly) and ((Command = ecCutCurrentLine) or (Command = ecCutAddCurrentLine)) then begin
+            FCaret.IncAutoMoveOnEdit;
+            FInternalBlockSelection.SelText := '';
+            FCaret.DecAutoMoveOnEdit;
+          end;
+          FInternalBlockSelection.ForceSingleLineSelected := False;
+        end;
+      ecMoveLineUp:
+        if (not ReadOnly) then begin
+          if FBlockSelection.SelAvail then
+            CY := BlockBegin.Y
+          else
+            CY := FCaret.LinePos;
+          if CY > 1 then begin
+            InternalBeginUndoBlock;
+            if not FBlockSelection.SelAvail then
+              FBlockSelection.Clear;
+            FBlockSelection.IncPersistentLock(sbpWeak);
+            if SelAvail and (BlockEnd.x = 1) then
+              FTheLinesView.EditLinesInsert(BlockEnd.y, 1, FTheLinesView[ToIdx(CY) - 1])
+            else
+              FTheLinesView.EditLinesInsert(BlockEnd.y + 1, 1, FTheLinesView[ToIdx(CY) - 1]);
+            FCaret.IncAutoMoveOnEdit;
+            FTheLinesView.EditLinesDelete(CY - 1, 1);
+            FCaret.DecAutoMoveOnEdit;
+            FBlockSelection.DecPersistentLock;
+            InternalEndUndoBlock;
+          end;
+        end;
+      ecMoveLineDown:
+        if (not ReadOnly) then begin
+          if FBlockSelection.SelAvail then begin
+            CY := BlockBegin.Y;
+            if (BlockEnd.x = 1) then
+              Dec(CY);
+          end
+          else
+            CY := FCaret.LinePos;
+          if CY < FTheLinesView.Count - 1 then begin
+            InternalBeginUndoBlock;
+            if not FBlockSelection.SelAvail then
+              FBlockSelection.Clear;
+            FBlockSelection.IncPersistentLock(sbpWeak);
+            FCaret.IncAutoMoveOnEdit;
+            FTheLinesView.EditLinesInsert(BlockBegin.y, 1, FTheLinesView[ToIdx(CY) + 1]);
+            FTheLinesView.EditLinesDelete(CY + 2, 1);
+            FCaret.DecAutoMoveOnEdit;
+            FBlockSelection.DecPersistentLock;
+            InternalEndUndoBlock;
+          end;
+        end;
+      ecDuplicateLine:
+        if (not ReadOnly) then begin
+          InternalBeginUndoBlock;
+          if not FBlockSelection.SelAvail then
+            FBlockSelection.Clear;
+          FBlockSelection.IncPersistentLock(sbpWeak);
+          FInternalBlockSelection.AssignFrom(FBlockSelection);
+          if FInternalBlockSelection.IsBackwardSel then begin
+            FInternalBlockSelection.StartLineBytePos := FBlockSelection.EndLineBytePos;
+            FInternalBlockSelection.EndLineBytePos   := FBlockSelection.StartLineBytePos;
+          end;
+          FInternalBlockSelection.ActiveSelectionMode := smLine;
+          FInternalBlockSelection.ForceSingleLineSelected := True;
+          If (FInternalBlockSelection.EndBytePos = 1) and
+             (FInternalBlockSelection.EndLinePos > FInternalBlockSelection.StartLinePos)
+          then
+            FInternalBlockSelection.EndLineBytePos := Point(1, FInternalBlockSelection.EndLinePos-1);
+          Temp := FInternalBlockSelection.SelText;
+          FInternalBlockSelection.ForceSingleLineSelected := False;
+          FInternalBlockSelection.StartLineBytePos := Point(1, FInternalBlockSelection.LastLineBytePos.y+1);
+          FInternalBlockSelection.SelText := Temp;
+          FBlockSelection.DecPersistentLock;
+          InternalEndUndoBlock;
+        end;
+      ecMoveSelectUp,
+      ecMoveSelectDown,
+      ecMoveSelectLeft,
+      ecMoveSelectRight:
+        if (not ReadOnly) and SelAvail then begin
+          InternalBeginUndoBlock;
+          if FLastCaretXForMoveSelection < 0 then
+            FLastCaretXForMoveSelection := FBlockSelection.FirstLineBytePos.x;
+          CurSm := FBlockSelection.ActiveSelectionMode;
+          CurBack := FBlockSelection.IsBackwardSel;
+          Temp := FBlockSelection.SelText;
+
+          if CurSm = smColumn then
+            FCaret.IncForcePastEOL;
+          SetSelTextExternal('');
+          FCaret.LineBytePos := FBlockSelection.StartLineBytePos;
+          if (Command = ecMoveSelectUp) or (Command = ecMoveSelectDown) then
+            FCaret.KeepCaretXPos := FLastCaretXForMoveSelection;
+          case Command of
+            ecMoveSelectUp:    MoveCaretVert(-1);
+            ecMoveSelectDown:  MoveCaretVert(1);
+            ecMoveSelectLeft:  FCaret.MoveHoriz(-1);
+            ecMoveSelectRight: FCaret.MoveHoriz(1);
+          end;
+          FBlockSelection.Clear;
+          FBlockSelection.SetSelTextPrimitive(CurSm, PChar(Temp), False, True);
+
+          if CurBack then begin
+            FBlockSelection.SortSelectionPoints(True);
+            FCaret.LineBytePos := FBlockSelection.EndLineBytePos;
+          end;
+          if (Command = ecMoveSelectUp) or (Command = ecMoveSelectDown) then
+            FCaret.KeepCaretXPos := FLastCaretXForMoveSelection;
+
+          if CurSm = smColumn then
+            FCaret.DecForcePastEOL;
+          InternalEndUndoBlock;
+        end;
+      ecDuplicateSelection:
+        if (not ReadOnly) and SelAvail then begin
+          InternalBeginUndoBlock;
+          FCaret.IncForcePastEOL;
+          CurSm := FBlockSelection.ActiveSelectionMode;
+          CurBack := FBlockSelection.IsBackwardSel;
+          Temp := FBlockSelection.SelText;
+          FCaret.LineBytePos := FBlockSelection.FirstLineBytePos;
+          FBlockSelection.Clear;
+          FBlockSelection.SetSelTextPrimitive(CurSm, PChar(Temp), False, True);
+          if CurBack then
+            FBlockSelection.SortSelectionPoints(True);
+          FCaret.DecForcePastEOL;
+          InternalEndUndoBlock;
         end;
       ecScrollUp:
         begin
@@ -8291,8 +8485,7 @@ begin
         Style := [];        // Reserved for Highlighter
       end;
       //debugln(['TCustomSynEdit.RecalcCharExtent ',fFontDummy.Name,' ',fFontDummy.Size]);
-      //debugln('TCustomSynEdit.RecalcCharExtent A UseUTF8=',dbgs(UseUTF8),
-      //  ' Font.CanUTF8='+dbgs(Font.CanUTF8)+' CharHeight=',dbgs(CharHeight));
+      //debugln('TCustomSynEdit.RecalcCharExtent A UseUTF8=',dbgs(UseUTF8),' CharHeight=',dbgs(CharHeight));
 
       fTextDrawer.BaseFont := FFontDummy;
       if Assigned(fHighlighter) then
@@ -8319,7 +8512,7 @@ begin
   finally
     DecStatusChangeLock;
   end;
-  //debugln('TCustomSynEdit.RecalcCharExtent UseUTF8=',dbgs(UseUTF8),' Font.CanUTF8=',dbgs(Font.CanUTF8));
+  //debugln('TCustomSynEdit.RecalcCharExtent UseUTF8=',dbgs(UseUTF8));
 end;
 
 procedure TCustomSynEdit.HighlighterAttrChanged(Sender: TObject);

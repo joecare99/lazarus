@@ -2317,6 +2317,10 @@ msgstr ""
 "Egy felület már létezik ugyanezzel a névvel.\n"
 "A név jóváhagyása szükséges:"
 
+#: lazarusidestrconsts.dlgincludecodetemplatestoidentcompl
+msgid "Include code templates"
+msgstr ""
+
 #: lazarusidestrconsts.dlgincludeidentifierscontainingprefix
 msgid "Include identifiers containing prefix"
 msgstr "Előtagokat tartalmazó azonosítókkal együtt"
@@ -3263,6 +3267,10 @@ msgstr "Nem aktív szerkesztőben is látható a beszúrási jel"
 msgid "Caret in unfocused editor does not blink"
 msgstr "Nem aktív szerkesztőben nem villog a beszúrási jel"
 
+#: lazarusidestrconsts.dlgpoansiutf8
+msgid "ANSI codepage is UTF-8 (Windows 10 1903+)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgpoapplication
 msgid "Application"
 msgstr "Alkalmazás"
@@ -3653,6 +3661,10 @@ msgstr "Keresés hatóköre"
 #: lazarusidestrconsts.dlgselectallchildcontrols
 msgid "Select all child controls together with their parent."
 msgstr "Az összes gyermek-vezérlő kijelölése a szülővel együtt."
+
+#: lazarusidestrconsts.dlgselectallnoscroll
+msgid "Do not scroll on Select-All / Paragraph or To-Brace"
+msgstr ""
 
 #: lazarusidestrconsts.dlgselectedtext
 msgid "&Selected text"
@@ -6989,6 +7001,10 @@ msgstr "Eredmény típusa"
 msgid "Visibility"
 msgstr "Láthatóság"
 
+#: lazarusidestrconsts.liscomboboxes
+msgid "Combo Boxes"
+msgstr ""
+
 #: lazarusidestrconsts.liscommandlineparameters
 msgctxt "lazarusidestrconsts.liscommandlineparameters"
 msgid "Command line parameters"
@@ -8975,6 +8991,10 @@ msgstr "Rácsvonalak rajzolása"
 #: lazarusidestrconsts.lisdrawtheselectionfocusedevenifthemessageswindowhasn
 msgid "Draw the selection focused even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
 msgstr "A kijelölést fókuszálva rajzolja ki, még akkor is ha az üzenetek ablaka nincs fókuszálva. Ezt akkor érdemes használni ha a téma nehezen láthatóan jeleníti meg a fókuszálatlan kirajzolást."
+
+#: lazarusidestrconsts.lisdropdowncount
+msgid "Drop Down Count"
+msgstr ""
 
 #: lazarusidestrconsts.lisdsgcopycomponents
 msgid "Copy selected components to clipboard"
@@ -12409,6 +12429,14 @@ msgstr "Projektfájlok maximális kompatibilitása (LPI és LPS)"
 #: lazarusidestrconsts.lislpicompatibilitymodecheckboxhint
 msgid "Check this if you want to open your project in legacy (2.0 and older) Lazarus versions."
 msgstr "Ennek bejelölésekor a projekt régi (2.0 vagy korábbi) Lazarus változatokkal is megnyitható lesz."
+
+#: lazarusidestrconsts.lislpkcompatibilitymodecheckbox
+msgid "Maximize compatibility of package file (LPK)"
+msgstr ""
+
+#: lazarusidestrconsts.lislpkcompatibilitymodecheckboxhint
+msgid "Check this if you want to open your package in legacy (2.0 and older) Lazarus versions."
+msgstr ""
 
 #: lazarusidestrconsts.lislpkhasvanishedondiskusingasalternative
 #, object-pascal-format
@@ -20815,9 +20843,25 @@ msgstr "Építés:"
 msgid "Character set:"
 msgstr "Karakterkészlet:"
 
+#: lazarusidestrconsts.rscloseall
+msgid "Close all pages"
+msgstr ""
+
 #: lazarusidestrconsts.rsclosecurrentpage
 msgid "Close current page"
 msgstr "Aktuális lap bezárása"
+
+#: lazarusidestrconsts.rscloseleft
+msgid "Close page(s) on the left"
+msgstr ""
+
+#: lazarusidestrconsts.rscloseothers
+msgid "Close other page(s)"
+msgstr ""
+
+#: lazarusidestrconsts.rscloseright
+msgid "Close page(s) on the right"
+msgstr ""
 
 #: lazarusidestrconsts.rsconditionaldefines
 msgid "Conditional defines"
@@ -21335,6 +21379,18 @@ msgctxt "lazarusidestrconsts.srkmeccopy"
 msgid "Copy"
 msgstr "Másolás"
 
+#: lazarusidestrconsts.srkmeccopyadd
+msgid "Copy (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopyaddcurrentline
+msgid "Copy current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopycurrentline
+msgid "Copy current line"
+msgstr ""
+
 #: lazarusidestrconsts.srkmeccopyeditornewwindow
 msgid "Copy editor to new window"
 msgstr "Szerkesztő új ablakba másolása"
@@ -21351,6 +21407,18 @@ msgstr "Szerkesztő másolása az előző üres ablakba"
 msgctxt "lazarusidestrconsts.srkmeccut"
 msgid "Cut"
 msgstr "Kivágás"
+
+#: lazarusidestrconsts.srkmeccutadd
+msgid "Cut (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutaddcurrentline
+msgid "Cut current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutcurrentline
+msgid "Cut current line"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecdeletebol
 msgid "Delete to beginning of line"
@@ -21392,6 +21460,14 @@ msgstr "Diff"
 #: lazarusidestrconsts.srkmecdown
 msgid "Move cursor down"
 msgstr "Beszúrási jel mozgatása lefelé"
+
+#: lazarusidestrconsts.srkmecduplicateline
+msgid "Duplicate line (or lines in selection)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecduplicateselection
+msgid "Duplicate selection"
+msgstr ""
 
 #: lazarusidestrconsts.srkmeceditorbottom
 msgid "Move cursor to absolute end"
@@ -21709,6 +21785,30 @@ msgstr "Lapfül mozgatása jobbra"
 #: lazarusidestrconsts.srkmecmoveeditorrightmost
 msgid "Move editor rightmost"
 msgstr "Lapfül mozgatása a jobb szélre"
+
+#: lazarusidestrconsts.srkmecmovelinedown
+msgid "Move line down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmovelineup
+msgid "Move line up"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectdown
+msgid "Move selection down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectleft
+msgid "Move selection left"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectright
+msgid "Move selection right"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectup
+msgid "Move selection up"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecmultipaste
 msgctxt "lazarusidestrconsts.srkmecmultipaste"

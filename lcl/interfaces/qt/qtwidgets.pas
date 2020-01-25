@@ -205,7 +205,7 @@ type
     function SlotMouseMove(Sender: QObjectH; Event: QEventH): Boolean; cdecl;
     function SlotMouseWheel(Sender: QObjectH; Event: QEventH): Boolean; cdecl;
     procedure SlotMove(Event: QEventH); cdecl;
-    procedure SlotPaintBg(Sender: QObjectH; Event: QEventH); cdecl;
+    procedure SlotPaintBg(Sender: QObjectH; Event: QEventH); cdecl; virtual;
     procedure SlotPaint(Sender: QObjectH; Event: QEventH); cdecl;
     procedure SlotResize(Event: QEventH); cdecl;
     function SlotContextMenu(Sender: QObjectH; Event: QEventH): Boolean; cdecl;
@@ -408,6 +408,7 @@ type
     function CreateWidget(const AParams: TCreateParams):QWidgetH; override;
   public
     function CanPaintBackground: Boolean; override;
+    procedure SlotPaintBg(Sender: QObjectH; Event: QEventH); cdecl; override;
     procedure setFocusPolicy(const APolicy: QtFocusPolicy); override;
     procedure setFrameStyle(p1: Integer);
     procedure setFrameShape(p1: QFrameShape);
@@ -3323,6 +3324,20 @@ begin
         ScanCode := ScanCode + 39;
       KeyMsg.CharCode := Word(ScanCode);
       if (Modifiers = QtShiftModifier or QtControlModifier) then
+        Text := '';
+    end;
+  end else
+  if (Modifiers = QtShiftModifier or QtAltModifier) then
+  begin
+    ScanCode := QKeyEvent_nativeScanCode(QKeyEventH(Event));
+    if (length(Text) = 1) and (ScanCode in [10..19]) then
+    begin
+      if ScanCode = 19 then
+        ScanCode := 48
+      else
+        ScanCode := ScanCode + 39;
+      KeyMsg.CharCode := Word(ScanCode);
+      if (Modifiers = QtShiftModifier or QtAltModifier) then
         Text := '';
     end;
   end;
@@ -8823,11 +8838,34 @@ end;
 function TQtFrame.CanPaintBackground: Boolean;
 begin
   Result := CanSendLCLMessage and getEnabled and
-    (LCLObject.Color <> clBackground);
-  if Result and (LCLObject is TCustomPanel) then
+    (LCLObject.Color <> clBackground) and (LCLObject.Color <> clDefault);
+end;
+
+procedure TQtFrame.SlotPaintBg(Sender: QObjectH; Event: QEventH); cdecl;
+var
+  Painter: QPainterH;
+  Brush: QBrushH;
+  Color: TQColor;
+  R: TRect;
+begin
+  if CanSendLCLMessage and (LCLObject is TWinControl) then
   begin
-    Result := (TCustomPanel(LCLObject).BevelInner = bvNone) and
-     (TCustomPanel(LCLObject).BevelOuter = bvNone);
+    if LCLObject.Color = clDefault then
+      Color := Palette.DefaultColor
+    else
+      ColorRefToTQColor(ColorToRGB(LCLObject.Color), Color);
+    Painter := QPainter_create(QWidget_to_QPaintDevice(QWidgetH(Sender)));
+    Brush := QBrush_create(@Color, QtSolidPattern);
+    try
+      QPaintEvent_rect(QPaintEventH(Event), @R);
+      QPainter_fillRect(Painter, @R, Brush);
+      if (LCLObject is TCustomPanel) and (TCustomPanel(LCLObject).BorderStyle <> bsNone) then
+        q_DrawShadePanel(Painter, PRect(@R), Palette.Handle, True, 2);
+      QPainter_end(Painter);
+    finally
+      QBrush_destroy(Brush);
+      QPainter_destroy(Painter);
+    end;
   end;
 end;
 

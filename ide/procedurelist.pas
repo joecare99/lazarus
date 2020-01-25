@@ -272,6 +272,7 @@ end;
 procedure TProcedureListForm.FormShow(Sender: TObject);
 begin
   edMethods.SetFocus;
+  cbObjects.DropDownCount := EnvironmentOptions.DropDownCount;
 end;
 
 procedure TProcedureListForm.SGDblClick(Sender: TObject);
@@ -346,8 +347,8 @@ begin
   tbChangeFont.ImageIndex  := IDEImages.LoadImage('item_font');
   tbAbout.ImageIndex       := IDEImages.LoadImage('menu_information');
   tbJumpTo.ImageIndex      := IDEImages.LoadImage('menu_goto_line');
-  tbFilterAny.ImageIndex   := IDEImages.LoadImage('item_filter');
-  tbFilterStart.ImageIndex := IDEImages.LoadImage('item_filter');
+  tbFilterAny.ImageIndex   := IDEImages.LoadImage('filter_any_place');
+  tbFilterStart.ImageIndex := IDEImages.LoadImage('filter_from_begin');
 
   SG.Columns[SG_COLIDX_IMAGE].Width  := 20;
   SG.Columns[SG_COLIDX_PROCEDURE].Width  := 300;

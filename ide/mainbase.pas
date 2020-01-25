@@ -70,10 +70,9 @@ uses
   IDECommands, IDEWindowIntf, ProjectIntf, ToolBarIntf, ObjectInspector,
   PropEdits, IDEDialogs, IDEUtils, EditorSyntaxHighlighterDef,
   // IDE
-  LazConf, LazarusIDEStrConsts, Project, BuildManager, IDEProcs,
-  EnvironmentOpts, EditorOptions, CompilerOptions, SourceEditor, SourceSynEditor,
-  FindInFilesDlg, DesktopManager, Splash, MainBar, MainIntf, Designer, Debugger,
-  RunParamsOpts;
+  LazConf, LazarusIDEStrConsts, Project, BuildManager, EnvironmentOpts,
+  EditorOptions, CompilerOptions, SourceEditor, SourceSynEditor, FindInFilesDlg,
+  DesktopManager, Splash, MainBar, MainIntf, Designer, Debugger, RunParamsOpts;
 
 type
   TResetToolFlag = (
@@ -1150,7 +1149,7 @@ begin
     CreateMenuItem(ParentMI,itmOpenFileAtCursor,'itmOpenFileAtCursor',lisMenuOpenFilenameAtCursor,'menu_search_openfile_atcursor');
     CreateMenuItem(ParentMI,itmGotoIncludeDirective,'itmGotoIncludeDirective',lisMenuGotoIncludeDirective);
     CreateMenuItem(ParentMI,itmSearchFindIdentifierRefs,'itmSearchFindIdentifierRefs',lisMenuFindIdentifierRefs);
-    CreateMenuItem(ParentMI,itmSearchProcedureList,'itmSearchProcedureList',lisMenuProcedureList);
+    CreateMenuItem(ParentMI,itmSearchProcedureList,'itmSearchProcedureList',lisMenuProcedureList, 'menu_search_procedure_list');
   end;
 end;
 
@@ -1253,7 +1252,9 @@ begin
     ParentMI:=itmSourceCodeToolChecks;
     CreateMenuItem(ParentMI,itmSourceSyntaxCheck,'itmSourceSyntaxCheck',lisMenuQuickSyntaxCheck, 'menu_tool_syntax_check');
     CreateMenuItem(ParentMI,itmSourceGuessUnclosedBlock,'itmSourceGuessUnclosedBlock',lisMenuGuessUnclosedBlock);
+    {$IFDEF GuessMisplacedIfdef}
     CreateMenuItem(ParentMI,itmSourceGuessMisplacedIFDEF,'itmSourceGuessMisplacedIFDEF',lisMenuGuessMisplacedIFDEF);
+    {$ENDIF}
 
     CreateMenuSeparatorSection(mnuSource,itmSourceInsertions,'itmSourceInsertions');
     ParentMI:=itmSourceInsertions;

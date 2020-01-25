@@ -662,10 +662,33 @@ begin
 end;
 
 function TCocoaWidgetSet.EnableWindow(hWnd: HWND; bEnable: Boolean): Boolean;
+var
+  obj : NSObject;
 begin
   Result := hWnd <> 0;
   if Result then
-    NSObject(hWnd).lclSetEnabled(bEnable)
+  begin
+    obj := NSObject(hWnd);
+
+    // The following check is actually a hack. LCL enables all windows disabled
+    // during ShowModal form. No matter if the windows are on the stack of the modality or not.
+    // Since Cocoa doesn't do much of the "modal" control over the windows
+    // (runWindowModal isn't used... maybe it should be?)
+    // It's possible that windows "disabled" by a another model window would be
+    // re-enabled. This check verifies that only a window on the top of the modal stack
+    // will be brought back active... what about other windows?
+    if bEnable and isModalSession and (obj.isKindOfClass(TCocoaWindowContent)) then begin
+      if not (TCocoaWindowContent(obj).isembedded)
+        and not isTopModalWin(TCocoaWindowContent(obj).window) then Exit;
+    end;
+    obj.lclSetEnabled(bEnable);
+
+    if (CaptureControl <> 0)
+      and (not bEnable)
+      and (obj.isKindOfClass(NSView))
+      and NSViewIsLCLEnabled(NSView(obj)) then
+      ReleaseCapture
+  end;
 end;
 
 function TCocoaWidgetSet.EndPaint(Handle: hwnd; var PS: TPaintStruct): Integer;
@@ -1007,8 +1030,8 @@ begin
     SPI_GETWHEELSCROLLLINES: PDword(pvPAram)^ := 3;
     SPI_GETWORKAREA:
     begin
-      NSToLCLRect(NSScreen.mainScreen.visibleFrame
-        , NSScreen.mainScreen.frame.size.height
+      NSToLCLRect(NSScreen(NSScreen.screens.objectAtIndex(0)).visibleFrame
+        , NSScreenZeroHeight
         , TRect(pvParam^));
     end;
   else
@@ -1106,7 +1129,7 @@ begin
   begin
     lpPoint.x := Round(x);
     // cocoa returns cursor with inverted y coordinate
-    lpPoint.y := Round(NSScreen.mainScreen.frame.size.height-y);
+    lpPoint.y := Round(NSScreenZeroHeight-y);
   end;
   //debugln('GetCursorPos='+DbgS(lpPoint));
   Result := True;
@@ -1114,6 +1137,7 @@ end;
 
 function TCocoaWidgetSet.GetMonitorInfo(hMonitor: HMONITOR; lpmi: PMonitorInfo): Boolean;
 var
+  Scr0Height:  CGFloat;
   ScreenID: NSScreen;
   idx : NSUInteger;
 begin
@@ -1123,9 +1147,10 @@ begin
   Result := (idx < NSScreen.screens.count);
   if not Result then Exit;
 
+  Scr0Height := NSScreenZeroHeight;
   ScreenID := NSScreen(NSScreen.screens.objectAtIndex(idx));
-  lpmi^.rcMonitor := NSRectToRect(ScreenID.frame);
-  NSToLCLRect(ScreenID.visibleFrame, ScreenID.frame.size.height, lpmi^.rcWork);
+  NSToLCLRect(ScreenID.frame, Scr0Height, lpmi^.rcMonitor);
+  NSToLCLRect(ScreenID.visibleFrame, Scr0Height, lpmi^.rcWork);
   // according to the documentation the primary (0,0 coord screen)
   // is always and index 0
   if idx = 0 then
@@ -1275,7 +1300,7 @@ begin
       Result := SizeOf(TLogFont);
       FillChar(ALogFont^, SizeOf(ALogFont^), 0);
       ALogFont^.lfFaceName := AFont.Name;
-      ALogFont^.lfHeight := AFont.Size;
+      ALogFont^.lfHeight := -AFont.Size; // Cocoa supports only full height (with leading) that corresponds with a negative value in WinAPI
       Traits := NSFontManager.sharedFontManager.traitsOfFont(AFont.Font);
       if (Traits and NSFontBoldTrait) <> 0 then
         ALogFont^.lfWeight := FW_BOLD
@@ -1301,12 +1326,7 @@ function TCocoaWidgetSet.GetWindowRelativePosition(Handle: hwnd; var Left, Top: 
 begin
   Result := Handle <> 0;
   if Result then
-  begin
-    if TCocoaWindowContent(handle).isembedded then
-       TCocoaWindowContent(handle).lclRelativePos(Left, Top)
-    else
-       TCocoaWindowContent(handle).window.lclRelativePos(Left, Top);
-  end
+    NSObject(handle).lclRelativePos(Left, Top);
 end;
 
 function TCocoaWidgetSet.GetWindowSize(Handle: hwnd; var Width, Height: Integer): boolean;
@@ -1490,7 +1510,7 @@ begin
   begin
     window:=windows.objectAtIndex(win);
     p.x:=Point.X;
-    p.y:=window.screen.frame.size.height-Point.Y;
+    p.y:=NSScreenZeroHeight-Point.Y;
     winnr:=NSWindow.windowNumberAtPoint_belowWindowWithWindowNumber(p,0);
     windowbelowpoint:=NSWindow(NSApp.windowWithWindowNumber(winnr));
     if windowbelowpoint=window then

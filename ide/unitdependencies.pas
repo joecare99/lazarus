@@ -197,6 +197,7 @@ type
     procedure AllUnitsSearchPrevSpeedButtonClick(Sender: TObject);
     procedure AllUnitsShowDirsSpeedButtonClick(Sender: TObject);
     procedure AllUnitsShowGroupNodesSpeedButtonClick(Sender: TObject);
+    procedure FormActivate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure GraphOptsMenuItemClick(Sender: TObject);
     procedure RefreshButtonClick(Sender: TObject);
@@ -562,7 +563,7 @@ end;
 
 procedure TUnitDependenciesWindow.FormCreate(Sender: TObject);
 begin
-  Name := NonModalIDEWindowNames[nmiwUnitDependenciesName];
+  Name := NonModalIDEWindowNames[nmiwUnitDependencies];
 
   FGroupLvlGraphSelectionsList := TStringList.Create;
   FPendingUnitDependencyRoute:=TStringList.Create;
@@ -2388,6 +2389,11 @@ begin
     end;
   end;
   Result:=nil;
+end;
+
+procedure TUnitDependenciesWindow.FormActivate(Sender: TObject);
+begin
+  SearchCustomFilesComboBox.DropDownCount:=EnvironmentOptions.DropDownCount;
 end;
 
 function TUnitDependenciesWindow.GetImgIndex(Node: TUDNode): integer;

@@ -327,6 +327,8 @@ begin
     Result:='.exe'
   else if SameText(TargetOS, 'browser') or SameText(TargetOS,'nodejs') then
     Result:='.js'
+  else if SameText(TargetOS, 'embedded') then
+      Result:='.elf'
   else
     Result:='';
 end;
@@ -356,6 +358,7 @@ begin
   or (CompareText(TargetOS, 'freebsd') = 0)
   or (CompareText(TargetOS, 'openbsd') = 0)
   or (CompareText(TargetOS, 'netbsd') = 0)
+  or (CompareText(TargetOS, 'dragonfly') = 0)
   or (CompareText(TargetOS, 'haiku') = 0) then
     Result:='.so'
   else
@@ -397,6 +400,7 @@ begin
   or (CompareText(TargetOS,'freebsd')=0)
   or (CompareText(TargetOS,'netbsd')=0)
   or (CompareText(TargetOS,'openbsd')=0)
+  or (CompareText(TargetOS,'dragonfly')=0)
   then
     Result:=ExtractFilePath(Result)+lowercase(ExtractFileName(Result));
 end;

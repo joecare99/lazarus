@@ -143,6 +143,7 @@ type
     _keyEvCallback: ICommonCallback;
     callback: IWindowCallback;
     keepWinLevel : NSInteger;
+    stopKeyEquivalent: Boolean;
     //LCLForm: TCustomForm;
     procedure dealloc; override;
     function acceptsFirstResponder: LCLObjCBoolean; override;
@@ -168,6 +169,7 @@ type
     procedure sendEvent(event: NSEvent); override;
     // key
     procedure keyDown(event: NSEvent); override;
+    function performKeyEquivalent(event: NSEvent): LCLObjCBoolean; override;
     // menu support
     procedure lclItemSelected(sender: id); message 'lclItemSelected:';
 
@@ -221,6 +223,7 @@ type
     function lclOwnWindow: NSWindow; message 'lclOwnWindow';
     procedure lclSetFrame(const r: TRect); override;
     function lclFrame: TRect; override;
+    procedure lclRelativePos(var Left, Top: Integer); override;
     procedure viewDidMoveToSuperview; override;
     procedure viewDidMoveToWindow; override;
     procedure viewWillMoveToWindow(newWindow: CocoaAll.NSWindow); override;
@@ -230,9 +233,6 @@ type
     procedure setStringValue(avalue: NSString); message 'setStringValue:';
     function stringValue: NSString; message 'stringValue';
   end;
-
-procedure NSScreenGetRect(sc: NSScreen; out r: TRect);
-procedure NSScreenGetRect(sc: NSScreen; mainScreenHeight: double; out r: TRect);
 
 implementation
 
@@ -445,11 +445,19 @@ begin
   begin
     //Window bounds should return "client rect" in screen coordinates
     if Assigned(window.screen) then
-      NSToLCLRect(window.frame, window.screen.frame.size.height, wfrm)
+      NSToLCLRect(window.frame, NSScreenZeroHeight, wfrm)
     else
       wfrm := NSRectToRect(frame);
     OffsetRect(Result, -Result.Left+wfrm.Left, -Result.Top+wfrm.Top);
   end;
+end;
+
+procedure TCocoaWindowContent.lclRelativePos(var Left, Top: Integer);
+begin
+  if isembedded then
+    inherited lclRelativePos(Left, Top)
+  else
+    window.lclRelativePos(Left, Top);
 end;
 
 procedure TCocoaWindowContent.viewDidMoveToSuperview;
@@ -740,6 +748,13 @@ begin
 
   if Assigned(callback) then
     callback.Activate;
+
+  // LCL didn't change focus. TCocoaWindow should not keep the focus for itself
+  // and it should pass it to it's content view
+  if (firstResponder = self)
+    and Assigned(contentView)
+    and (contentView.isKindOfClass(TCocoaWindowContent)) then
+    self.makeFirstResponder( TCocoaWindowContent(contentView).documentView );
 end;
 
 procedure TCocoaWindow.windowDidResignKey(notification: NSNotification);
@@ -976,7 +991,18 @@ begin
       Exit;
   end;
 
+  // we tried everything (all keyEquiovalents), see calls above
+  // now we just want to stop the Beep
+  stopKeyEquivalent:=true;
   inherited keyDown(event);
+  stopKeyEquivalent:=false;
+end;
+
+function TCocoaWindow.performKeyEquivalent(event: NSEvent): LCLObjCBoolean;
+begin
+  Result:=inherited performKeyEquivalent(event);
+  if stopKeyEquivalent and not Result then
+    Result := true;
 end;
 
 function TCocoaWindowContentDocument.draggingEntered(sender: NSDraggingInfoProtocol): NSDragOperation;
@@ -1147,7 +1173,7 @@ begin
   begin
     f:=frame;
     Left := Round(f.origin.x);
-    Top := Round(screen.frame.size.height - f.size.height - f.origin.y);
+    Top := Round(NSScreenZeroHeight - f.size.height - f.origin.y);
     //debugln('Top:'+dbgs(Top));
   end;
 end;
@@ -1160,7 +1186,7 @@ begin
   begin
     f := frame;
     inc(X, Round(f.origin.x));
-    inc(Y, Round(screen.frame.size.height - f.size.height - f.origin.y));
+    inc(Y, Round(NSScreenZeroHeight - f.size.height - f.origin.y));
   end;
 end;
 
@@ -1183,7 +1209,7 @@ begin
   else
   begin
     if Assigned(screen) then
-      NSToLCLRect(frame, screen.frame.size.height, Result)
+      NSToLCLRect(frame, NSScreenZeroHeight, Result)
     else
       Result := NSRectToRect(frame);
   end;
@@ -1219,42 +1245,12 @@ begin
   NSScreenGetRect(sc, NSScreen.mainScreen.frame.size.height, r);
 end;
 
-function GetScreenForPoint(x,y: Integer): NSScreen;
-var
-  scarr : NSArray;
-  sc    : NSScreen;
-  r     : TRect;
-  h     : double;
-  p     : TPoint;
-  i     : Integer;
-begin
-  p.x := x;
-  p.y := y;
-  scarr := NSScreen.screens;
-  h := NSScreen.mainScreen.frame.size.height;
-  sc := NSScreen(scarr.objectAtIndex(0));
-  for i:=0 to scarr.count-1 do begin
-    sc:=NSScreen(scarr.objectAtIndex(i));
-    NSScreenGetRect(sc, h, r);
-    if Types.PtInRect(r, p) then begin
-      Result := sc;
-      Exit;
-    end;
-  end;
-  Result := NSScreen.mainScreen;
-end;
-
 procedure LCLWindowExtension.lclSetFrame(const r: TRect);
 var
   ns : NSRect;
   h  : integer;
-  sc : NSScreen;
-  srect : NSRect;
 begin
-  sc := GetScreenForPoint(r.Left, r.Top);
-  srect := sc.frame;
-
-  LCLToNSRect(r, srect.size.height, ns);
+  LCLToNSRect(r, NSScreenZeroHeight, ns);
 
   // add topbar height
   h:=lclGetTopBarHeight;

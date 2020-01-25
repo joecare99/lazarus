@@ -102,7 +102,7 @@
 unit FpDbgWinClasses;
 
 {$mode objfpc}{$H+}
-{$DEFINE DebuglnWinDebugEvents}
+{off $DEFINE DebuglnWinDebugEvents}
 
 interface
 
@@ -185,6 +185,7 @@ type
     function ReadString(const AAdress: TDbgPtr; const AMaxSize: Cardinal; out AData: String): Boolean; override;
     function ReadWString(const AAdress: TDbgPtr; const AMaxSize: Cardinal; out AData: WideString): Boolean; override;
 
+    procedure Interrupt; // required by app/fpd
     function  HandleDebugEvent(const ADebugEvent: TDebugEvent): Boolean;
 
     class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags): TDbgProcess; override;
@@ -384,19 +385,17 @@ begin
 
   // GetFinalPathNameByHandle is only available on Windows Vista / Server 2008
   if assigned(_GetFinalPathNameByHandle) then begin
-    SetLength(u, MAX_PATH);
+    SetLength(u, MAX_PATH+1);
 
     len := _GetFinalPathNameByHandle(AModuleHandle, @u[1], MAX_PATH, 0);
     s:='';
     if len > 0
     then begin
-      SetLength(u, len - 1);
-      if (u<>'') and (u[length(u)]=#0) then
-      begin
-        // On some older Windows versions there's a bug in GetFinalPathNameByHandleW,
-        // which leads to a trailing #0.
-        Delete(u,length(u),1);
-      end;
+      // On some older Windows versions there's a bug in GetFinalPathNameByHandleW,
+      // which leads to a trailing #0.
+      if (u[len]=#0) then
+        dec(len);
+      SetLength(u, len);
       s:=UTF8Encode(u);
     end else begin
       u := '';
@@ -441,7 +440,7 @@ end;
 
 procedure tDbgWinLibrary.InitializeLoaders;
 begin
-  TDbgImageLoader.Create(FInfo.hFile).AddToLoaderList(LoaderList);
+  TDbgImageLoaderLibrary.Create(FInfo.hFile, nil, TDBGPtr(FInfo.lpBaseOfDll)).AddToLoaderList(LoaderList);
 end;
 
 constructor tDbgWinLibrary.Create(const AProcess: TDbgProcess;
@@ -550,6 +549,48 @@ begin
   AData := PWChar(@Buf[0]);
 end;
 
+procedure TDbgWinProcess.Interrupt;
+var
+  _UC: record
+    C: TContext;
+    D: array[1..16] of Byte;
+  end;
+  Context: PContext;
+begin
+  // Interrupting is implemented by suspending the thread and set DB0 to the
+  // (to be) executed EIP. When the thread is resumed, it will generate a break
+  // Single stepping doesn't work in all cases.
+
+  // A context needs to be aligned to 16 bytes. Unfortunately, the compiler has
+  // no directive for this, so align it somewhere in our "reserved" memory
+  Context := AlignPtr(@_UC, $10);
+  SuspendThread(FInfo.hThread);
+  try
+    Context^.ContextFlags := CONTEXT_CONTROL or CONTEXT_DEBUG_REGISTERS;
+    if not GetThreadContext(FInfo.hThread, Context^)
+    then begin
+      DebugLn(DBG_WARNINGS, 'Proces %u interrupt: Unable to get context', [ProcessID]);
+      Exit;
+    end;
+
+    Context^.ContextFlags := CONTEXT_DEBUG_REGISTERS;
+    {$ifdef cpui386}
+    Context^.Dr0 := Context^.Eip;
+    {$else}
+    Context^.Dr0 := Context^.Rip;
+    {$endif}
+    Context^.Dr7 := (Context^.Dr7 and $FFF0FFFF) or $1;
+
+    if not SetThreadContext(FInfo.hThread, Context^)
+    then begin
+      DebugLn(DBG_WARNINGS, 'Proces %u interrupt: Unable to set context', [ProcessID]);
+      Exit;
+    end;
+  finally
+    ResumeTHread(FInfo.hThread);
+  end;
+end;
+
 { ------------------------------------------------------------------
   HandleDebugEvent
 
@@ -644,7 +685,6 @@ var
 begin
 debugln(['TDbgWinProcess.Continue ',SingleStep]);
   if assigned(AThread) and not FThreadMap.HasId(AThread.ID) then begin
-    AThread.Free;
     AThread := nil;
   end;
 
@@ -1178,7 +1218,7 @@ begin
       end;
       UNLOAD_DLL_DEBUG_EVENT: begin
         //DumpEvent('UNLOAD_DLL_DEBUG_EVENT');
-        result := deInternalContinue;
+        result := deUnloadLibrary;
       end;
       OUTPUT_DEBUG_STRING_EVENT: begin
         //DumpEvent('OUTPUT_DEBUG_STRING_EVENT');
@@ -1287,7 +1327,7 @@ begin
   Result := TDbgWinLibrary.Create(Self, HexValue(AInfo.lpBaseOfDll, SizeOf(Pointer), [hvfIncludeHexchar]), AInfo.hFile, TDbgPtr(AInfo.lpBaseOfDll), AInfo);
   ID := TDbgPtr(AInfo.lpBaseOfDll);
   FLibMap.Add(ID, Result);
-  if Result.DbgInfo.HasInfo
+  if (Result.DbgInfo.HasInfo) or (Result.SymbolTableInfo.HasInfo)
   then FSymInstances.Add(Result);
 end;
 
@@ -1299,10 +1339,9 @@ begin
   if FLibMap = nil then Exit;
   ID := TDbgPtr(AInfo.lpBaseOfDll);
   if not FLibMap.GetData(ID, Lib) then Exit;
-  if Lib.DbgInfo.HasInfo
-  then FSymInstances.Remove(Lib);
+  FSymInstances.Remove(Lib);
   FLibMap.Delete(ID);
-  Lib.Free;
+  SetLastLibraryUnloaded(Lib);
 end;
 
 { TDbgWinThread }
@@ -1516,7 +1555,7 @@ begin
       Dr2 := DWORD(TFpIntelWatchPointData(AWatchPointData).Dr03[2]);
       Dr3 := DWORD(TFpIntelWatchPointData(AWatchPointData).Dr03[3]);
       Dr7 := (Dr7 and $0000FF00) or DWORD(TFpIntelWatchPointData(AWatchPointData).Dr7);
-DebugLn('### WATCH ADDED  dr0 %x  dr1 %x  dr2 %x  dr3 %x      dr7 %x', [ dr0,dr1,dr2,dr3, dr7]);
+DebugLn(DBG_VERBOSE, '### WATCH ADDED  dr0 %x  dr1 %x  dr2 %x  dr3 %x      dr7 %x', [ dr0,dr1,dr2,dr3, dr7]);
     end;
   end
   else begin
@@ -1527,7 +1566,7 @@ DebugLn('### WATCH ADDED  dr0 %x  dr1 %x  dr2 %x  dr3 %x      dr7 %x', [ dr0,dr1
       Dr2 := TFpIntelWatchPointData(AWatchPointData).Dr03[2];
       Dr3 := TFpIntelWatchPointData(AWatchPointData).Dr03[3];
       Dr7 := (Dr7 and $0000FF00) or TFpIntelWatchPointData(AWatchPointData).Dr7;
-DebugLn('### WATCH ADDED   dr0 %x  dr1 %x  dr2 %x  dr3 %x      dr7 %x', [ dr0,dr1,dr2,dr3, dr7]);
+DebugLn(DBG_VERBOSE, '### WATCH ADDED   dr0 %x  dr1 %x  dr2 %x  dr3 %x      dr7 %x', [ dr0,dr1,dr2,dr3, dr7]);
     end;
   {$ifdef cpux86_64}
   end;

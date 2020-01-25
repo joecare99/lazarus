@@ -540,6 +540,9 @@ type
     procedure LMSelChange(var TheMessage); message LM_SelChange;
     procedure WMLButtonUp(Var Message: TLMLButtonUp); message LM_LBUTTONUP;
     procedure SendItemSelected(Index: integer; IsSelected: boolean);
+    procedure ClearSelectedCache;
+    procedure SetSelectedCache(Index: Integer; IsSelected: Boolean);
+    function GetSelectedCache(Index: Integer): Boolean;
   protected
     class procedure WSRegisterClass; override;
     procedure AssignItemDataToCache(const AIndex: Integer; const AData: Pointer); virtual; // called to store item data while the handle isn't created
@@ -1719,7 +1722,4 @@ end;
 
 {$I customstatictext.inc}
 
-initialization
-  RegisterPropertyToSkip(TCustomEdit, 'TextHintFontColor','Used in a previous version of Lazarus','');
-  RegisterPropertyToSkip(TCustomEdit, 'TextHintFontStyle','Used in a previous version of Lazarus','');
 end.

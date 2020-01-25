@@ -2317,6 +2317,10 @@ msgstr ""
 "Uma área de trabalho com o mesmo nome já existe.\n"
 "Favor confirmar o nome da área de trabalho:"
 
+#: lazarusidestrconsts.dlgincludecodetemplatestoidentcompl
+msgid "Include code templates"
+msgstr "Incluir modelos de código"
+
 #: lazarusidestrconsts.dlgincludeidentifierscontainingprefix
 msgid "Include identifiers containing prefix"
 msgstr "Incluir identificadores contendo prefixo"
@@ -3263,6 +3267,10 @@ msgstr "Cursor texto visível em editor fora de foco"
 msgid "Caret in unfocused editor does not blink"
 msgstr "Cursor texto em editor fora de foco não pisca"
 
+#: lazarusidestrconsts.dlgpoansiutf8
+msgid "ANSI codepage is UTF-8 (Windows 10 1903+)"
+msgstr "Código de página ANSI é UTF-8 (Windows 10 1903+)"
+
 #: lazarusidestrconsts.dlgpoapplication
 msgid "Application"
 msgstr "Aplicação"
@@ -3652,6 +3660,10 @@ msgstr "Escopo localização"
 #: lazarusidestrconsts.dlgselectallchildcontrols
 msgid "Select all child controls together with their parent."
 msgstr "Selecionar todos os controles filhos juntamente com seus pais."
+
+#: lazarusidestrconsts.dlgselectallnoscroll
+msgid "Do not scroll on Select-All / Paragraph or To-Brace"
+msgstr "Não rolar em Selecionar Tudo / Parágrafo ou Até Colchete"
 
 #: lazarusidestrconsts.dlgselectedtext
 msgid "&Selected text"
@@ -7018,6 +7030,10 @@ msgstr "Retorna"
 msgid "Visibility"
 msgstr "Visibilidade"
 
+#: lazarusidestrconsts.liscomboboxes
+msgid "Combo Boxes"
+msgstr "Caixas de Combinação"
+
 #: lazarusidestrconsts.liscommandlineparameters
 msgctxt "lazarusidestrconsts.liscommandlineparameters"
 msgid "Command line parameters"
@@ -9004,6 +9020,10 @@ msgstr "Desenhar linhas da grade"
 #: lazarusidestrconsts.lisdrawtheselectionfocusedevenifthemessageswindowhasn
 msgid "Draw the selection focused even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
 msgstr "Desenhar a seleção focada, mesmo se a janela Mensagens não estiver em foco. Usar isto se o seu tema tem uma visão difícil de desenho não focado."
+
+#: lazarusidestrconsts.lisdropdowncount
+msgid "Drop Down Count"
+msgstr "Contagem Lista Suspensa"
 
 #: lazarusidestrconsts.lisdsgcopycomponents
 msgid "Copy selected components to clipboard"
@@ -12444,6 +12464,14 @@ msgstr "Maximizar a compatibilidade dos arquivos de projeto (LPI e LPS)."
 #: lazarusidestrconsts.lislpicompatibilitymodecheckboxhint
 msgid "Check this if you want to open your project in legacy (2.0 and older) Lazarus versions."
 msgstr "Verifique se você deseja abrir projetos em versões legadas do Lazarus (2.0 e mais antigas)."
+
+#: lazarusidestrconsts.lislpkcompatibilitymodecheckbox
+msgid "Maximize compatibility of package file (LPK)"
+msgstr "Maximizar compatibilidade de arquivo de pacote (LPK)"
+
+#: lazarusidestrconsts.lislpkcompatibilitymodecheckboxhint
+msgid "Check this if you want to open your package in legacy (2.0 and older) Lazarus versions."
+msgstr "Marcar isto se você deseja abrir seu pacote em versões legadas do Lazarus (2.0 e mais antigas)."
 
 #: lazarusidestrconsts.lislpkhasvanishedondiskusingasalternative
 #, object-pascal-format
@@ -20865,9 +20893,25 @@ msgstr "&Construção:"
 msgid "Character set:"
 msgstr "Conjunto caracteres:"
 
+#: lazarusidestrconsts.rscloseall
+msgid "Close all pages"
+msgstr "Fechar todas as páginas"
+
 #: lazarusidestrconsts.rsclosecurrentpage
 msgid "Close current page"
 msgstr "Fechar página atual"
+
+#: lazarusidestrconsts.rscloseleft
+msgid "Close page(s) on the left"
+msgstr "Fechar página(s) à esquerda."
+
+#: lazarusidestrconsts.rscloseothers
+msgid "Close other page(s)"
+msgstr "Fechar outra(s) página(s)"
+
+#: lazarusidestrconsts.rscloseright
+msgid "Close page(s) on the right"
+msgstr "Fechar página(s) à direita."
 
 #: lazarusidestrconsts.rsconditionaldefines
 msgid "Conditional defines"
@@ -21385,6 +21429,18 @@ msgctxt "lazarusidestrconsts.srkmeccopy"
 msgid "Copy"
 msgstr "Copiar"
 
+#: lazarusidestrconsts.srkmeccopyadd
+msgid "Copy (Add to Clipboard)"
+msgstr "Copiar (adicionar à área de transferência)"
+
+#: lazarusidestrconsts.srkmeccopyaddcurrentline
+msgid "Copy current line (Add to Clipboard)"
+msgstr "Copiar linha atual (adicionar à área de transferência)"
+
+#: lazarusidestrconsts.srkmeccopycurrentline
+msgid "Copy current line"
+msgstr "Copiar linha atual"
+
 #: lazarusidestrconsts.srkmeccopyeditornewwindow
 msgid "Copy editor to new window"
 msgstr "Copiar editor para nova janela"
@@ -21401,6 +21457,18 @@ msgstr "Copia editor para janela livre anterior"
 msgctxt "lazarusidestrconsts.srkmeccut"
 msgid "Cut"
 msgstr "Recortar"
+
+#: lazarusidestrconsts.srkmeccutadd
+msgid "Cut (Add to Clipboard)"
+msgstr "Recortar (adicionar à área de transferência)"
+
+#: lazarusidestrconsts.srkmeccutaddcurrentline
+msgid "Cut current line (Add to Clipboard)"
+msgstr "Recortar linha atual (adicionar à área de transferência)"
+
+#: lazarusidestrconsts.srkmeccutcurrentline
+msgid "Cut current line"
+msgstr "Recortar linha atual"
 
 #: lazarusidestrconsts.srkmecdeletebol
 msgid "Delete to beginning of line"
@@ -21442,6 +21510,14 @@ msgstr "Diferenciar (Diff)"
 #: lazarusidestrconsts.srkmecdown
 msgid "Move cursor down"
 msgstr "Mover cursor abaixo"
+
+#: lazarusidestrconsts.srkmecduplicateline
+msgid "Duplicate line (or lines in selection)"
+msgstr "Duplicar linha (ou linhas na seleção)"
+
+#: lazarusidestrconsts.srkmecduplicateselection
+msgid "Duplicate selection"
+msgstr ""
 
 #: lazarusidestrconsts.srkmeceditorbottom
 msgid "Move cursor to absolute end"
@@ -21759,6 +21835,34 @@ msgstr "Mover editor a direita"
 #: lazarusidestrconsts.srkmecmoveeditorrightmost
 msgid "Move editor rightmost"
 msgstr "Mover editor extremo direito"
+
+#: lazarusidestrconsts.srkmecmovelinedown
+#, fuzzy
+#| msgid "Move one line down"
+msgid "Move line down"
+msgstr "Mover uma linha abaixo"
+
+#: lazarusidestrconsts.srkmecmovelineup
+#, fuzzy
+#| msgid "Move one line up"
+msgid "Move line up"
+msgstr "Mover uma linha acima"
+
+#: lazarusidestrconsts.srkmecmoveselectdown
+msgid "Move selection down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectleft
+msgid "Move selection left"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectright
+msgid "Move selection right"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectup
+msgid "Move selection up"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecmultipaste
 msgctxt "lazarusidestrconsts.srkmecmultipaste"

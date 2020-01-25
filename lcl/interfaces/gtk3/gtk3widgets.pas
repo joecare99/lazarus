@@ -54,7 +54,7 @@ type
     wtGroupBox, wtCalendar, wtTrackBar, wtScrollBar,
     wtScrollingWin, wtListBox, wtListView, wtCheckListBox, wtMemo, wtTreeModel,
     wtCustomControl, wtScrollingWinControl,
-    wtWindow, wtDialog, wtHintWindow);
+    wtWindow, wtDialog, wtHintWindow, wtGLArea);
   TGtk3WidgetTypes = set of TGtk3WidgetType;
 
   { TGtk3Widget }
@@ -165,7 +165,7 @@ type
     procedure SetParent(AParent: TGtk3Widget; const ALeft, ATop: Integer); virtual;
     procedure Show; virtual;
     procedure ShowAll; virtual;
-    procedure Update(ARect: PRect);
+    procedure Update(ARect: PRect); virtual;
     property CairoContext: Pcairo_t read GetCairoContext;
     property Color: TColor read GetColor write SetColor;
     property Context: HDC read GetContext;
@@ -571,6 +571,7 @@ type
     procedure SetColumnMinWidth(AIndex: Integer; AColumn: TListColumn; AMinWidth: Integer);
     procedure SetColumnWidth(AIndex: Integer; AColumn: TListColumn; AWidth: Integer);
     procedure SetColumnVisible(AIndex: Integer; AColumn: TListColumn; AVisible: Boolean);
+    procedure ColumnSetSortIndicator(const AIndex: Integer; const AColumn: TListColumn; const ASortIndicator: TSortIndicator);
 
     procedure ItemDelete(AIndex: Integer);
     procedure ItemInsert(AIndex: Integer; AItem: TListItem);
@@ -603,8 +604,6 @@ type
 
   TGtk3Panel = class(TGtk3Bin)
   private
-    FBevelInner: TBevelCut;
-    FBevelOuter: TBevelCut;
     FBorderStyle: TBorderStyle;
     FText: String;
   protected
@@ -614,8 +613,6 @@ type
     function getText: String; override;
     procedure setText(const AValue: String); override;
   public
-    property BevelInner: TBevelCut read FBevelInner write FBevelInner;
-    property BevelOuter: TBevelCut read FBevelOuter write FBevelOuter;
     property BorderStyle: TBorderStyle read FBorderStyle write FBorderStyle;
   end;
 
@@ -822,6 +819,16 @@ type
   public
     constructor Create(const ACommonDialog: TCommonDialog); virtual; overload;
   end;
+
+  { TGtk3GLArea }
+  TGtk3GLArea = class(TGtk3Widget)
+  protected
+    function CreateWidget(const Params: TCreateParams): PGtkWidget; override;
+  public
+    procedure Update(ARect: PRect); override;
+  end;
+
+
 
 {main event filter for all widgets, also called from widgetset main eventfilter}
 function Gtk3WidgetEvent(widget: PGtkWidget; event: PGdkEvent; data: GPointer): gboolean; cdecl;
@@ -2497,8 +2504,7 @@ begin
     FWidget^.Visible := AValue;
 end;
 
-function TGtk3Widget.QueryInterface(constref iid: TGuid; out obj): LongInt;
-  cdecl;
+function TGtk3Widget.QueryInterface(constref iid: TGuid; out obj): LongInt; cdecl;
 begin
   if GetInterface(iid, obj) then
     Result := 0
@@ -3012,7 +3018,7 @@ begin
     StyleContext^.get_background_color(GTK_STATE_FLAG_NORMAL, @AGdkRGBA);
 
     // writeln('ACOLOR R=',AColor.Red,' G=',AColor.green,' B=',AColor.blue);
-    // AColor := TColortoTGDKColor(AValue);
+    // AColor := TColorToTGDKColor(AValue);
     {AGdkRGBA.alpha := 0;
     AGdkRGBA.red := AColor.red / 65535.00;
     AGdkRGBA.blue := AColor.blue / 65535.00;
@@ -3024,7 +3030,7 @@ begin
     FWidget^.override_background_color(GTK_STATE_FLAG_SELECTED, @AGdkRGBA);
   end else
   begin
-    AColor := TColortoTGDKColor(AValue);
+    AColor := TColorToTGDKColor(AValue);
     // writeln('ACOLOR R=',AColor.Red,' G=',AColor.green,' B=',AColor.blue);
     //inherited SetColor(AValue);
   end;
@@ -3036,8 +3042,6 @@ var
 begin
   FHasPaint := True;
   FBorderStyle := bsNone;
-  FBevelInner := bvNone;
-  FBevelOuter := bvNone;
   // wtLayout = using GtkLayout
   // FWidgetType := [wtWidget, wtLayout];
   // Result := TGtkLayout.new(nil, nil);
@@ -3063,14 +3067,26 @@ end;
 procedure TGtk3Panel.DoBeforeLCLPaint;
 var
   DC: TGtk3DeviceContext;
+  NColor: TColor;
 begin
   inherited DoBeforeLCLPaint;
-  // example how to paint borderstyle/bevels of TPanel before we send event to lcl
-  DC := TGtk3DeviceContext(FContext);
   if not Visible then
     exit;
+
+  DC := TGtk3DeviceContext(FContext);
+
+  NColor := LCLObject.Color;
+  if (NColor <> clNone) and (NColor <> clDefault) then
+  begin
+    DC.CurrentBrush.Color := ColorToRGB(NColor);
+    DC.fillRect(0, 0, LCLObject.Width, LCLObject.Height);
+  end;
+
   if BorderStyle <> bsNone then
-    DC.drawRect(0, 0, LCLObject.Width, LCLObject.Height, LCLObject.Color <> clDefault);
+  begin
+    DC.CurrentPen.Color := ColorToRGB(clBtnShadow); // not sure what color to use here?
+    DC.drawRect(0, 0, LCLObject.Width, LCLObject.Height, False, True);
+  end;
 end;
 
 function TGtk3Panel.getText: String;
@@ -3591,6 +3607,7 @@ var
 begin
   if IsWidgetOK then
   begin
+    PGtkScale(FWidget)^.set_draw_value(ATickStyle <> tsNone);
     if ATickStyle = tsNone then
       PGtkScale(FWidget)^.clear_marks
     else
@@ -4008,7 +4025,7 @@ begin
   for i:=0 to AToolbar.ButtonCount-1 do
   begin
     btn:=AToolBar.Buttons[i];
-    bs:=StringReplace(btn.Caption,'&','_',[rfReplaceAll]);
+    bs:= ReplaceAmpersandsWithUnderscores(btn.Caption);
     wicon:=nil;
     if btn is TToolButton then
     begin
@@ -4019,7 +4036,7 @@ begin
         if Assigned(AToolBar.Images) and (btn.ImageIndex>=0) then
         begin
           bmp:=TBitmap.Create; { this carries gdk pixmap }
-          resolution:=Atoolbar.Images.Resolution[Atoolbar.Images.Width];
+          resolution:=AToolBar.Images.Resolution[AToolBar.ImagesWidth]; // not AToolBar.Images.Width, issue #36465
           resolution.GetRawImage(btn.ImageIndex,raw);
           { convince the bitmap it has actually another format }
           bmp.BeginUpdate();
@@ -4050,6 +4067,7 @@ begin
         begin
           gtb:=TGtkToggleToolButton.new();
           PGtkToolButton(gtb)^.set_label(PgChar(bs));
+          PGtkToolButton(gtb)^.set_icon_widget(wicon);
         end
   	  else
     	  gtb:=TGtkToolButton.new(wicon,PgChar(bs));
@@ -4493,13 +4511,28 @@ end;
 function TGtk3MenuItem.CreateWidget(const Params: TCreateParams): PGtkWidget;
 var
   ndx:integer;
-  pmenu:TMenuItem;
   pl:PGsList;
+  parentMenu:TMenuItem;
+  picon:PGtkImage;
+  pmenu:PGtkMenuItem;
+  pimgmenu:PgtkImageMenuItem absolute pmenu;
+  img:TGtk3Image;
 begin
+  Result:=nil;
   FWidgetType := [wtWidget, wtMenuItem];
   if MenuItem.Caption = cLineCaption then
     Result := TGtkSeparatorMenuItem.new
   else
+  if (MenuItem.HasIcon) then
+  begin
+    pimgmenu := TGtkImageMenuItem.new();
+    MenuItem.UpdateImage(true);
+    img:=Tgtk3Image(MenuItem.Bitmap.Handle);
+    picon := TGtkImage.new_from_pixbuf(img.Handle);
+    pimgmenu^.set_image(picon);
+    pimgmenu^.set_always_show_image(true);
+    Result:=pimgmenu;
+  end else
   if MenuItem.RadioItem and not MenuItem.HasIcon then
   begin
     Result := TGtkRadioMenuItem.new(nil);
@@ -4508,30 +4541,29 @@ begin
       ndx:=menuItem.Parent.IndexOf(MenuItem);
       if (ndx>0) then
       begin
-        pMenu:=menuItem.Parent.Items[ndx-1];
-        if (MenuItem.GroupIndex>0) and (pMenu.GroupIndex=MenuItem.GroupIndex) then
+        ParentMenu:=menuItem.Parent.Items[ndx-1];
+        if (MenuItem.GroupIndex>0) and (ParentMenu.GroupIndex=MenuItem.GroupIndex) then
         begin
-          pl:=PGtkRadioMenuItem(TGtk3MenuItem(pMenu.Handle).Widget)^.get_group;
+          pl:=PGtkRadioMenuItem(TGtk3MenuItem(ParentMenu.Handle).Widget)^.get_group;
           PGtkRadioMenuItem(Result)^.set_group(pl);
         end;
       end;
     end;
   end
   else
-  if MenuItem.IsCheckItem or MenuItem.HasIcon then
+  if MenuItem.IsCheckItem and not MenuItem.HasIcon then
     Result := TGtkCheckMenuItem.new
   else
     Result := TGtkMenuItem.new;
 
-  if MenuItem.Caption <> cLineCaption then
+  if Assigned(Result) and (MenuItem.Caption <> cLineCaption) {and not MenuItem.HasIcon} then
   begin
-    PGtkMenuItem(Result)^.set_label(PgChar(MenuItem.Caption));
+    PGtkMenuItem(Result)^.use_underline := True;
+    PGtkMenuItem(Result)^.set_label(PgChar(ReplaceAmpersandsWithUnderscores(MenuItem.Caption)));
     PGtkMenuItem(Result)^.set_sensitive(MenuItem.Enabled);
-    // there's nothing like this in Gtk3
-    // if MenuItem.RightJustify then
-    //  gtk_menu_item_right_justify(PGtkMenuItem(Widget));
-
   end;
+
+
 end;
 
 constructor TGtk3MenuItem.Create(const AMenuItem: TMenuItem);
@@ -5791,6 +5823,27 @@ begin
   end;
 end;
 
+procedure TGtk3ListView.ColumnSetSortIndicator(const AIndex: Integer;
+  const AColumn: TListColumn; const ASortIndicator: TSortIndicator);
+const
+  GtkOrder : array [ TSortIndicator] of TGtkSortType = (0, {GTK_SORT_ASCENDING}0, {GTK_SORT_DESCENDING}1);
+var
+  AGtkColumn: PGtkTreeViewColumn;
+begin
+  AGtkColumn := PGtkTreeView(getContainerWidget)^.get_column(AIndex);
+
+  if AGtkColumn <> nil then
+  begin
+    if ASortIndicator = siNone then
+      AGtkColumn^.set_sort_indicator(false)
+    else
+    begin
+      AGtkColumn^.set_sort_indicator(true);
+      AgtkColumn^.set_sort_order(GtkOrder[ASortIndicator]);
+    end;
+  end;
+end;
+
 procedure TGtk3ListView.ItemDelete(AIndex: Integer);
 var
   AModel: PGtkTreeModel;
@@ -6393,13 +6446,12 @@ procedure TGtk3Button.setText(const AValue: String);
 begin
   if IsWidgetOk then
   begin
-    PGtkButton(FWidget)^.set_label(PgChar(StringReplace(AValue,'&','_',[rfReplaceAll])));
+    PGtkButton(FWidget)^.set_label(PgChar(ReplaceAmpersandsWithUnderscores(AValue)));
   end;
 end;
 
 function TGtk3Button.CreateWidget(const Params: TCreateParams): PGtkWidget;
 var
-  img:PGtkImage;
   btn:PGtkButton absolute Result;
 begin
   Result := PGtkWidget(TGtkButton.new);
@@ -6446,8 +6498,12 @@ begin
 end;
 
 function TGtk3ToggleButton.CreateWidget(const Params: TCreateParams): PGtkWidget;
+var
+  btn: PGtkToggleButton;
 begin
-  Result := PGtkWidget(TGtkToggleButton.new);
+  btn := TGtkToggleButton.new;
+  btn^.use_underline := True;
+  Result := PGtkWidget(btn);
 end;
 
 { TGtk3CheckBox }
@@ -6477,35 +6533,61 @@ begin
 end;
 
 function TGtk3CheckBox.CreateWidget(const Params: TCreateParams): PGtkWidget;
+var
+  check: PGtkCheckButton;
 begin
-  Result := PGtkWidget(TGtkCheckButton.new);
+  check := TGtkCheckButton.new;
+  Result := PGtkWidget(check);
+  check^.set_use_underline(True);
 end;
 
 { TGtk3RadioButton }
 
 function TGtk3RadioButton.CreateWidget(const Params: TCreateParams): PGtkWidget;
 var
+  btn: PGtkRadioButton;
   w: PGtkWidget;
   ctl, Parent: TWinControl;
   rb: TRadioButton;
-  pl: PGsList;
+  //pl: PGsList;
+  i: Integer;
 begin
   if Self.LCLObject.Name='HiddenRadioButton' then
     exit;
-  Result := PGtkWidget(TGtkRadioButton.new(nil));
+  btn := TGtkRadioButton.new(nil);
+  btn^.use_underline := True;
+  Result := PGtkWidget(btn);
   ctl := Self.LCLObject;
   if Assigned(ctl) then
   begin
     Parent := ctl.Parent;
-    if (Parent is TRadioGroup) and (TRadioGroup(Parent).Items.Count>0) then
+    if (Parent is TRadioGroup) then
     begin
-      rb := TRadioButton(Parent.Controls[0]);
-      if rb<>ctl then
+      if (TRadioGroup(Parent).Items.Count>0) then
       begin
-        w := TGtk3RadioButton(rb.Handle).Widget;
-        pl := PGtkRadioButton(w)^.get_group;
-        PGtkRadioButton(Result)^.set_group(pl);
-      end;
+        rb := TRadioButton(Parent.Controls[0]);
+        if rb<>ctl then
+        begin
+          w := TGtk3RadioButton(rb.Handle).Widget;
+          //pl := PGtkRadioButton(w)^.get_group;
+          //PGtkRadioButton(Result)^.set_group(pl);
+          PGtkRadioButton(Result)^.join_group(PGtkRadioButton(w));
+        end;
+      end
+    end
+    else
+    begin
+      for i := 0 to Parent.ControlCount - 1 do
+        if Parent.Controls[i] is TRadioButton and
+           TWinControl(Parent.Controls[i]).HandleAllocated then
+        begin
+          rb := TRadioButton(Parent.Controls[i]);
+          w := TGtk3RadioButton(rb.Handle).Widget;
+          //pl := PGtkRadioButton(w)^.get_group;
+          //PGtkRadioButton(Result)^.set_group(pl);
+          PGtkRadioButton(Result)^.join_group(PGtkRadioButton(w));
+          Break;
+        end;
     end;
   end;
 end;
@@ -7118,10 +7200,7 @@ begin
   end
   else
   if FileDialog is TSelectDirectoryDialog then
-  begin
     Action := GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER;
-    Button1 := GTK_STOCK_OPEN;
-  end;
 
   FWidget := gtk_file_chooser_dialog_new(PgChar(FileDialog.Title), nil,
     Action, PChar(GTK_STOCK_CANCEL),
@@ -7172,6 +7251,19 @@ begin
   CommonDialog := ACommonDialog;
 end;
 
+{ TGtk3GLArea }
+
+procedure TGtk3GLArea.Update(ARect: PRect);
+begin
+  if IsWidgetOK then
+    PGtkGLArea(Widget)^.queue_render;
+end;
+
+function TGtk3GLArea.CreateWidget(const Params: TCreateParams): PGtkWidget;
+begin
+  FWidgetType := [wtWidget, wtGLArea];
+  Result := TGtkGLArea.new;
+end;
 
 end.
 

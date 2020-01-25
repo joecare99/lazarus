@@ -56,7 +56,7 @@ uses
   LazStringUtils,
   // codetools
   BasicCodeTools, CodeBeautifier, CodeToolManager, CodeCache, SourceLog,
-  LinkScanner, CodeTree, SourceChanger,
+  LinkScanner, CodeTree, SourceChanger, IdentCompletionTool,
   // synedit
   SynEditLines, SynEditStrConst, SynEditTypes, SynEdit,
   SynEditHighlighter, SynEditAutoComplete, SynEditKeyCmds, SynCompletion,
@@ -1204,8 +1204,6 @@ type
     procedure OnSourceMarksAction(AMark: TSourceMark; {%H-}AAction: TMarksAction);
     procedure OnSourceMarksGetSynEdit(Sender: TObject; aFilename: string;
       var aSynEdit: TSynEdit);
-    property CodeTemplateModul: TSynEditAutoComplete
-                               read FCodeTemplateModul write FCodeTemplateModul;
     // goto dialog
     function GotoDialog: TfrmGoto;
   public
@@ -1216,6 +1214,8 @@ type
                              AnID: Integer = -1
                             ): TSourceNotebook;
     function SenderToEditor(Sender: TObject): TSourceEditor;
+    property CodeTemplateModul: TSynEditAutoComplete
+                               read FCodeTemplateModul write FCodeTemplateModul;
   private
     // Context-Menu
     procedure CloseOtherPagesClicked(Sender: TObject);
@@ -2427,6 +2427,7 @@ var
   OldCompletionType: TCompletionType;
   prototypeAdded: boolean;
   SourceNoteBook: TSourceNotebook;
+  IdentItem: TIdentifierListItem;
 Begin
   {$IFDEF VerboseIDECompletionBox}
   DebugLnEnter(['TSourceNotebook.ccComplete START']);
@@ -2444,22 +2445,29 @@ Begin
              SourceStart,SourceEnd,KeyChar,Shift);
           Manager.FActiveCompletionPlugin:=nil;
         end else begin
+          IdentItem:=CodeToolBoss.IdentifierList.FilteredItems[Position];
           // add to history
-          CodeToolBoss.IdentifierHistory.Add(
-            CodeToolBoss.IdentifierList.FilteredItems[Position]);
-          // get value
-          NewValue:=GetIdentCompletionValue(Self, KeyChar, ValueType, CursorToLeft);
-          if ValueType=icvIdentifier then ;
-          // insert value plus special chars like brackets, semicolons, ...
-          if ValueType <> icvNone then
-            Editor.TextBetweenPointsEx[SourceStart, SourceEnd, scamEnd] := NewValue;
-          if ValueType in [icvProcWithParams,icvIndexedProp] then
-            prototypeAdded := true;
-          if CursorToLeft>0 then
+          CodeToolBoss.IdentifierHistory.Add(IdentItem);
+          if IdentItem is TCodeTemplateIdentifierListItem then
           begin
-            NewCaretXY:=Editor.CaretXY;
-            dec(NewCaretXY.X,CursorToLeft);
-            Editor.CaretXY:=NewCaretXY;
+            if IdentItem.Identifier<>'' then
+              Manager.CodeTemplateModul.ExecuteCompletion(IdentItem.Identifier, Editor);
+          end else
+          begin
+            // get value
+            NewValue:=GetIdentCompletionValue(Self, KeyChar, ValueType, CursorToLeft);
+            if ValueType=icvIdentifier then ;
+            // insert value plus special chars like brackets, semicolons, ...
+            if ValueType <> icvNone then
+              Editor.TextBetweenPointsEx[SourceStart, SourceEnd, scamEnd] := NewValue;
+            if ValueType in [icvProcWithParams,icvIndexedProp] then
+              prototypeAdded := true;
+            if CursorToLeft>0 then
+            begin
+              NewCaretXY:=Editor.CaretXY;
+              dec(NewCaretXY.X,CursorToLeft);
+              Editor.CaretXY:=NewCaretXY;
+            end;
           end;
           ccSelection := '';
           Value:='';
@@ -3934,7 +3942,7 @@ begin
         Manager.AddJumpPointClicked(Self);
     end;
 
-  ecCopy,ecCut:
+  ecCopy,ecCut,ecCopyAdd,ecCutAdd:
     begin
       if (not FEditor.SelAvail) then begin
         // nothing selected
@@ -6337,10 +6345,10 @@ var
 begin
   FPageIndex := -1;
   i := 1;
-  n := AOwner.FindComponent(NonModalIDEWindowNames[nmiwSourceNoteBookName]);
+  n := AOwner.FindComponent(NonModalIDEWindowNames[nmiwSourceNoteBook]);
   while (n <> nil) do begin
     inc(i);
-    n := AOwner.FindComponent(NonModalIDEWindowNames[nmiwSourceNoteBookName]+IntToStr(i));
+    n := AOwner.FindComponent(NonModalIDEWindowNames[nmiwSourceNoteBook]+IntToStr(i));
   end;
 
   Create(AOwner, i-1);
@@ -6356,9 +6364,9 @@ begin
   FIsClosing := False;
   FWindowID := AWindowID;
   if AWindowID > 0 then
-    Name := NonModalIDEWindowNames[nmiwSourceNoteBookName] + IntToStr(AWindowID+1)
+    Name := NonModalIDEWindowNames[nmiwSourceNoteBook] + IntToStr(AWindowID+1)
   else
-    Name := NonModalIDEWindowNames[nmiwSourceNoteBookName];
+    Name := NonModalIDEWindowNames[nmiwSourceNoteBook];
 
   if AWindowID > 0 then
     FBaseCaption := locWndSrcEditor + ' (' + IntToStr(AWindowID+1) + ')'
@@ -9191,7 +9199,7 @@ begin
   SRCED_CLOSE := DebugLogger.RegisterLogGroup('SRCED_CLOSE' {$IFDEF SRCED_CLOSE} , True {$ENDIF} );
   SRCED_PAGES := DebugLogger.RegisterLogGroup('SRCED_PAGES' {$IFDEF SRCED_PAGES} , True {$ENDIF} );
 
-  IDEWindowsGlobalOptions.Add(NonModalIDEWindowNames[nmiwSourceNoteBookName], False);
+  IDEWindowsGlobalOptions.Add(NonModalIDEWindowNames[nmiwSourceNoteBook], False);
 end;
 
 procedure InternalFinal;
@@ -10008,8 +10016,8 @@ begin
   DockSibling:='';
   DockAlign:=alNone;
   i:=StrToIntDef(
-       copy(aFormName,length(NonModalIDEWindowNames[nmiwSourceNoteBookName])+1,
-            length(aFormName)),0);
+    copy(aFormName,length(NonModalIDEWindowNames[nmiwSourceNoteBook])+1,length(aFormName)),
+    0);
   {$IFDEF VerboseIDEDocking}
   debugln(['TSourceEditorManager.GetDefaultLayout ',aFormName,' i=',i]);
   {$ENDIF}
@@ -10029,7 +10037,7 @@ begin
   aBounds.Right:=ScreenR.Right-MulDiv(30, Screen.PixelsPerInch, 96);
   aBounds.Bottom:=ScreenR.Bottom-MulDiv(200, Screen.PixelsPerInch, 96);
   if (i=0) and (IDEDockMaster<>nil) then begin
-    DockSibling:=NonModalIDEWindowNames[nmiwMainIDEName];
+    DockSibling:=NonModalIDEWindowNames[nmiwMainIDE];
     DockAlign:=alBottom;
   end;
 end;
@@ -10244,21 +10252,8 @@ begin
 
   AutoStartCompletionBoxTimer.Interval:=EditorOpts.AutoDelayInMSec;
   // reload code templates
-  with CodeTemplateModul do begin
-    if FileExistsUTF8(EditorOpts.CodeTemplateFileNameExpand) then
-      LoadStringsFromFileUTF8(AutoCompleteList,EditorOpts.CodeTemplateFileNameExpand)
-    else begin
-      Filename:=EnvironmentOptions.GetParsedLazarusDirectory
-        +GetForcedPathDelims('ide/lazarus.dci');
-      if FileExistsUTF8(Filename) then begin
-        try
-          LoadStringsFromFileUTF8(AutoCompleteList,Filename);
-        except
-        end;
-      end;
-    end;
-    IndentToTokenStart:=EditorOpts.CodeTemplateIndentToTokenStart;
-  end;
+  EditorOpts.LoadCodeTemplates(CodeTemplateModul);
+  CodeTemplateModul.IndentToTokenStart:=EditorOpts.CodeTemplateIndentToTokenStart;
 
   FHints.AutoHintTimer.Interval:=EditorOpts.AutoHintDelayInMSec;
 
@@ -11144,8 +11139,6 @@ begin
 end;
 
 constructor TSourceEditorManager.Create(AOwner: TComponent);
-var
-  DCIFilename: String;
 begin
   inherited Create(AOwner);
 
@@ -11191,16 +11184,9 @@ begin
 
   // code templates
   FCodeTemplateModul:=TSynEditAutoComplete.Create(Self);
+
+  EditorOpts.LoadCodeTemplates(FCodeTemplateModul);
   with FCodeTemplateModul do begin
-    DCIFilename:=EditorOpts.CodeTemplateFileNameExpand;
-    if not FileExistsCached(DCIFilename) then
-      DCIFilename:=EnvironmentOptions.GetParsedLazarusDirectory
-        +GetForcedPathDelims('ide/lazarus.dci');
-    if FileExistsCached(DCIFilename) then
-      try
-        LoadStringsFromFileUTF8(AutoCompleteList,DCIFilename);
-      except
-      end;
     IndentToTokenStart := EditorOpts.CodeTemplateIndentToTokenStart;
     OnTokenNotFound := @OnCodeTemplateTokenNotFound;
     OnExecuteCompletion := @OnCodeTemplateExecuteCompletion;
@@ -11211,10 +11197,9 @@ begin
   CreateEditorToolBar(@DoConfigureEditorToolbar);
 
   // layout
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwSourceNoteBookName],
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwSourceNoteBook],
     nil,@CreateSourceWindow,'250','100','+70%','+70%',
-    NonModalIDEWindowNames[nmiwMainIDEName],alBottom,
-    true,@GetDefaultLayout);
+    NonModalIDEWindowNames[nmiwMainIDE],alBottom,true,@GetDefaultLayout);
 
   Application.AddOnIdleHandler(@OnIdle);
   Application.AddOnUserInputHandler(@OnUserInput);

@@ -2629,7 +2629,11 @@ begin
 
   Action := ccaDefaultAction;
   case Command of
-    ecCopy, ecCut:                  Action := ccaNoneRepeatCommand;
+    ecCopy, ecCut,
+    ecCopyCurrentLine, ecCutCurrentLine, ecDuplicateSelection:
+      Action := ccaNoneRepeatCommand;
+    ecMoveSelectUp, ecMoveSelectDown, ecMoveSelectLeft, ecMoveSelectRight:
+      Action := ccaClearCarets;
     ecGotoMarker0..ecGotoMarker9:   Action := ccaClearCarets;
     ecSelectAll:                    Action := ccaClearCarets;
     ecDeleteChar:                   if smcoDeleteSkipLineBreak in Options then

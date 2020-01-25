@@ -854,7 +854,7 @@ begin
   if aOption='' then exit;
   if fExtraOptions<>'' then
     fExtraOptions:=fExtraOptions+' ';
-  if AutoQuote then
+  if AutoQuote and (pos(' ',aOption)>0) then
     fExtraOptions:=fExtraOptions+AnsiQuotedStr(aOption,'"')
   else
     fExtraOptions:=fExtraOptions+aOption;
@@ -1066,6 +1066,7 @@ begin
       Add('Linux');
       Add('NetBSD');
       Add('OpenBSD');
+      Add('DragonFly');
       Add('Solaris');
       Add('Win32');
       Add('Win64');
@@ -1112,6 +1113,11 @@ begin
   end;
 
   SetupInfoPage;
+  BuildProfileComboBox.DropDownCount:=EnvironmentOptions.DropDownCount;
+  LCLWidgetTypeComboBox.DropDownCount:=EnvironmentOptions.DropDownCount;
+  TargetOSComboBox.DropDownCount:=EnvironmentOptions.DropDownCount;
+  TargetCPUComboBox.DropDownCount:=EnvironmentOptions.DropDownCount;
+  TargetDirectoryComboBox.DropDownCount:=EnvironmentOptions.DropDownCount;
 end;
 
 procedure TConfigureBuildLazarusDlg.FormResize(Sender: TObject);

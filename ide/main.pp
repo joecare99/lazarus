@@ -272,7 +272,9 @@ type
     procedure mnuSourceUseUnitClicked(Sender: TObject);
     procedure mnuSourceSyntaxCheckClicked(Sender: TObject);
     procedure mnuSourceGuessUnclosedBlockClicked(Sender: TObject);
+    {$IFDEF GuessMisplacedIfdef}
     procedure mnuSourceGuessMisplacedIFDEFClicked(Sender: TObject);
+    {$ENDIF}
     // source->insert CVS keyword
     procedure mnuSourceInsertCVSAuthorClick(Sender: TObject);
     procedure mnuSourceInsertCVSDateClick(Sender: TObject);
@@ -667,6 +669,7 @@ type
     function OIHelpProvider: TAbstractIDEHTMLProvider;
     procedure DoAddWordsToIdentCompletion(Sender: TIdentifierList;
       FilteredList: TFPList; PriorityCount: Integer);
+    procedure DoAddCodeTemplatesToIdentCompletion;
     // form editor and designer
     procedure DoBringToFrontFormOrUnit;
     procedure DoBringToFrontFormOrInspector(ForceInspector: boolean);
@@ -922,7 +925,9 @@ type
     procedure DoGoToPascalBlockOtherEnd;
     procedure DoGoToPascalBlockStart;
     procedure DoJumpToGuessedUnclosedBlock(FindNextUTF8: boolean);
+    {$IFDEF GuessMisplacedIfdef}
     procedure DoJumpToGuessedMisplacedIFDEF(FindNextUTF8: boolean);
+    {$ENDIF}
     procedure DoGotoIncludeDirective;
 
     // tools
@@ -1544,7 +1549,7 @@ begin
 
   // build and position the MainIDE form
   Application.CreateForm(TMainIDEBar,MainIDEBar);
-  MainIDEBar.Name := NonModalIDEWindowNames[nmiwMainIDEName];
+  MainIDEBar.Name := NonModalIDEWindowNames[nmiwMainIDE];
   FormCreator:=IDEWindowCreators.Add(MainIDEBar.Name);
   FormCreator.Right:='100%';
   FormCreator.Bottom:='+90';
@@ -2053,6 +2058,8 @@ procedure TMainIDE.CodeToolBossGatherUserIdentifiers(
   );
 begin
   FIdentifierWordCompletionEnabled := not (ilcfStartIsSubIdent in ContextFlags);
+  if not (ilcfStartIsSubIdent in ContextFlags) then
+    DoAddCodeTemplatesToIdentCompletion;
 end;
 
 procedure TMainIDE.CodeToolBossGatherUserIdentifiersToFilteredList(
@@ -2449,22 +2456,22 @@ end;
 
 procedure TMainIDE.SetupIDEWindowsLayout;
 begin
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwMessagesViewName],
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwMessagesView],
     nil,@CreateIDEWindow,'250','75%','+70%','+100',
-    NonModalIDEWindowNames[nmiwSourceNoteBookName],alBottom,false,@GetLayoutHandler);
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwCodeExplorerName],
+    NonModalIDEWindowNames[nmiwSourceNoteBook],alBottom,false,@GetLayoutHandler);
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwCodeExplorer],
     nil,@CreateIDEWindow,'72%','120','+170','-200',
-    NonModalIDEWindowNames[nmiwMainIDEName],alRight);
+    NonModalIDEWindowNames[nmiwMainIDE],alRight);
 
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwUnitDependenciesName],
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwUnitDependencies],
     nil,@CreateIDEWindow,'200','200','','');
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwFPDocEditorName],
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwFPDocEditor],
     nil,@CreateIDEWindow,'250','75%','+70%','+120');
-  //IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwClipbrdHistoryName],
+  //IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwClipbrdHistory],
   //  nil,@CreateIDEWindow,'250','200','','');
   IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwProjectInspector],
     nil,@CreateIDEWindow,'200','150','+300','+400');
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwSearchResultsViewName],
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwSearchResultsView],
     nil,@CreateIDEWindow,'250','250','+70%','+300');
   IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwAnchorEditor],
     nil,@CreateIDEWindow,'250','250','','');
@@ -2743,7 +2750,9 @@ begin
     // CodeTool Checks
     itmSourceSyntaxCheck.OnClick := @mnuSourceSyntaxCheckClicked;
     itmSourceGuessUnclosedBlock.OnClick := @mnuSourceGuessUnclosedBlockClicked;
+    {$IFDEF GuessMisplacedIfdef}
     itmSourceGuessMisplacedIFDEF.OnClick := @mnuSourceGuessMisplacedIFDEFClicked;
+    {$ENDIF}
     // Refactor
     itmRefactorRenameIdentifier.OnClick:=@mnuRefactorRenameIdentifierClicked;
     itmRefactorExtractProc.OnClick:=@mnuRefactorExtractProcClicked;
@@ -3009,7 +3018,9 @@ begin
 
     itmSourceSyntaxCheck.Command:=GetCommand(ecSyntaxCheck);
     itmSourceGuessUnclosedBlock.Command:=GetCommand(ecGuessUnclosedBlock);
+    {$IFDEF GuessMisplacedIfdef}
     itmSourceGuessMisplacedIFDEF.Command:=GetCommand(ecGuessMisplacedIFDEF);
+    {$ENDIF}
 
     itmSourceInsertCVSAuthor.Command:=GetCommand(ecInsertCVSAuthor);
     itmSourceInsertCVSDate.Command:=GetCommand(ecInsertCVSDate);
@@ -3606,7 +3617,9 @@ begin
   ecExtToolFirst..ecExtToolLast: DoRunExternalTool(Command-ecExtToolFirst,false);
   ecSyntaxCheck:              DoCheckSyntax;
   ecGuessUnclosedBlock:       DoJumpToGuessedUnclosedBlock(true);
+  {$IFDEF GuessMisplacedIfdef}
   ecGuessMisplacedIFDEF:      DoJumpToGuessedMisplacedIFDEF(true);
+  {$ENDIF}
   ecMakeResourceString:       DoMakeResourceString;
   ecDiff:                     DoDiff;
   ecConvertDFM2LFM:           DoConvertDFMtoLFM;
@@ -3891,10 +3904,9 @@ begin
       begin
         if (rfInteractive in AFlags)
         and (IDEQuestionDialog(lisStopDebugging, lisStopTheDebugging,
-                 mtConfirmation, [mrYes, lisStop,
-                                  mrCancel, lisContinue]) <> mrYes)
+                 mtConfirmation, [mrYes,lisStop, mrCancel,lisContinue]) <> mrYes)
         then exit;
-        if (DebugBoss.DoStopProject = mrOK) and (ToolStatus = itDebugger) and (rfCloseOnDone in AFlags) then
+        if (DebugBoss.DoStopProject = mrOK) and (rfCloseOnDone in AFlags) then
           FWaitForClose := True;
         if rfSuccessOnTrigger in AFlags then
           exit(true);
@@ -4708,10 +4720,12 @@ begin
   DoJumpToGuessedUnclosedBlock(true);
 end;
 
+{$IFDEF GuessMisplacedIfdef}
 procedure TMainIDE.mnuSourceGuessMisplacedIFDEFClicked(Sender: TObject);
 begin
   DoJumpToGuessedMisplacedIFDEF(true);
 end;
+{$ENDIF}
 
 procedure TMainIDE.mnuRefactorMakeResourceStringClicked(Sender: TObject);
 begin
@@ -5216,156 +5230,44 @@ end;
 
 procedure TMainIDE.ProjectOptionsAfterWrite(Sender: TObject; Restore: boolean);
 var
-  AProject: TProject;
-
-  function SetTitle: Boolean;
-  var
-    TitleStat, ProjTitle: String;
-  begin
-    Result := True;
-    TitleStat := '';
-    CodeToolBoss.GetApplicationTitleStatement(AProject.MainUnitInfo.Source, TitleStat);
-    ProjTitle:=AProject.GetTitle;
-    //DebugLn(['ProjectOptionsAfterWrite: Project title=',ProjTitle,
-    //         ', Default=',AProject.GetDefaultTitle,', Title Statement=',TitleStat]);
-    if pfMainUnitHasTitleStatement in AProject.Flags then
-    begin                            // Add Title statement if not there already.
-      if ((TitleStat = '') or (TitleStat = ProjTitle)) and AProject.TitleIsDefault then
-        Exit;
-      //DebugLn(['ProjectOptionsAfterWrite: Setting Title to ',ProjTitle]);
-      if not CodeToolBoss.SetApplicationTitleStatement(AProject.MainUnitInfo.Source, ProjTitle) then
-      begin
-        IDEMessageDialog(lisProjOptsError,
-          Format(lisUnableToChangeProjectTitleInSource, [LineEnding, CodeToolBoss.ErrorMessage]),
-          mtWarning, [mbOk]);
-        Result := False;
-      end;
-    end
-    else begin                          // Remove Title statement if it is there.
-      if TitleStat <> ProjTitle then
-        Exit;
-      //DebugLn(['ProjectOptionsAfterWrite: Removing Title']);
-      if not CodeToolBoss.RemoveApplicationTitleStatement(AProject.MainUnitInfo.Source) then
-      begin
-        IDEMessageDialog(lisProjOptsError,
-          Format(lisUnableToRemoveProjectTitleFromSource, [LineEnding, CodeToolBoss.ErrorMessage]),
-          mtWarning, [mbOk]);
-        Result := False;
-      end;
-    end;
-  end;
-
-  function SetScaled: Boolean;
-  var
-    ScaledStat, ProjScaled: Boolean;
-  begin
-    Result := True;
-    ScaledStat := False;
-    CodeToolBoss.GetApplicationScaledStatement(AProject.MainUnitInfo.Source, ScaledStat);
-    ProjScaled:=AProject.Scaled;
-    //DebugLn(['ProjectOptionsAfterWrite: Project Scaled=',ProjScaled,', Scaled Statement=',ScaledStat]);
-    if pfMainUnitHasScaledStatement in AProject.Flags then
-    begin                           // Add Scaled statement if not there already.
-      if (ScaledStat = ProjScaled) or not ProjScaled then
-        Exit;
-      //DebugLn(['ProjectOptionsAfterWrite: Setting Scaled to ',ProjScaled]);
-      if not CodeToolBoss.SetApplicationScaledStatement(AProject.MainUnitInfo.Source, ProjScaled) then
-      begin
-        IDEMessageDialog(lisProjOptsError,
-          Format(lisUnableToChangeProjectScaledInSource, [LineEnding, CodeToolBoss.ErrorMessage]),
-          mtWarning, [mbOk]);
-        Result := False;
-      end;
-    end
-    else begin                      // Remove Scaled statement if it is there.
-      if ScaledStat <> ProjScaled then
-        Exit;
-      //DebugLn(['ProjectOptionsAfterWrite: Removing Scaled']);
-      if not CodeToolBoss.RemoveApplicationScaledStatement(AProject.MainUnitInfo.Source) then
-      begin
-        IDEMessageDialog(lisProjOptsError,
-          Format(lisUnableToRemoveProjectScaledFromSource, [LineEnding, CodeToolBoss.ErrorMessage]),
-          mtWarning, [mbOk]);
-        Result := False;
-      end;
-    end;
-  end;
-
-  function SetAutoCreateForms: boolean;
-  var
-    i: integer;
-    OldList: TStrings;
-  begin
-    Result := True;
-    if not (pfMainUnitHasCreateFormStatements in AProject.Flags) then
-      Exit;
-    OldList := AProject.GetAutoCreatedFormsList;
-    if (OldList = nil) then
-      Exit;
-    try
-      if OldList.Count = AProject.TmpAutoCreatedForms.Count then
-      begin
-        { Just exit if the form list is the same }
-        i := OldList.Count - 1;
-        while (i >= 0)
-        and (SysUtils.CompareText(OldList[i], AProject.TmpAutoCreatedForms[i]) = 0) do
-          Dec(i);
-        if i < 0 then
-          Exit;
-      end;
-
-      if not CodeToolBoss.SetAllCreateFromStatements(AProject.MainUnitInfo.Source,
-        AProject.TmpAutoCreatedForms) then
-      begin
-        IDEMessageDialog(lisProjOptsError,
-          Format(lisProjOptsUnableToChangeTheAutoCreateFormList, [LineEnding]),
-          mtWarning, [mbOK]);
-        Result := False;
-        Exit;
-      end;
-    finally
-      OldList.Free;
-    end;
-  end;
-
-var
+  aProject: TProject;
   aFilename: String;
 begin
   //debugln(['TMainIDE.ProjectOptionsAfterWrite ',DbgSName(Sender),' Restore=',Restore]);
   if not (Sender is TProjectIDEOptions) then exit;
-  AProject:=TProjectIDEOptions(Sender).Project;
-  Assert(Assigned(AProject), 'TMainIDE.ProjectOptionsAfterWrite: Project=Nil.');
+  aProject:=TProjectIDEOptions(Sender).Project;
+  Assert(Assigned(aProject), 'TMainIDE.ProjectOptionsAfterWrite: Project=Nil.');
+  Assert(aProject=Project1, 'TMainIDE.ProjectOptionsAfterWrite: Project<>Project1.');
   if Restore then
   begin
-    AProject.RestoreBuildModes;
-    AProject.RestoreSession;
+    Project1.RestoreBuildModes;
+    Project1.RestoreSession;
   end
   else begin
-    if AProject.MainUnitID >= 0 then
+    if Project1.MainUnitID >= 0 then
     begin
-      SetTitle;
-      SetScaled;
-      SetAutoCreateForms;
-      AProject.AutoAddOutputDirToIncPath;  // extend include path
-      if AProject.ProjResources.Modified then
-        if not AProject.ProjResources.Regenerate(AProject.MainFilename, True, False, '') then
-          IDEMessageDialog(lisCCOWarningCaption, AProject.ProjResources.Messages.Text,
+      UpdateAppTitleInSource;
+      UpdateAppScaledInSource;
+      UpdateAppAutoCreateForms;
+      Project1.AutoAddOutputDirToIncPath;  // extend include path
+      if Project1.ProjResources.Modified then
+        if not Project1.ProjResources.Regenerate(Project1.MainFilename, True, False, '') then
+          IDEMessageDialog(lisCCOWarningCaption, Project1.ProjResources.Messages.Text,
                            mtWarning, [mbOk]);
     end;
     UpdateCaption;
     if Assigned(ProjInspector) then
       ProjInspector.UpdateTitle;
-    AProject.DefineTemplates.AllChanged;
+    Project1.DefineTemplates.AllChanged;
     IncreaseCompilerParseStamp;
 
-    if AProject.UseAsDefault then
+    if Project1.UseAsDefault then
     begin
       // save as default
       aFilename:=AppendPathDelim(GetPrimaryConfigPath)+DefaultProjectOptionsFilename;
-      AProject.WriteProject([pwfSkipSeparateSessionInfo,pwfIgnoreModified],
+      Project1.WriteProject([pwfSkipSeparateSessionInfo,pwfIgnoreModified],
         aFilename,EnvironmentOptions.BuildMatrixOptions);
     end;
-
     Project1.UpdateAllSyntaxHighlighter;
     SourceEditorManager.BeginGlobalUpdate;
     try
@@ -5984,7 +5886,6 @@ end;
 function TMainIDE.DoSelectFrame: TComponentClass;
 var
   UnitList: TStringList;
-  dummy: Boolean;
   i: Integer;
   aFilename: String;
   AComponent: TComponent;
@@ -5992,10 +5893,7 @@ begin
   Result := nil;
   UnitList := TStringList.Create;
   try
-    dummy := false;
-    if SelectUnitComponents(lisSelectFrame,piFrame,UnitList, false, dummy) <> mrOk
-    then
-      exit;
+    if SelectUnitComponents(lisSelectFrame,piFrame,UnitList) <> mrOk then exit;
     for i := 0 to UnitList.Count-1 do
     begin
       aFilename:=UnitList[i];
@@ -6016,7 +5914,6 @@ end;
 function TMainIDE.DoViewUnitsAndForms(OnlyForms: boolean): TModalResult;
 const
   UseItemType: array[Boolean] of TIDEProjectItem = (piUnit, piComponent);
-  MultiSelectCheckedState: Array [Boolean] of Boolean = (True,True);
 var
   UnitList: TViewUnitEntries;
   AForm: TCustomForm;
@@ -6027,8 +5924,7 @@ begin
   Project1.UpdateIsPartOfProjectFromMainUnit;
   UnitList := TViewUnitEntries.Create;
   try
-    if SelectProjectItems(UnitList, UseItemType[OnlyForms],
-                          true, MultiSelectCheckedState[OnlyForms]) = mrOk then
+    if SelectProjectItems(UnitList, UseItemType[OnlyForms]) = mrOk then
     begin
       { This is where we check what the user selected. }
       AnUnitInfo := nil;
@@ -6258,30 +6154,30 @@ begin
     State:=iwgfDisabled
   else
     State:=iwgfEnabled;
-  if ItIs(NonModalIDEWindowNames[nmiwMessagesViewName]) then
+  if ItIs(NonModalIDEWindowNames[nmiwMessagesView]) then
     AForm:=MessagesView
-  else if ItIs(NonModalIDEWindowNames[nmiwUnitDependenciesName]) then
+  else if ItIs(NonModalIDEWindowNames[nmiwUnitDependencies]) then
   begin
     ShowUnitDependencies(State);
     AForm:=UnitDependenciesWindow;
   end
-  else if ItIs(NonModalIDEWindowNames[nmiwCodeExplorerName]) then
+  else if ItIs(NonModalIDEWindowNames[nmiwCodeExplorer]) then
   begin
     DoShowCodeExplorer(State);
     AForm:=CodeExplorerView;
   end
-  else if ItIs(NonModalIDEWindowNames[nmiwFPDocEditorName]) then
+  else if ItIs(NonModalIDEWindowNames[nmiwFPDocEditor]) then
   begin
     DoShowFPDocEditor(State);
     AForm:=FPDocEditor;
   end
-  // ToDo: nmiwClipbrdHistoryName:
+  // ToDo: nmiwClipbrdHistory:
   else if ItIs(NonModalIDEWindowNames[nmiwProjectInspector]) then
   begin
     DoShowProjectInspector(State);
     AForm:=ProjInspector;
   end
-  else if ItIs(NonModalIDEWindowNames[nmiwSearchResultsViewName]) then
+  else if ItIs(NonModalIDEWindowNames[nmiwSearchResultsView]) then
   begin
     DoShowSearchResultsView(State);
     AForm:=SearchResultsView;
@@ -7301,6 +7197,24 @@ begin
       exit;
   end;
   AbortBuild;
+end;
+
+procedure TMainIDE.DoAddCodeTemplatesToIdentCompletion;
+var
+  New: TCodeTemplateIdentifierListItem;
+  I: Integer;
+begin
+  if not CodeToolsOpts.IdentComplIncludeCodeTemplates then
+    Exit;
+
+  for I := 0 to SourceEditorManager.CodeTemplateModul.Completions.Count-1 do
+  begin
+    New := TCodeTemplateIdentifierListItem.Create(CodeTemplateCompatibility, False, CodeTemplateHistoryIndex,
+      PChar(SourceEditorManager.CodeTemplateModul.Completions[I]),
+      CodeTemplateLevel, nil, nil, ctnCodeTemplate);
+    New.Comment := SourceEditorManager.CodeTemplateModul.CompletionComments[I];
+    CodeToolBoss.IdentifierList.Add(New);
+  end;
 end;
 
 procedure TMainIDE.DoCompile;
@@ -8693,7 +8607,8 @@ begin
           //DebugLn(['DoCheckFilesOnDisk IgnoreCurrentFileDateOnDisk']);
           CurUnit.IgnoreCurrentFileDateOnDisk;
           CurUnit.Modified:=True;
-          CurUnit.OpenEditorInfo[0].EditorComponent.Modified:=True;
+          if CurUnit.OpenEditorInfoCount > 0 then
+            CurUnit.OpenEditorInfo[0].EditorComponent.Modified:=True;
         end;
       end;
     end;
@@ -10749,6 +10664,7 @@ begin
   end;
 end;
 
+{$IFDEF GuessMisplacedIfdef}
 procedure TMainIDE.DoJumpToGuessedMisplacedIFDEF(FindNextUTF8: boolean);
 var ActiveSrcEdit: TSourceEditor;
   ActiveUnitInfo: TUnitInfo;
@@ -10776,6 +10692,7 @@ begin
   end else
     DoJumpToCodeToolBossError;
 end;
+{$ENDIF}
 
 procedure TMainIDE.DoGotoIncludeDirective;
 var ActiveSrcEdit: TSourceEditor;
@@ -12787,7 +12704,7 @@ begin
        ScreenR.Bottom-MainIDEBar.Scale96ToForm(50));
     // do not dock object inspector, because this would hide the floating designers
   end
-  else if (aFormName=NonModalIDEWindowNames[nmiwMessagesViewName]) then begin
+  else if (aFormName=NonModalIDEWindowNames[nmiwMessagesView]) then begin
     // place messages below source editor
     ScreenR:=IDEWindowCreators.GetScreenrectForDefaults;
     if SourceEditorManager.SourceWindowCount>0 then begin
@@ -12803,7 +12720,7 @@ begin
         ScreenR.Bottom-MainIDEBar.Scale96ToForm(50));
     end;
     if IDEDockMaster<>nil then begin
-      DockSibling:=NonModalIDEWindowNames[nmiwSourceNoteBookName];
+      DockSibling:=NonModalIDEWindowNames[nmiwSourceNoteBook];
       DockAlign:=alBottom;
     end;
   end;

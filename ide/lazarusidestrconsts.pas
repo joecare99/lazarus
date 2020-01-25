@@ -1357,6 +1357,8 @@ resourcestring
   lisFilesInASCIIOrUTF8Encoding = 'Files in ASCII or UTF-8 encoding';
   lisFilesNotInASCIINorUTF8Encoding = 'Files not in ASCII nor UTF-8 encoding';
   podAddPackageUnitToUsesSection = 'Add package unit to uses section';
+  lisLPKCompatibilityModeCheckBox = 'Maximize compatibility of package file (LPK)';
+  lisLPKCompatibilityModeCheckBoxHint = 'Check this if you want to open your package in legacy (2.0 and older) Lazarus versions.';
   lisCodeBrowser = 'Code Browser';
 
   // IDE General options
@@ -1378,6 +1380,8 @@ resourcestring
     +'jump history and search results.';
   lisExportEnvironmentOptions = 'Export environment options';
   lisImportEnvironmentOptions = 'Import environment options';
+  lisComboBoxes = 'Combo Boxes';
+  lisDropDownCount = 'Drop Down Count';
 
   // Desktop options
   dlgManageDesktops = 'Manage desktops';
@@ -1903,6 +1907,7 @@ resourcestring
   dlgCopyWordAtCursorOnCopyNone = 'Copy current word when no selection exists';
   dlgHomeKeyJumpsToNearestStart = 'Home key jumps to nearest start';
   dlgEndKeyJumpsToNearestStart = 'End key jumps to nearest end';
+  dlgSelectAllNoScroll = 'Do not scroll on Select-All / Paragraph or To-Brace';
   dlgMultiCaretOnColumnSelection = 'Enable multi-caret for column selection';
   dlgMultiCaretColumnMode = 'Navigation keys move all carets (column-select)';
   dlgMultiCaretMode = 'Navigation keys move all carets';
@@ -2054,6 +2059,7 @@ resourcestring
   dlgIncludeWordsToIdentCompl_IncludeFromAllUnits = 'from all units';
   dlgIncludeWordsToIdentCompl_IncludeFromCurrentUnit = 'from current unit';
   dlgIncludeWordsToIdentCompl_DontInclude = 'don''t include';
+  dlgIncludeCodeTemplatesToIdentCompl = 'Include code templates';
 
   dlgMarkupUserDefined = 'User defined markup';
   dlgMarkupUserDefinedNoLists = 'No lists';
@@ -2709,6 +2715,7 @@ resourcestring
   dlgPODpiAwarenessOldOnNewPerMonitorV2 = 'Vista-8: on, 8.1/10+: per monitor/V2';
   dlgPOUIAccess = 'UI Access (uiAccess)';
   dlgPOLongPathAware = 'Long path awareness';
+  dlgPOAnsiUTF8  = 'ANSI codepage is UTF-8 (Windows 10 1903+)';
   dlgPOAsInvoker = 'as invoker (asInvoker)';
   dlgPOHighestAvailable = 'highest available (highestAvailable)';
   dlgPORequireAdministrator = 'require administrator (requireAdministrator)';
@@ -3114,6 +3121,21 @@ resourcestring
   srkmecCut                   = 'Cut';
   srkmecCopy                  = 'Copy';
   srkmecPaste                 = 'Paste';
+  srkmecCopyAdd               = 'Copy (Add to Clipboard)';
+  srkmecCutAdd                = 'Cut (Add to Clipboard)';
+  srkmecCopyCurrentLine       = 'Copy current line';
+  srkmecCopyAddCurrentLine    = 'Copy current line (Add to Clipboard)';
+  srkmecCutCurrentLine        = 'Cut current line';
+  srkmecCutAddCurrentLine     = 'Cut current line (Add to Clipboard)';
+  srkmecMoveLineUp            = 'Move line up';
+  srkmecMoveLineDown          = 'Move line down';
+  srkmecDuplicateLine         = 'Duplicate line (or lines in selection)';
+  srkmecDuplicateSelection    = 'Duplicate selection';
+  srkmecMoveSelectUp          = 'Move selection up';
+  srkmecMoveSelectDown        = 'Move selection down';
+  srkmecMoveSelectLeft        = 'Move selection left';
+  srkmecMoveSelectRight       = 'Move selection right';
+
   srkmecMultiPaste            = 'MultiPaste';
   srkmecScrollUp              = 'Scroll up one line';
   srkmecScrollDown            = 'Scroll down one line';
@@ -5465,6 +5487,10 @@ resourcestring
   rsStartANewSearch = 'Start a new search';
   rsCloseCurrentPage = 'Close current page';
   rsFilterTheListWithString = 'Filter the lines in list with a string';
+  rsCloseLeft = 'Close page(s) on the left';
+  rsCloseRight = 'Close page(s) on the right';
+  rsCloseOthers = 'Close other page(s)';
+  rsCloseAll = 'Close all pages';
 
   // Application Bundle
   lisErrorLoadingFrom = 'Error loading %s from%s%s%s%s';

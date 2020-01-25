@@ -43,12 +43,12 @@ uses
   DbgIntfDebuggerBase,
   FpPascalBuilder,
   fpDbgSymTableContext,
-  FpDbgDwarfDataClasses;
+  FpDbgDwarfDataClasses, FpDbgDisasX86;
 
 type
-  TFPDEvent = (deExitProcess, deFinishedStep, deBreakpoint, deException, deCreateProcess, deLoadLibrary, deInternalContinue);
+  TFPDEvent = (deExitProcess, deFinishedStep, deBreakpoint, deException, deCreateProcess, deLoadLibrary, deUnloadLibrary, deInternalContinue);
   TFPDMode = (dm32, dm64);
-  TFPDCompareStepInfo = (dcsiNewLine, dcsiSameLine, dcsiNoLineInfo);
+  TFPDCompareStepInfo = (dcsiNewLine, dcsiSameLine, dcsiNoLineInfo, dcsiZeroLine);
 
   { TDbgRegisterValue }
 
@@ -86,6 +86,7 @@ type
   { TDbgCallstackEntry }
   TDbgThread = class;
   TFPDThreadArray = array of TDbgThread;
+  TDbgLibrary = class;
 
   TDbgCallstackEntry = class
   private
@@ -103,7 +104,7 @@ type
   public
     constructor create(AThread: TDbgThread; AnIndex: integer; AFrameAddress, AnAddress: TDBGPtr);
     destructor Destroy; override;
-    function GetParamsAsString: string;
+    function GetParamsAsString(APrettyPrinter: TFpPascalPrettyPrinter): string;
     property AnAddress: TDBGPtr read FAnAddress;
     property FrameAdress: TDBGPtr read FFrameAdress;
     property SourceFile: string read GetSourceFile;
@@ -149,9 +150,9 @@ type
     FCallStackEntryList: TDbgCallstackEntryList;
     FRegisterValueListValid: boolean;
     FRegisterValueList: TDbgRegisterValueList;
-    FStoreStepSrcFilename: string;
+    FStoreStepSrcFilename, FStoreStepFuncName: string;
+    FStoreStepStartAddr, FStoreStepEndAddr: TDBGPtr;
     FStoreStepSrcLineNo: integer;
-    FStoreStepStackFrame: TDBGPtr;
     FStoreStepFuncAddr: TDBGPtr;
     procedure LoadRegisterValues; virtual;
     property Process: TDbgProcess read FProcess;
@@ -173,14 +174,15 @@ type
     procedure PrepareCallStackEntryList(AFrameRequired: Integer = -1); virtual;
     procedure ClearCallStack;
     destructor Destroy; override;
-    function CompareStepInfo: TFPDCompareStepInfo;
+    function CompareStepInfo(AnAddr: TDBGPtr = 0; ASubLine: Boolean = False): TFPDCompareStepInfo;
     function IsAtStartOfLine: boolean;
-    procedure StoreStepInfo;
+    procedure StoreStepInfo(AnAddr: TDBGPtr = 0);
     property ID: Integer read FID;
     property Handle: THandle read FHandle;
     property NextIsSingleStep: boolean read FNextIsSingleStep write FNextIsSingleStep;
     property RegisterValueList: TDbgRegisterValueList read GetRegisterValueList;
     property CallStackEntryList: TDbgCallstackEntryList read FCallStackEntryList;
+    property StoreStepFuncName: String read FStoreStepFuncName;
   end;
   TDbgThreadClass = class of TDbgThread;
 
@@ -200,6 +202,18 @@ type
   TThreadMap = class(TMap)
   public
     function GetEnumerator: TThreadMapEnumerator;
+  end;
+
+  { TLibraryMap }
+
+  TLibraryMap = class(TMap)
+  private
+    FLastLibraryAdded: TDbgLibrary;
+  public
+    procedure Add(const AId, AData);
+    function GetLib(const AHandle: THandle; out ALib: TDbgLibrary): Boolean;
+    function GetLib(const AName: String; out ALib: TDbgLibrary; IsFullName: Boolean = True): Boolean;
+    property LastLibraryAdded: TDbgLibrary read FLastLibraryAdded;
   end;
 
   TFpInternalBreakpointArray = array of TFpInternalBreakpoint;
@@ -255,6 +269,12 @@ type
   TFpDbgBreakpoint = class(TObject)
   public
     function Hit(const AThreadID: Integer; ABreakpointAddress: TDBGPtr): Boolean; virtual; abstract;
+    function HasLocation(const ALocation: TDBGPtr): Boolean; virtual; abstract;
+
+    procedure AddAddress(const ALocation: TDBGPtr); virtual; abstract;
+    procedure RemoveAddress(const ALocation: TDBGPtr); virtual; abstract;
+    procedure RemoveAllAddresses; virtual; abstract;
+
     procedure SetBreak; virtual; abstract;
     procedure ResetBreak; virtual; abstract;
   end;
@@ -281,10 +301,14 @@ type
   protected
     property Location: TDBGPtrArray read FLocation;
   public
-    constructor Create(const AProcess: TDbgProcess; const ALocation: TDBGPtrArray); virtual;
+    constructor Create(const AProcess: TDbgProcess; const ALocation: TDBGPtrArray; AnEnabled: Boolean); virtual;
     destructor Destroy; override;
     function Hit(const AThreadID: Integer; ABreakpointAddress: TDBGPtr): Boolean; override;
-    function HasLocation(const ALocation: TDBGPtr): Boolean;
+    function HasLocation(const ALocation: TDBGPtr): Boolean; override;
+
+    procedure AddAddress(const ALocation: TDBGPtr); override;
+    procedure RemoveAddress(const ALocation: TDBGPtr); override;
+    procedure RemoveAllAddresses; override;
 
     procedure SetBreak; override;
     procedure ResetBreak; override;
@@ -329,6 +353,7 @@ type
     FProcess: TDbgProcess;
     FSymbolTableInfo: TFpSymbolInfo;
     FLoaderList: TDbgImageLoaderList;
+    function GetPointerSize: Integer;
 
   protected
     FDbgInfo: TDbgInfo;
@@ -339,15 +364,18 @@ type
     constructor Create(const AProcess: TDbgProcess); virtual;
     destructor Destroy; override;
 
-    function AddBreak(const AFileName: String; ALine: Cardinal): TFpInternalBreakpoint; overload;
+    function AddBreak(const AFileName: String; ALine: Cardinal; AnEnabled: Boolean = True): TFpInternalBreakpoint; overload;
+    function AddBreak(const AFuncName: String; AnEnabled: Boolean = True): TFpDbgBreakpoint; overload;
     function AddrOffset: TDBGPtr; virtual;  // gives the offset between  the loaded addresses and the compiled addresses
-    function FindProcSymbol(AAdress: TDbgPtr): TFpSymbol;
+    function FindProcSymbol(const AName: String): TFpSymbol; overload;
+    function FindProcSymbol(AAdress: TDbgPtr): TFpSymbol; overload;
     procedure LoadInfo; virtual;
 
     property Process: TDbgProcess read FProcess;
     property DbgInfo: TDbgInfo read FDbgInfo;
     property SymbolTableInfo: TFpSymbolInfo read FSymbolTableInfo;
     property Mode: TFPDMode read FMode;
+    property PointerSize: Integer read GetPointerSize;
   end;
 
   { TDbgLibrary }
@@ -376,10 +404,12 @@ type
     FExceptionMessage: string;
     FExitCode: DWord;
     FGotExitProcess: Boolean;
+    FLastLibraryUnloaded: TDbgLibrary;
     FProcessID: Integer;
     FThreadID: Integer;
     FWatchPointData: TFpWatchPointData;
 
+    function GetLastLibraryLoaded: TDbgLibrary;
     function GetPauseRequested: boolean;
     procedure SetPauseRequested(AValue: boolean);
     procedure ThreadDestroyed(const AThread: TDbgThread);
@@ -394,7 +424,7 @@ type
     FSymInstances: TList;  // list of dbgInstances with debug info
 
     FThreadMap: TThreadMap; // map ThreadID -> ThreadObject
-    FLibMap: TMap;    // map LibAddr -> LibObject
+    FLibMap: TLibraryMap;    // map LibAddr -> LibObject
     FBreakMap: TBreakLocationMap;  // map BreakAddr -> BreakObject
     FTmpRemovedBreaks: array of TDBGPtr;
     FPauseRequested: longint;
@@ -405,6 +435,8 @@ type
     procedure SetExitCode(AValue: DWord);
     function GetLastEventProcessIdentifier: THandle; virtual;
     function DoBreak(BreakpointAddress: TDBGPtr; AThreadID: integer): Boolean;
+    procedure SetLastLibraryUnloaded(ALib: TDbgLibrary);
+    procedure SetLastLibraryUnloadedNil(ALib: TDbgLibrary);
 
     function InsertBreakInstructionCode(const ALocation: TDBGPtr; out OrigValue: Byte): Boolean; //virtual;
     function RemoveBreakInstructionCode(const ALocation: TDBGPtr; const OrigValue: Byte): Boolean; //virtual;
@@ -426,16 +458,25 @@ public
     destructor Destroy; override;
     function  AddInternalBreak(const ALocation: TDBGPtr): TFpInternalBreakpoint; overload;
     function  AddInternalBreak(const ALocation: TDBGPtrArray): TFpInternalBreakpoint; overload;
-    function  AddBreak(const ALocation: TDBGPtr): TFpInternalBreakpoint; overload;
-    function  AddBreak(const ALocation: TDBGPtrArray): TFpInternalBreakpoint; overload;
+    function  AddBreak(const ALocation: TDBGPtr; AnEnabled: Boolean = True): TFpInternalBreakpoint; overload;
+    function  AddBreak(const ALocation: TDBGPtrArray; AnEnabled: Boolean = True): TFpInternalBreakpoint; overload;
     function  AddWatch(const ALocation: TDBGPtr; ASize: Cardinal; AReadWrite: TDBGWatchPointKind;
                       AScope: TDBGWatchPointScope): TFpInternalWatchpoint;
     property WatchPointData: TFpWatchPointData read FWatchPointData;
-    function  FindProcSymbol(const AName: String): TFpSymbol;
-    function  FindProcSymbol(AAdress: TDbgPtr): TFpSymbol;
+    (* FindProcSymbol(Address)
+         Search the program and all libraries.
+       FindProcSymbol(Name)
+         Search ONLY the program.
+         Names can be ambigious, as dll can have the same names.
+    *)
+    function  FindProcSymbol(const AName, ALibraryName: String; IsFullLibName: Boolean = True): TFpSymbol;  overload;
+    function  FindProcSymbol(AAdress: TDbgPtr): TFpSymbol;  overload;
     function  FindContext(AThreadId, AStackFrame: Integer): TFpDbgInfoContext;
     function  FindContext(AAddress: TDbgPtr): TFpDbgInfoContext; deprecated 'use FindContext(thread,stack)';
+    function  ContextFromProc(AThreadId, AStackFrame: Integer; AProcSym: TFpSymbol): TFpDbgInfoContext; inline;
     function  GetLib(const AHandle: THandle; out ALib: TDbgLibrary): Boolean;
+    property  LastLibraryLoaded: TDbgLibrary read GetLastLibraryLoaded;
+    property  LastLibraryUnloaded: TDbgLibrary read FLastLibraryUnloaded write SetLastLibraryUnloadedNil;
     function  GetThread(const AID: Integer; out AThread: TDbgThread): Boolean;
     procedure RemoveBreak(const ABreakPoint: TFpDbgBreakpoint);
     procedure DoBeforeBreakLocationMapChange;
@@ -445,6 +486,7 @@ public
     function  Pause: boolean; virtual;
 
     function ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean; virtual;
+    function ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData; out APartSize: Cardinal): Boolean; virtual;
     function ReadAddress(const AAdress: TDbgPtr; out AData: TDBGPtr): Boolean; virtual;
     function ReadOrdinal(const AAdress: TDbgPtr; out AData): Boolean; virtual;
     function ReadString(const AAdress: TDbgPtr; const AMaxSize: Cardinal; out AData: String): Boolean; virtual;
@@ -540,7 +582,7 @@ var
 
 const
   DBGPTRSIZE: array[TFPDMode] of Integer = (4, 8);
-  FPDEventNames: array[TFPDEvent] of string = ('deExitProcess', 'deFinishedStep', 'deBreakpoint', 'deException', 'deCreateProcess', 'deLoadLibrary', 'deInternalContinue');
+  FPDEventNames: array[TFPDEvent] of string = ('deExitProcess', 'deFinishedStep', 'deBreakpoint', 'deException', 'deCreateProcess', 'deLoadLibrary', 'deUnloadLibrary', 'deInternalContinue');
 
 function OSDbgClasses: TOSDbgClasses;
 
@@ -561,7 +603,7 @@ uses
 
 var
   GOSDbgClasses : TOSDbgClasses;
-  DBG_VERBOSE, DBG_WARNINGS, DBG_BREAKPOINTS: PLazLoggerLogGroup;
+  DBG_VERBOSE, DBG_WARNINGS, DBG_BREAKPOINTS, FPDBG_COMMANDS: PLazLoggerLogGroup;
 
 function OSDbgClasses: TOSDbgClasses;
 begin
@@ -607,6 +649,63 @@ end;
 function TThreadMap.GetEnumerator: TThreadMapEnumerator;
 begin
   Result := TThreadMapEnumerator.Create(Self);
+end;
+
+{ TLibraryMap }
+
+procedure TLibraryMap.Add(const AId, AData);
+begin
+  inherited Add(AId, AData);
+  FLastLibraryAdded := TDbgLibrary(AData);
+end;
+
+function TLibraryMap.GetLib(const AHandle: THandle; out ALib: TDbgLibrary
+  ): Boolean;
+var
+  Iterator: TMapIterator;
+  Lib: TDbgLibrary;
+begin
+  Result := False;
+  Iterator := TMapIterator.Create(Self);
+  while not Iterator.EOM do
+  begin
+    Iterator.GetData(Lib);
+    Result := Lib.ModuleHandle = AHandle;
+    if Result
+    then begin
+      ALib := Lib;
+      Break;
+    end;
+    Iterator.Next;
+  end;
+  Iterator.Free;
+end;
+
+function TLibraryMap.GetLib(const AName: String; out ALib: TDbgLibrary;
+  IsFullName: Boolean): Boolean;
+var
+  Iterator: TMapIterator;
+  Lib: TDbgLibrary;
+  n: String;
+begin
+  Result := False;
+  Iterator := TMapIterator.Create(Self);
+  n := UpperCase(AName);
+  while not Iterator.EOM do
+  begin
+    Iterator.GetData(Lib);
+    if IsFullName then
+      Result := UpperCase(Lib.Name) = n
+    else
+      Result := UpperCase(ExtractFileName(Lib.Name)) = n;
+    if Result
+    then begin
+      ALib := Lib;
+      Break;
+    end;
+    Iterator.Next;
+  end;
+  Iterator.Free;
 end;
 
 { TBreakLocationEntry }
@@ -837,43 +936,40 @@ begin
     result := '';
 end;
 
-function TDbgCallstackEntry.GetParamsAsString: string;
+function TDbgCallstackEntry.GetParamsAsString(
+  APrettyPrinter: TFpPascalPrettyPrinter): string;
 var
   ProcVal: TFpValue;
-  InstrPointerValue: TDBGPtr;
   AContext: TFpDbgInfoContext;
-  APrettyPrinter: TFpPascalPrettyPrinter;
   m: TFpValue;
   v: String;
   i: Integer;
+  OldContext: TFpDbgAddressContext;
 begin
   result := '';
   if assigned(ProcSymbol) then begin
     ProcVal := ProcSymbol.Value;
     if (ProcVal <> nil) then begin
-      InstrPointerValue := AnAddress;
-      if InstrPointerValue <> 0 then begin
-        AContext := FThread.Process.DbgInfo.FindContext(FThread.ID, Index, InstrPointerValue);
-        if AContext <> nil then begin
-          AContext.MemManager.DefaultContext := AContext;
-          TFpValueDwarf(ProcVal).Context := AContext;
-          APrettyPrinter:=TFpPascalPrettyPrinter.Create(DBGPTRSIZE[FThread.Process.Mode]);
-          try
-            for i := 0 to ProcVal.MemberCount - 1 do begin
-              m := ProcVal.Member[i];
-              if (m <> nil) and (sfParameter in m.DbgSymbol.Flags) then begin
-                APrettyPrinter.PrintValue(v, m, wdfDefault, -1, [ppoStackParam]);
-                if result <> '' then result := result + ', ';
-                result := result + v;
-              end;
-              m.ReleaseReference;
-            end;
-          finally
-            APrettyPrinter.Free;
+      AContext := FThread.Process.ContextFromProc(FThread.ID, Index, ProcSymbol);
+
+      if AContext <> nil then begin
+        OldContext := AContext.MemManager.DefaultContext;
+        AContext.MemManager.DefaultContext := AContext;
+        TFpValueDwarf(ProcVal).Context := AContext;
+        APrettyPrinter.MemManager := AContext.MemManager;
+        APrettyPrinter.AddressSize := AContext.SizeOfAddress;
+        for i := 0 to ProcVal.MemberCount - 1 do begin
+          m := ProcVal.Member[i];
+          if (m <> nil) and (sfParameter in m.DbgSymbol.Flags) then begin
+            APrettyPrinter.PrintValue(v, m, wdfDefault, -1, [ppoStackParam]);
+            if result <> '' then result := result + ', ';
+            result := result + v;
           end;
-          TFpValueDwarf(ProcVal).Context := nil;
-          AContext.ReleaseReference;
+          m.ReleaseReference;
         end;
+        TFpValueDwarf(ProcVal).Context := nil;
+        AContext.MemManager.DefaultContext := OldContext;
+        AContext.ReleaseReference;
       end;
       ProcVal.ReleaseReference;
     end;
@@ -1074,7 +1170,8 @@ end;
 
 { TDbgInstance }
 
-function TDbgInstance.AddBreak(const AFileName: String; ALine: Cardinal): TFpInternalBreakpoint;
+function TDbgInstance.AddBreak(const AFileName: String; ALine: Cardinal;
+  AnEnabled: Boolean): TFpInternalBreakpoint;
 var
   addr: TDBGPtrArray;
   o: Int64;
@@ -1086,13 +1183,36 @@ begin
     o := AddrOffset;
     for i := 0 to High(addr) do
       addr[i] := addr[i] - o;
-    Result := FProcess.AddBreak(addr);
+    Result := FProcess.AddBreak(addr, AnEnabled);
+  end;
+end;
+
+function TDbgInstance.AddBreak(const AFuncName: String; AnEnabled: Boolean
+  ): TFpDbgBreakpoint;
+var
+  AProc: TFpSymbol;
+begin
+  Result := nil;
+  AProc := FindProcSymbol(AFuncName);
+  if AProc <> nil then begin
+    Result := FProcess.AddBreak(AProc.Address.Address, AnEnabled);
+    AProc.ReleaseReference;
   end;
 end;
 
 function TDbgInstance.AddrOffset: TDBGPtr;
 begin
   Result := FLoaderList.ImageBase;
+end;
+
+function TDbgInstance.FindProcSymbol(const AName: String): TFpSymbol;
+begin
+  if FDbgInfo <> nil then
+    Result := FDbgInfo.FindProcSymbol(AName)
+  else
+    Result := nil;
+  if (Result = nil) and (SymbolTableInfo <> nil) then
+    Result := SymbolTableInfo.FindProcSymbol(AName);
 end;
 
 constructor TDbgInstance.Create(const AProcess: TDbgProcess);
@@ -1138,6 +1258,13 @@ begin
   FFileName := AValue;
 end;
 
+function TDbgInstance.GetPointerSize: Integer;
+const
+  PTRSZ: array[TFPDMode] of Integer = (4, 8); // (dm32, dm64)
+begin
+  Result := PTRSZ[FMode];
+end;
+
 procedure TDbgInstance.InitializeLoaders;
 begin
   // Do nothing;
@@ -1155,22 +1282,23 @@ end;
 
 { TDbgProcess }
 
-function TDbgProcess.AddBreak(const ALocation: TDBGPtr): TFpInternalBreakpoint;
+function TDbgProcess.AddBreak(const ALocation: TDBGPtr; AnEnabled: Boolean
+  ): TFpInternalBreakpoint;
 var
   a: TDBGPtrArray;
 begin
   SetLength(a, 1);
   a[0] := ALocation;
-  Result := AddBreak(a);
+  Result := AddBreak(a, AnEnabled);
 // TODO: if a = GetInstructionPointerRegisterValue (of any thread?)
 end;
 
-function TDbgProcess.AddBreak(const ALocation: TDBGPtrArray
+function TDbgProcess.AddBreak(const ALocation: TDBGPtrArray; AnEnabled: Boolean
   ): TFpInternalBreakpoint;
 var
   a, ip: TDBGPtr;
 begin
-  Result := OSDbgClasses.DbgBreakpointClass.Create(Self, ALocation);
+  Result := OSDbgClasses.DbgBreakpointClass.Create(Self, ALocation, AnEnabled);
   // TODO: empty breakpoint (all address failed to set) = nil
   ip := FMainThread.GetInstructionPointerRegisterValue;
   if not assigned(FCurrentBreakpoint) then
@@ -1188,6 +1316,17 @@ begin
   Result := OSDbgClasses.DbgWatchpointClass.Create(Self, ALocation, ASize, AReadWrite, AScope);
 end;
 
+function TDbgProcess.FindProcSymbol(const AName, ALibraryName: String;
+  IsFullLibName: Boolean): TFpSymbol;
+var
+  lib: TDbgLibrary;
+begin
+  Result := nil;
+  if not FLibMap.GetLib(ALibraryName, lib, IsFullLibName) then
+    exit;
+  Result := lib.FindProcSymbol(AName);
+end;
+
 constructor TDbgProcess.Create(const AFileName: string; const AProcessID,
   AThreadID: Integer);
 const
@@ -1203,7 +1342,7 @@ begin
   FBreakpointList := TFpInternalBreakpointList.Create(False);
   FWatchPointList := TFpInternalBreakpointList.Create(False);
   FThreadMap := TThreadMap.Create(itu4, SizeOf(TDbgThread));
-  FLibMap := TMap.Create(MAP_ID_SIZE, SizeOf(TDbgLibrary));
+  FLibMap := TLibraryMap.Create(MAP_ID_SIZE, SizeOf(TDbgLibrary));
   FWatchPointData := CreateWatchPointData;
   FBreakMap := TBreakLocationMap.Create(Self);
   FCurrentBreakpoint := nil;
@@ -1241,6 +1380,7 @@ var
   i: Integer;
 begin
   FProcessID:=0;
+  SetLastLibraryUnloaded(nil);
 
   for i := 0 to FBreakpointList.Count - 1 do
     FBreakpointList[i].FProcess := nil;
@@ -1273,12 +1413,6 @@ begin
   Result.FInternal := True;
 end;
 
-function TDbgProcess.FindProcSymbol(const AName: String): TFpSymbol;
-begin
-  Result := FDbgInfo.FindProcSymbol(AName);
-  // SymbolTableInfo.FindProcSymbol()
-end;
-
 function TDbgProcess.FindProcSymbol(AAdress: TDbgPtr): TFpSymbol;
 var
   n: Integer;
@@ -1291,7 +1425,6 @@ begin
     if Result <> nil then Exit;
   end;
   Result := nil;
-  // SymbolTableInfo.FindProcSymbol()
 end;
 
 function TDbgProcess.FindContext(AThreadId, AStackFrame: Integer): TFpDbgInfoContext;
@@ -1327,25 +1460,14 @@ begin
   // SymbolTableInfo.FindContext()
 end;
 
-function TDbgProcess.GetLib(const AHandle: THandle; out ALib: TDbgLibrary): Boolean;
-var
-  Iterator: TMapIterator;
-  Lib: TDbgLibrary;
+function TDbgProcess.ContextFromProc(AThreadId, AStackFrame: Integer; AProcSym: TFpSymbol): TFpDbgInfoContext;
 begin
-  Result := False;
-  Iterator := TMapIterator.Create(FLibMap);
-  while not Iterator.EOM do
-  begin
-    Iterator.GetData(Lib);
-    Result := Lib.ModuleHandle = AHandle;
-    if Result
-    then begin
-      ALib := Lib;
-      Break;
-    end;
-    Iterator.Next;
-  end;
-  Iterator.Free;
+  Result := FDbgInfo.ContextFromProc(AThreadId, AStackFrame, AProcSym);
+end;
+
+function TDbgProcess.GetLib(const AHandle: THandle; out ALib: TDbgLibrary): Boolean;
+begin
+  Result := FLibMap.GetLib(AHandle, ALib);
 end;
 
 function TDbgProcess.GetThread(const AID: Integer; out AThread: TDbgThread): Boolean;
@@ -1361,6 +1483,40 @@ end;
 function TDbgProcess.ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean;
 begin
   result := false
+end;
+
+function TDbgProcess.ReadData(const AAdress: TDbgPtr; const ASize: Cardinal;
+  out AData; out APartSize: Cardinal): Boolean;
+var
+  SizeRemaining, sz: Cardinal;
+  Offs: Integer;
+begin
+  // subclasses can do better implementation if checking for error reasons, such as part_read
+  APartSize := ASize;
+  Result := ReadData(AAdress, APartSize, AData);
+  if Result then
+    exit;
+
+  SizeRemaining := ASize;
+  Offs := 0;
+  APartSize := 0;
+
+  while SizeRemaining > 0 do begin
+    Result := False;
+    sz := SizeRemaining;
+    while (not Result) and (sz > 1) do begin
+      sz := sz div 2;
+      Result := ReadData(AAdress, sz, (@AData + Offs)^);
+    end;
+    if not Result then
+      break;
+
+    APartSize := APartSize + sz;
+    Offs := Offs + sz;
+    SizeRemaining := SizeRemaining - sz;
+  end;
+
+  Result := APartSize > 0;
 end;
 
 function TDbgProcess.ReadAddress(const AAdress: TDbgPtr; out AData: TDBGPtr): Boolean;
@@ -1605,6 +1761,11 @@ begin
   Result := Boolean(InterLockedExchangeAdd(FPauseRequested, 0));
 end;
 
+function TDbgProcess.GetLastLibraryLoaded: TDbgLibrary;
+begin
+  Result := FLibMap.LastLibraryAdded;
+end;
+
 function TDbgProcess.GetAndClearPauseRequested: Boolean;
 begin
   Result := Boolean(InterLockedExchange(FPauseRequested, ord(False)));
@@ -1649,6 +1810,19 @@ begin
   Result := True;
   if not FCurrentBreakpoint.Hit(AThreadId, BreakpointAddress)
   then FCurrentBreakpoint := nil; // no need for a singlestep if we continue
+end;
+
+procedure TDbgProcess.SetLastLibraryUnloaded(ALib: TDbgLibrary);
+begin
+  if FLastLibraryUnloaded <> nil then
+    FLastLibraryUnloaded.Destroy;
+  FLastLibraryUnloaded := ALib;
+end;
+
+procedure TDbgProcess.SetLastLibraryUnloadedNil(ALib: TDbgLibrary);
+begin
+  assert(ALib = nil, 'TDbgProcess.SetLastLibraryUnloadedNil: ALib = nil');
+  SetLastLibraryUnloaded(nil);
 end;
 
 function TDbgProcess.InsertBreakInstructionCode(const ALocation: TDBGPtr; out
@@ -1826,20 +2000,48 @@ begin
   result := FRegisterValueList;
 end;
 
-function TDbgThread.CompareStepInfo: TFPDCompareStepInfo;
+function TDbgThread.CompareStepInfo(AnAddr: TDBGPtr; ASubLine: Boolean
+  ): TFPDCompareStepInfo;
 var
-  AnAddr: TDBGPtr;
   Sym: TFpSymbol;
+  l: TDBGPtr;
 begin
-  AnAddr := GetInstructionPointerRegisterValue;
+  if FStoreStepSrcLineNo = -1 then begin // stepping from location with no line info
+    Result := dcsiNewLine;
+    exit;
+  end;
+
+  if AnAddr = 0 then
+    AnAddr := GetInstructionPointerRegisterValue;
+
+  if (FStoreStepStartAddr <> 0) then begin
+    if (AnAddr > FStoreStepStartAddr) and (AnAddr < FStoreStepEndAddr)
+    then begin
+      result := dcsiSameLine;
+      exit;
+    end
+    else
+    if ASubLine then begin
+      // this is used for the (unmarked) proloque of finally handlers in 3.1.1
+      result := dcsiNewLine; // may have the same line number, but has a new address block
+      exit;
+    end;
+  end;
+
   sym := FProcess.FindProcSymbol(AnAddr);
   if assigned(sym) then
   begin
-    if (((FStoreStepSrcFilename=sym.FileName) and (FStoreStepSrcLineNo=sym.Line)) {or FStepOut}) and
-              (FStoreStepFuncAddr=sym.Address.Address) then
+    if sym is TFpSymbolDwarfDataProc then
+      l := TFpSymbolDwarfDataProc(sym).LineUnfixed
+    else
+      l := Sym.Line;
+    debugln(FPDBG_COMMANDS, ['CompareStepInfo @IP=',AnAddr,' ',sym.FileName, ':',l, ' in ',sym.Name, ' @Func=',sym.Address.Address]);
+    if (((FStoreStepSrcFilename=sym.FileName) and (FStoreStepSrcLineNo=l)) {or FStepOut}) then
       result := dcsiSameLine
-    else if sym.Line = 0 then
+    else if sym.FileName = '' then
       result := dcsiNoLineInfo
+    else if l = 0 then
+      result := dcsiZeroLine
     else
       result := dcsiNewLine;
     sym.ReleaseReference;
@@ -1872,23 +2074,34 @@ begin
   sym.ReleaseReference;
 end;
 
-procedure TDbgThread.StoreStepInfo;
+procedure TDbgThread.StoreStepInfo(AnAddr: TDBGPtr);
 var
-  AnAddr: TDBGPtr;
   Sym: TFpSymbol;
 begin
-  FStoreStepStackFrame := GetStackBasePointerRegisterValue;
-  AnAddr := GetInstructionPointerRegisterValue;
+  if AnAddr = 0 then
+    AnAddr := GetInstructionPointerRegisterValue;
   sym := FProcess.FindProcSymbol(AnAddr);
+  FStoreStepStartAddr := AnAddr;
+  FStoreStepEndAddr := AnAddr;
   if assigned(sym) then
   begin
     FStoreStepSrcFilename:=sym.FileName;
-    FStoreStepSrcLineNo:=sym.Line;
     FStoreStepFuncAddr:=sym.Address.Address;
+    FStoreStepFuncName:=sym.Name;
+    if sym is TFpSymbolDwarfDataProc then begin
+      FStoreStepStartAddr := TFpSymbolDwarfDataProc(sym).LineStartAddress;
+      FStoreStepEndAddr := TFpSymbolDwarfDataProc(sym).LineEndAddress;
+      FStoreStepSrcLineNo := TFpSymbolDwarfDataProc(sym).LineUnfixed;
+    end
+    else
+      FStoreStepSrcLineNo:=sym.Line;
+    debugln(FPDBG_COMMANDS, ['StoreStepInfo @IP=',AnAddr,' ',sym.FileName, ':',FStoreStepSrcLineNo, ' in ',sym.Name, ' @Func=',sym.Address.Address]);
     sym.ReleaseReference;
   end
-  else
+  else begin
+    debugln(FPDBG_COMMANDS, ['StoreStepInfo @IP=',AnAddr,' - No symbol']);
     FStoreStepSrcLineNo:=-1;
+  end;
 end;
 
 procedure TDbgThread.LoadRegisterValues;
@@ -1946,7 +2159,6 @@ begin
   Result := ( (FPausedAtRemovedBreakPointState = rbFound) and
               (FPausedAtRemovedBreakPointAddress = t) ) or
             ( (t <> 0) and Process.HasInsertedBreakInstructionAtLocation(t - 1) );
-debugln(['####### CHECK ',result, ' for id ', ID, ' stored ', FPausedAtRemovedBreakPointState=rbFound, ' ',FPausedAtRemovedBreakPointAddress=t, ' ',dbghex(t), ' ', dbghex(FPausedAtRemovedBreakPointAddress)]);
 end;
 
 procedure TDbgThread.CheckAndResetInstructionPointerAfterBreakpoint;
@@ -1983,12 +2195,16 @@ procedure TDbgThread.PrepareCallStackEntryList(AFrameRequired: Integer);
 const
   MAX_FRAMES = 50000; // safety net
 var
-  Address, Frame, LastFrame: QWord;
-  Size, CountNeeded, IP, BP: integer;
+  CodeBin: array[0..50] of byte;
+  Address, FrameBase, LastFrameBase: QWord;
+  Size, CountNeeded, IP, BP, CodeReadErrCnt, SP: integer;
   AnEntry: TDbgCallstackEntry;
   R: TDbgRegisterValue;
-  nIP, nBP: String;
+  nIP, nBP, nSP: String;
   NextIdx: LongInt;
+  AReadSize: Cardinal;
+  OutSideFrame: Boolean;
+  StackPtr: TDBGPtr;
 begin
   // TODO: use AFrameRequired // check if already partly done
   if FCallStackEntryList = nil then
@@ -2001,17 +2217,24 @@ begin
       Size := 4;
       IP := 8; // Dwarf Reg Num EIP
       BP := 5; // EBP
+      SP := 4; // ESP
       nIP := 'eip';
       nBP := 'ebp';
+      nSP := 'esp';
     end;
     dm64: begin
       Size := 8;
       IP := 16; // Dwarf Reg Num RIP
       BP := 6; // RBP
+      SP := 7; // RSP
       nIP := 'rip';
       nBP := 'rbp';
+      nSP := 'rsp';
     end;
-    else assert(False, 'unknown address size for stack')
+    else begin
+      assert(False, 'unknown address size for stack');
+      exit;
+    end;
   end;
 
   FCallStackEntryList.FreeObjects:=true;
@@ -2023,15 +2246,20 @@ begin
     Address := R.NumValue;
     R := AnEntry.RegisterValueList.FindRegisterByDwarfIndex(BP);
     if R = nil then exit;
-    Frame := R.NumValue;
+    FrameBase := R.NumValue;
+    R := AnEntry.RegisterValueList.FindRegisterByDwarfIndex(SP);
+    if R = nil then exit;
+    StackPtr := R.NumValue;
   end
   else begin
     Address := GetInstructionPointerRegisterValue;
-    Frame := GetStackBasePointerRegisterValue;
-    AnEntry := TDbgCallstackEntry.create(Self, 0, Frame, Address);
+    FrameBase := GetStackBasePointerRegisterValue;
+    StackPtr := GetStackPointerRegisterValue;
+    AnEntry := TDbgCallstackEntry.create(Self, 0, FrameBase, Address);
     // Top level could be without entry in registerlist / same as GetRegisterValueList / but some code tries to find it here ....
     AnEntry.RegisterValueList.DbgRegisterAutoCreate[nIP].SetValue(Address, IntToStr(Address),Size, IP);
-    AnEntry.RegisterValueList.DbgRegisterAutoCreate[nBP].SetValue(Frame, IntToStr(Frame),Size, BP);
+    AnEntry.RegisterValueList.DbgRegisterAutoCreate[nBP].SetValue(FrameBase, IntToStr(FrameBase),Size, BP);
+    AnEntry.RegisterValueList.DbgRegisterAutoCreate[nSP].SetValue(StackPtr, IntToStr(StackPtr),Size, SP);
     FCallStackEntryList.Add(AnEntry);
   end;
 
@@ -2039,18 +2267,43 @@ begin
   if AFrameRequired < 0 then
     AFrameRequired := MaxInt;
   CountNeeded := AFrameRequired - FCallStackEntryList.Count;
-  LastFrame := 0;
-  while (CountNeeded > 0) and (Frame <> 0) and (Frame > LastFrame) do
+  LastFrameBase := 0;
+  CodeReadErrCnt := 0;
+  while (CountNeeded > 0) and (FrameBase <> 0) and (FrameBase > LastFrameBase) do
   begin
-    LastFrame := Frame;
-    if not Process.ReadData(Frame + Size, Size, Address) or (Address = 0) then Break;
-    if not Process.ReadData(Frame, Size, Frame) then Break;
-    AnEntry := TDbgCallstackEntry.create(Self, NextIdx, Frame, Address);
+    if not Process.ReadData(Address, sizeof(CodeBin), CodeBin, AReadSize) then begin
+      inc(CodeReadErrCnt);
+      if CodeReadErrCnt > 5 then break; // If the code cannot be read the stack pointer is wrong.
+    end
+    else begin
+      if not GetFunctionFrameInfo(@CodeBin[0], AReadSize, FProcess.Mode=dm64, OutSideFrame) then
+        OutSideFrame := False;
+    end;
+    LastFrameBase := FrameBase;
+    if OutSideFrame then begin
+      if not Process.ReadData(StackPtr, Size, Address) or (Address = 0) then Break;
+      {$PUSH}{$R-}{$Q-}
+      StackPtr := StackPtr + 1 * Size; // After popping return-addr from "StackPtr"
+      LastFrameBase := LastFrameBase - 1; // Make the loop think thas LastFrameBase was smaller
+      {$POP}
+      // last stack has no frame
+      //AnEntry.RegisterValueList.DbgRegisterAutoCreate[nBP].SetValue(0, '0',Size, BP);
+    end
+    else begin
+      {$PUSH}{$R-}{$Q-}
+      StackPtr := FrameBase + 2 * Size; // After popping return-addr from "FrameBase + Size"
+      {$POP}
+      if not Process.ReadData(FrameBase + Size, Size, Address) or (Address = 0) then Break;
+      if not Process.ReadData(FrameBase, Size, FrameBase) then Break;
+    end;
+    AnEntry := TDbgCallstackEntry.create(Self, NextIdx, FrameBase, Address);
     AnEntry.RegisterValueList.DbgRegisterAutoCreate[nIP].SetValue(Address, IntToStr(Address),Size, IP);
-    AnEntry.RegisterValueList.DbgRegisterAutoCreate[nBP].SetValue(Frame, IntToStr(Frame),Size, BP);
+    AnEntry.RegisterValueList.DbgRegisterAutoCreate[nBP].SetValue(FrameBase, IntToStr(FrameBase),Size, BP);
+    AnEntry.RegisterValueList.DbgRegisterAutoCreate[nSP].SetValue(StackPtr, IntToStr(StackPtr),Size, SP);
     FCallStackEntryList.Add(AnEntry);
     Dec(CountNeeded);
     inc(NextIdx);
+    CodeReadErrCnt := 0;
     If (NextIdx > MAX_FRAMES) then
       break;
   end;
@@ -2162,12 +2415,13 @@ end;
 { TDbgBreak }
 
 constructor TFpInternalBreakpoint.Create(const AProcess: TDbgProcess;
-  const ALocation: TDBGPtrArray);
+  const ALocation: TDBGPtrArray; AnEnabled: Boolean);
 begin
   inherited Create(AProcess);
   FProcess.FBreakpointList.Add(Self);
   FLocation := ALocation;
-  SetBreak;
+  if AnEnabled then
+    SetBreak;
 end;
 
 destructor TFpInternalBreakpoint.Destroy;
@@ -2202,6 +2456,36 @@ begin
       exit;
   end;
   Result := False;
+end;
+
+procedure TFpInternalBreakpoint.AddAddress(const ALocation: TDBGPtr);
+var
+  l: Integer;
+begin
+  l := Length(FLocation);
+  SetLength(FLocation, l+1);
+  FLocation[l] := ALocation;
+end;
+
+procedure TFpInternalBreakpoint.RemoveAddress(const ALocation: TDBGPtr);
+var
+  l, i: Integer;
+begin
+  l := Length(FLocation) - 1;
+  i := l;
+  while (i >= 0) and (FLocation[i] <> ALocation) do
+    dec(i);
+  if i < 0 then
+    exit;
+  FLocation[i] := FLocation[l];
+  SetLength(FLocation, l-1);
+  FProcess.FBreakMap.RemoveLocotion(ALocation, Self);
+end;
+
+procedure TFpInternalBreakpoint.RemoveAllAddresses;
+begin
+  ResetBreak;
+  SetLength(FLocation, 0);
 end;
 
 procedure TFpInternalBreakpoint.ResetBreak;
@@ -2356,6 +2640,7 @@ initialization
   DBG_VERBOSE := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
   DBG_BREAKPOINTS := DebugLogger.FindOrRegisterLogGroup('DBG_BREAKPOINTS' {$IFDEF DBG_BREAKPOINTS} , True {$ENDIF} );
+  FPDBG_COMMANDS := DebugLogger.FindOrRegisterLogGroup('FPDBG_COMMANDS' {$IFDEF FPDBG_COMMANDS} , True {$ENDIF} );
 
 
 finalization

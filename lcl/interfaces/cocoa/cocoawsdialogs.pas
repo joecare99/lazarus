@@ -33,7 +33,7 @@ uses
   WSForms, WSLCLClasses, WSProc, WSDialogs, LCLMessageGlue,
   // LCL Cocoa
   CocoaPrivate, CocoaUtils, CocoaWSCommon, CocoaWSStdCtrls, CocoaGDIObjects
-  ,Cocoa_Extra;
+  ,Cocoa_Extra, CocoaWSMenus;
 
 type
 
@@ -132,10 +132,13 @@ type
     procedure setDialogFilter(ASelectedFilterIndex: Integer); message 'setDialogFilter:';
     procedure comboboxAction(sender: id); message 'comboboxAction:';
     // NSOpenSavePanelDelegateProtocol
-    function panel_shouldEnableURL(sender: id; url: NSURL): Boolean; message 'panel:shouldEnableURL:';
+    function panel_shouldEnableURL(sender: id; url: NSURL): LCLObjCBoolean; message 'panel:shouldEnableURL:';
   end;
 
 implementation
+
+uses
+  CocoaInt;
 
 // API irony.
 // In LCL the base dialog is TOpenDialog (savedialog inherits from it)
@@ -153,59 +156,56 @@ end;
 
 type
 
-  { TCocoaPanelDialog }
+  { TOpenSaveDelegate }
 
-  TCocoaPanelDialog = objcclass(NSObject, NSOpenSavePanelDelegateProtocol)
+  TOpenSaveDelegate = objcclass(NSObject, NSOpenSavePanelDelegateProtocol)
     FileDialog: TFileDialog;
     OpenDialog: TOpenDialog;
     selUrl: NSURL;
+    filter: NSOpenSavePanelDelegateProtocol;
     procedure dealloc; override;
-    function panel_shouldEnableURL(sender: id; url: NSURL): Boolean;
-    function panel_validateURL_error(sender: id; url: NSURL; outError: NSErrorPointer): Boolean;
+    function panel_shouldEnableURL(sender: id; url: NSURL): LCLObjCBoolean;
     procedure panel_didChangeToDirectoryURL(sender: id; url: NSURL);
-    function panel_userEnteredFilename_confirmed(sender: id; filename: NSString; okFlag: Boolean): NSString;
-    procedure panel_willExpand(sender: id; expanding: Boolean);
+    function panel_userEnteredFilename_confirmed(sender: id; filename: NSString; okFlag: LCLObjCBoolean): NSString;
+    procedure panel_willExpand(sender: id; expanding: LCLObjCBoolean);
     procedure panelSelectionDidChange(sender: id);
   end;
 
-{ TCocoaPanelDialog }
+{ TOpenSaveDelegate }
 
-procedure TCocoaPanelDialog.dealloc;
+procedure TOpenSaveDelegate.dealloc;
 begin
   if Assigned(selUrl) then selURL.release;
   inherited dealloc;
 end;
 
-function TCocoaPanelDialog.panel_shouldEnableURL(sender: id; url: NSURL
-  ): Boolean;
+function TOpenSaveDelegate.panel_shouldEnableURL(sender: id; url: NSURL
+  ): LCLObjCBoolean;
 begin
-  Result := true;
+  if Assigned(filter) then
+    Result := filter.panel_shouldEnableURL(sender, url)
+  else
+    Result := true;
 end;
 
-function TCocoaPanelDialog.panel_validateURL_error(sender: id; url: NSURL;
-  outError: NSErrorPointer): Boolean;
-begin
-  Result := true;
-end;
-
-procedure TCocoaPanelDialog.panel_didChangeToDirectoryURL(sender: id; url: NSURL);
+procedure TOpenSaveDelegate.panel_didChangeToDirectoryURL(sender: id; url: NSURL);
 begin
   if Assigned(OpenDialog) then
     OpenDialog.DoFolderChange;
 end;
 
-function TCocoaPanelDialog.panel_userEnteredFilename_confirmed(sender: id;
-  filename: NSString; okFlag: Boolean): NSString;
+function TOpenSaveDelegate.panel_userEnteredFilename_confirmed(sender: id;
+  filename: NSString; okFlag: LCLObjCBoolean): NSString;
 begin
   Result := filename;
 end;
 
-procedure TCocoaPanelDialog.panel_willExpand(sender: id; expanding: Boolean);
+procedure TOpenSaveDelegate.panel_willExpand(sender: id; expanding: LCLObjCBoolean);
 begin
 
 end;
 
-procedure TCocoaPanelDialog.panelSelectionDidChange(sender: id);
+procedure TOpenSaveDelegate.panelSelectionDidChange(sender: id);
 var
   sp : NSSavePanel;
   ch : Boolean;     // set to true, if actually getting a new file name
@@ -216,7 +216,11 @@ begin
   sp := NSSavePanel(sender);
   ch := false;
   if not Assigned(sp.URL) then begin
-    if Assigned(selUrl) then selURL.release;
+    if Assigned(selUrl) then
+    begin
+      selURL.release;
+      selURL := nil;
+    end;
     ch := true;
   end
   else if not Assigned(selUrl) then
@@ -261,7 +265,7 @@ var
   // filter accessory view
   accessoryView: NSView;
   lFilter: TCocoaFilterComboBox;
-  callback: TCocoaPanelDialog;
+  callback: TOpenSaveDelegate;
 
   // setup panel and its accessory view
   procedure CreateAccessoryView(AOpenOwner: NSOpenPanel; ASaveOwner: NSSavePanel);
@@ -415,36 +419,41 @@ begin
     openDlg := nil;
   end;
 
-  callback:=TCocoaPanelDialog.alloc;
+  callback:=TOpenSaveDelegate.alloc;
   callback.autorelease;
   callback.FileDialog := FileDialog;
   if FileDialog is TOpenDialog then
     callback.OpenDialog := TOpenDialog(FileDialog);
+  callback.filter := lFilter;
   saveDlg.setDelegate(callback);
-
   saveDlg.setTitle(NSStringUtf8(FileDialog.Title));
   saveDlg.setDirectoryURL(NSURL.fileURLWithPath(NSStringUtf8(InitDir)));
   UpdateOptions(FileDialog, saveDlg);
 
-  if saveDlg.runModal = NSOKButton then
-  begin
-    FileDialog.FileName := NSStringToString(saveDlg.URL.path);
-    FileDialog.Files.Clear;
+  ToggleAppMenu(false);
+  try
+    if saveDlg.runModal = NSOKButton then
+    begin
+      FileDialog.FileName := NSStringToString(saveDlg.URL.path);
+      FileDialog.Files.Clear;
 
-    if Assigned(openDlg) then
-      for i := 0 to openDlg.filenames.Count - 1 do
-        FileDialog.Files.Add(NSStringToString(
-          NSURL(openDlg.URLs.objectAtIndex(i)).path));
+      if Assigned(openDlg) then
+        for i := 0 to openDlg.filenames.Count - 1 do
+          FileDialog.Files.Add(NSStringToString(
+            NSURL(openDlg.URLs.objectAtIndex(i)).path));
 
-    FileDialog.UserChoice := mrOk;
-    if lFilter <> nil then
-      FileDialog.FilterIndex := lFilter.lastSelectedItemIndex+1;
+      FileDialog.UserChoice := mrOk;
+      if lFilter <> nil then
+        FileDialog.FilterIndex := lFilter.lastSelectedItemIndex+1;
+    end;
+    FileDialog.DoClose;
+
+
+    // release everything
+    LocalPool.Release;
+  finally
+    ToggleAppMenu(true);
   end;
-  FileDialog.DoClose;
-
-
-  // release everything
-  LocalPool.Release;
 
 end;  {TCocoaWSFileDialog.ShowModal}
 
@@ -539,6 +548,7 @@ var
   accessoryView: NSView;
   lRect: NSRect;
   okButton, cancelButton: NSButton;
+  fn : NSFont;
 begin
   {$IFDEF VerboseWSClass}
   DebugLn('TCocoaWSFontDialog.ShowModal for ' + ACommonDialog.Name);
@@ -548,7 +558,15 @@ begin
 
   fontPanel := NSFontPanel.sharedFontPanel();
   inFont := TCocoaFont(FontDialog.Font.Handle);
-  fontPanel.setPanelFont_isMultiple(inFont.Font, False);
+  fn := inFont.Font;
+  if (FontDialog.Font.PixelsPerInch<>72) and (FontDialog.Font.PixelsPerInch<>0) then
+  begin
+    if (FontDialog.Font.Size<>0) then // assign font size directly to avoid rounding errors
+      fn := NSFont.fontWithDescriptor_size(fn.fontDescriptor, Abs(FontDialog.Font.Size)) // ToDo: emulate negative Size values from WinAPI
+    else // fallback for default font size: round the result because currently the LCL doesn't support floating-point sizes, so there is no reason to show them to the user
+      fn := NSFont.fontWithDescriptor_size(fn.fontDescriptor, Round(fn.pointSize * 72 / FontDialog.Font.PixelsPerInch));
+  end;
+  fontPanel.setPanelFont_isMultiple(fn, False);
 
   FontDelegate := TFontPanelDelegate.alloc.init();
   FontDelegate.FontPanel := FontPanel;
@@ -648,6 +666,8 @@ begin
   oldFont := oldHandle.Font;
   //oldFont := NSFont.fontWithName_size(NSFont.systemFontOfSize(0).fontDescriptor.postscriptName, 0);
   newFont := FontPanel.panelConvertFont(oldFont);
+  if (FontDialog.Font.PixelsPerInch<>72) and (FontDialog.Font.PixelsPerInch<>0) then
+    newFont := NSFont.fontWithDescriptor_size(newFont.fontDescriptor, newFont.pointSize * FontDialog.Font.PixelsPerInch / 72);
   newHandle := TCocoaFont.Create(newFont);
   FontDialog.Font.Handle := HFONT(newHandle);
 end;
@@ -859,7 +879,7 @@ begin
   lastSelectedItemIndex := indexOfSelectedItem;
 end;
 
-function TCocoaFilterComboBox.panel_shouldEnableURL(sender: id; url: NSURL): Boolean;
+function TCocoaFilterComboBox.panel_shouldEnableURL(sender: id; url: NSURL): LCLObjCBoolean;
 var
   lPath, lExt, lCurExt: NSString;
   lExtStr, lCurExtStr: String;

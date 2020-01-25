@@ -21,9 +21,13 @@ unit gtk3objects;
 interface
 
 uses
-  Classes, SysUtils, Graphics, types, LCLType, LCLProc, LazUTF8, IntegerList,
-  LazGtk3, LazGdk3, LazGObject2, LazPango1, LazPangoCairo1, LazGdkPixbuf2,
-  LazGLib2, LazCairo1, FPCanvas;
+  Classes, SysUtils, Types, FPCanvas,
+  // LazUtils
+  LazUTF8, IntegerList, LazStringUtils,
+  // LCL
+  LCLType, LCLProc, Graphics,
+  LazGtk3, LazGdk3, LazGObject2, LazGLib2, LazGdkPixbuf2,
+  LazPango1, LazPangoCairo1, LazCairo1;
 
 type
   TGtk3DeviceContext = class;
@@ -59,13 +63,12 @@ type
     FLogFont: TLogFont;
     FFontName: String;
     FHandle: PPangoFontDescription;
-    procedure SetFontName(const AValue: String);
   public
     constructor Create(ACairo: Pcairo_t; AWidget: PGtkWidget = nil);
     constructor Create(ALogFont: TLogFont; const ALongFontName: String);
     destructor Destroy; override;
     procedure UpdateLogFont;
-    property FontName: String read FFontName write SetFontName;
+    property FontName: String read FFontName write FFontName;
     property Handle: PPangoFontDescription read FHandle;
     property Layout: PPangoLayout read FLayout;
     property LogFont: TLogFont read FLogFont;
@@ -78,15 +81,13 @@ type
     FColor: TColor;
     FContext: TGtk3DeviceContext;
     FStyle: LongWord;
-    function GetColor: TColor;
     procedure SetColor(AValue: TColor);
-    procedure SetStyle(AValue: cardinal);
   public
     LogBrush: TLogBrush;
     constructor Create; override;
-    property Color: TColor read GetColor write SetColor;
+    property Color: TColor read FColor write SetColor;
     property Context: TGtk3DeviceContext read FContext write FContext;
-    property Style: LongWord read FStyle write SetStyle;
+    property Style: LongWord read FStyle write FStyle;
   end;
 
   { TGtk3Pen }
@@ -102,28 +103,22 @@ type
     FColor: TColor;
     FContext: TGtk3DeviceContext;
     FIsExtPen: Boolean;
-    function GetColor: TColor;
-    function GetWidth: Integer;
     procedure SetColor(AValue: TColor);
     procedure setCosmetic(b: Boolean);
-    procedure SetEndCap(AValue: TPenEndCap);
-    procedure SetJoinStyle(AValue: TPenJoinStyle);
-    procedure SetPenMode(AValue: TPenMode);
-    procedure SetStyle(AValue: TFPPenStyle);
     procedure setWidth(p1: Integer);
   public
     LogPen: TLogPen;
     constructor Create; override;
-    property Color: TColor read GetColor write SetColor;
+    property Color: TColor read FColor write SetColor;
     property Context: TGtk3DeviceContext read FContext write FContext;
 
     property Cosmetic: Boolean read FCosmetic write SetCosmetic;
-    property EndCap: TPenEndCap read FEndCap write SetEndCap;
+    property EndCap: TPenEndCap read FEndCap write FEndCap;
     property IsExtPen: Boolean read FIsExtPen write FIsExtPen;
-    property JoinStyle: TPenJoinStyle read FJoinStyle write SetJoinStyle;
-    property Mode: TPenMode read FPenMode write SetPenMode;
-    property Style: TFPPenStyle read FStyle write SetStyle;
-    property Width: Integer read GetWidth write SetWidth;
+    property JoinStyle: TPenJoinStyle read FJoinStyle write FJoinStyle;
+    property Mode: TPenMode read FPenMode write FPenMode;
+    property Style: TFPPenStyle read FStyle write FStyle;
+    property Width: Integer read FWidth write SetWidth;
   end;
 
   { TGtk3Region }
@@ -164,7 +159,7 @@ type
     function bits: PByte;
     function numBytes: LongWord;
     function bytesPerLine: Integer;
-    function getFormat: cairo_format_t;
+    property Format: cairo_format_t read FFormat;
     property Handle: PGdkPixbuf read FHandle;
   end;
 
@@ -193,15 +188,8 @@ type
     FvClipRect: TRect;
     FCurrentPen: TGtk3Pen;
     FBkMode: Integer;
-    function GetBkMode: Integer;
-    function getBrush: TGtk3Brush;
-    function GetFont: TGtk3Font;
     function GetOffset: TPoint;
-    function getPen: TGtk3Pen;
-    function GetvImage: TGtk3Image;
-    procedure SetBkMode(AValue: Integer);
     procedure setBrush(AValue: TGtk3Brush);
-    procedure SetCurrentTextColor(AValue: TColorRef);
     procedure SetFont(AValue: TGtk3Font);
     procedure SetOffset(AValue: TPoint);
     procedure setPen(AValue: TGtk3Pen);
@@ -228,20 +216,22 @@ type
     procedure CreateObjects;
     procedure DeleteObjects;
   public
-    procedure drawPoint(x1: Integer; y1: Integer);
-    procedure drawRect(x1: Integer; y1: Integer; w: Integer; h: Integer; const AFill: Boolean);
+    procedure drawPixel(x, y: Integer; AColor: TColor);
+    function getPixel(x, y: Integer): TColor;
+    procedure drawRect(x1, y1, w, h: Integer; const AFill, ABorder: Boolean);
     procedure drawRoundRect(x, y, w, h, rx, ry: Integer);
-    procedure drawText(x: Integer; y: Integer; const s: String); overload;
-    procedure drawText(x,y,w,h,flags: Integer; const s: String); overload;
-    procedure drawLine(x1: Integer; y1: Integer; x2: Integer; y2: Integer);
-    procedure drawEllipse(x: Integer; y: Integer; w: Integer; h: Integer);
+    procedure drawText(x, y: Integer; AText: PChar; ALen: Integer);
+    procedure drawEllipse(x, y, w, h: Integer; AFill, ABorder: Boolean);
     procedure drawSurface(targetRect: PRect; Surface: Pcairo_surface_t; sourceRect: PRect;
       mask: PGdkPixBuf; maskRect: PRect);
     procedure drawImage(targetRect: PRect; image: PGdkPixBuf; sourceRect: PRect;
       mask: PGdkPixBuf; maskRect: PRect);
+    procedure drawImage1(targetRect: PRect; image: PGdkPixBuf; sourceRect: PRect;
+      mask: PGdkPixBuf; maskRect: PRect);
     procedure drawPixmap(p: PPoint; pm: PGdkPixbuf; sr: PRect);
     procedure drawPolyLine(P: PPoint; NumPts: Integer);
-    procedure drawPolygon(P: PPoint; NumPts: Integer; FillRule: integer);
+    procedure drawPolygon(P: PPoint; NumPts: Integer; FillRule: Integer; AFill,
+      ABorder: Boolean);
     procedure drawPolyBezier(P: PPoint; NumPoints: Integer; Filled, Continuous: boolean);
     procedure EllipseArcPath(CX, CY, RX, RY: Double; Angle1, Angle2: Double; Clockwise, Continuous: Boolean);
     procedure eraseRect(ARect: PRect);
@@ -253,33 +243,29 @@ type
     function getBpp: integer;
     function getDepth: integer;
     function getDeviceSize: TPoint;
-    function LineTo(const X, Y: Integer): Boolean;
+    function LineTo(X, Y: Integer): Boolean;
     function MoveTo(const X, Y: Integer; OldPoint: PPoint): Boolean;
     function SetClipRegion(ARgn: TGtk3Region): Integer;
     procedure SetSourceColor(AColor: TColor);
-    procedure SetCurrentBrush(ABrush: TGtk3Brush);
-    procedure SetCurrentFont(AFont: TGtk3Font);
-    procedure SetCurrentPen(APen: TGtk3Pen);
-    procedure SetCurrentImage(AImage: TGtk3Image);
     procedure SetImage(AImage: TGtk3Image);
     function ResetClip: Integer;
     procedure TranslateCairoToDevice;
     procedure Translate(APoint: TPoint);
-    property BkMode: Integer read GetBkMode write SetBkMode;
+    property BkMode: Integer read FBkMode write FBkMode;
     property CanRelease: Boolean read FCanRelease write FCanRelease;
-    property CurrentBrush: TGtk3Brush read FCurrentBrush;
-    property CurrentFont: TGtk3Font read FCurrentFont;
-    property CurrentImage: TGtk3Image read FCurrentImage;
-    property CurrentPen: TGtk3Pen read FCurrentPen;
+    property CurrentBrush: TGtk3Brush read FCurrentBrush write FCurrentBrush;
+    property CurrentFont: TGtk3Font read FCurrentFont write FCurrentFont;
+    property CurrentImage: TGtk3Image read FCurrentImage write FCurrentImage;
+    property CurrentPen: TGtk3Pen read FCurrentPen write FCurrentPen;
     property CurrentRegion: TGtk3Region read FCurrentRegion;
-    property CurrentTextColor: TColorRef read FCurrentTextColor write SetCurrentTextColor;
+    property CurrentTextColor: TColorRef read FCurrentTextColor write FCurrentTextColor;
     property Offset: TPoint read GetOffset write SetOffset;
     property OwnsSurface: Boolean read FOwnsSurface;
-    property vBrush: TGtk3Brush read getBrush write setBrush;
+    property vBrush: TGtk3Brush read FBrush write setBrush;
     property vClipRect: TRect read FvClipRect write FvClipRect;
-    property vFont: TGtk3Font read GetFont write SetFont;
-    property vImage: TGtk3Image read GetvImage write SetvImage;
-    property vPen: TGtk3Pen read getPen write setPen;
+    property vFont: TGtk3Font read FFont write SetFont;
+    property vImage: TGtk3Image read FvImage write SetvImage;
+    property vPen: TGtk3Pen read FPen write setPen;
   end;
 
 function CheckBitmap(const ABitmap: HBITMAP; const AMethodName: String;
@@ -290,8 +276,14 @@ procedure Gtk3WordWrap(DC: HDC; AText: PChar;
 function Gtk3DefaultContext: TGtk3DeviceContext;
 function Gtk3ScreenContext: TGtk3DeviceContext;
 
+function ReplaceAmpersandsWithUnderscores(const S: string): string; inline;
+
 implementation
+
 uses math, gtk3int, gtk3procs;
+
+const
+  PixelOffset = 0.5; // Cairo API needs 0.5 pixel offset to not make blurry lines
 
 const
   Dash_Dash:        array [0..1] of double = (18, 6);             //____ ____
@@ -420,12 +412,6 @@ end;
 
 { TGtk3Font }
 
-procedure TGtk3Font.SetFontName(const AValue: String);
-begin
-  if FFontName=AValue then Exit;
-  FFontName:=AValue;
-end;
-
 procedure TGtk3Font.UpdateLogFont;
 var
   sz:integer;
@@ -521,9 +507,7 @@ end;
 constructor TGtk3Font.Create(ALogFont: TLogFont; const ALongFontName: String);
 var
   AContext: PPangoContext;
-  ADescription: PPangoFontDescription;
   AttrList: PPangoAttrList;
-  AttrListTemporary: Boolean;
   Attr: PPangoAttribute;
 begin
   FLogFont := ALogFont;
@@ -534,36 +518,23 @@ begin
     if Gtk3WidgetSet.DefaultAppFontName <> '' then
       FHandle := pango_font_description_from_string(PgChar(Gtk3WidgetSet.DefaultAppFontName))
     else
-    begin
-      ADescription := pango_context_get_font_description(AContext);
-      FHandle := pango_font_description_copy(ADescription);
-    end;
-    FFontName := FHandle^.get_family;
+      FHandle := pango_font_description_copy(pango_context_get_font_description(AContext));
   end else
-  begin
     FHandle := pango_font_description_from_string(PgChar(FFontName));
-    FFontName := FHandle^.get_family;
-  end;
+  FFontName := FHandle^.get_family;
   if ALogFont.lfHeight <> 0 then
     FHandle^.set_absolute_size(Abs(ALogFont.lfHeight) * PANGO_SCALE);
-
   if ALogFont.lfItalic > 0 then
     FHandle^.set_style(PANGO_STYLE_ITALIC);
-
   FHandle^.set_weight(ALogFont.lfWeight);
-
   FLayout := pango_layout_new(AContext);
   FLayout^.set_font_description(FHandle);
 
   if (ALogFont.lfUnderline<>0) or (ALogFont.lfStrikeOut<>0) then
   begin
-    AttrListTemporary := false;
     AttrList := pango_layout_get_attributes(FLayout);
     if (AttrList = nil) then
-    begin
       AttrList := pango_attr_list_new();
-      AttrListTemporary := True;
-    end;
     if ALogFont.lfUnderline <> 0 then
       Attr := pango_attr_underline_new(PANGO_UNDERLINE_SINGLE)
     else
@@ -572,13 +543,9 @@ begin
 
     Attr := pango_attr_strikethrough_new(ALogFont.lfStrikeOut<>0);
     pango_attr_list_change(AttrList, Attr);
-
     pango_layout_set_attributes(FLayout, AttrList);
-
-    if AttrListTemporary then
-      pango_attr_list_unref(AttrList);
+    pango_attr_list_unref(AttrList);
   end;
-
   g_object_unref(AContext);
 end;
 
@@ -827,22 +794,7 @@ begin
   Result := FHandle^.rowstride;
 end;
 
-function TGtk3Image.getFormat: cairo_format_t;
-begin
-  Result := FFormat;
-end;
-
 { TGtk3Pen }
-
-function TGtk3Pen.GetColor: TColor;
-begin
-  Result := FColor;
-end;
-
-function TGtk3Pen.GetWidth: Integer;
-begin
-  Result := FWidth;
-end;
 
 procedure TGtk3Pen.SetColor(AValue: TColor);
 var
@@ -852,27 +804,6 @@ begin
   ColorToCairoRGB(FColor, ARed, AGreen, ABlue);
   if Assigned(FContext) and Assigned(FContext.Widget) then
     cairo_set_source_rgb(FContext.Widget, ARed, AGreen, ABlue);
-end;
-
-procedure TGtk3Pen.SetEndCap(AValue: TPenEndCap);
-begin
-  FEndCap := AValue;
-end;
-
-procedure TGtk3Pen.SetJoinStyle(AValue: TPenJoinStyle);
-begin
-  FJoinStyle:=AValue;
-end;
-
-procedure TGtk3Pen.SetPenMode(AValue: TPenMode);
-begin
-  if FPenMode=AValue then Exit;
-  FPenMode:=AValue;
-end;
-
-procedure TGtk3Pen.SetStyle(AValue: TFPPenStyle);
-begin
-  FStyle := AValue;
 end;
 
 constructor TGtk3Pen.Create;
@@ -911,11 +842,6 @@ end;
 
 { TGtk3Brush }
 
-function TGtk3Brush.GetColor: TColor;
-begin
-  Result := FColor;
-end;
-
 procedure TGtk3Brush.SetColor(AValue: TColor);
 var
   ARed, AGreen, ABlue: Double;
@@ -924,12 +850,6 @@ begin
   ColorToCairoRGB(FColor, ARed, AGreen, ABlue);
   if Assigned(FContext) then
     cairo_set_source_rgb(FContext.Widget, ARed, AGreen, ABlue);
-end;
-
-procedure TGtk3Brush.SetStyle(AValue: cardinal);
-begin
-  if FStyle=AValue then Exit;
-  FStyle:=AValue;
 end;
 
 constructor TGtk3Brush.Create;
@@ -944,21 +864,6 @@ end;
 
 { TGtk3DeviceContext }
 
-function TGtk3DeviceContext.getBrush: TGtk3Brush;
-begin
-  Result := FBrush;
-end;
-
-function TGtk3DeviceContext.GetBkMode: Integer;
-begin
-  Result := FBkMode;
-end;
-
-function TGtk3DeviceContext.GetFont: TGtk3Font;
-begin
-  Result := FFont;
-end;
-
 function TGtk3DeviceContext.GetOffset: TPoint;
 var
   dx,dy: Double;
@@ -967,32 +872,11 @@ begin
   Result := Point(Round(dx), Round(dy));
 end;
 
-function TGtk3DeviceContext.getPen: TGtk3Pen;
-begin
-  Result := FPen;
-end;
-
-function TGtk3DeviceContext.GetvImage: TGtk3Image;
-begin
-  Result := FvImage;
-end;
-
-procedure TGtk3DeviceContext.SetBkMode(AValue: Integer);
-begin
-  FBkMode := AValue;
-end;
-
 procedure TGtk3DeviceContext.setBrush(AValue: TGtk3Brush);
 begin
   if Assigned(FBrush) then
     FBrush.Free;
   FBrush := AValue;
-end;
-
-procedure TGtk3DeviceContext.SetCurrentTextColor(AValue: TColorRef);
-begin
-  if FCurrentTextColor=AValue then Exit;
-  FCurrentTextColor:=AValue;
 end;
 
 procedure TGtk3DeviceContext.SetFont(AValue: TGtk3Font);
@@ -1063,7 +947,6 @@ begin
     AFont := FCurrentFont
   else
     AFont := FFont;
-
 end;
 
 procedure TGtk3DeviceContext.ApplyPen;
@@ -1179,6 +1062,7 @@ begin
   begin
     AWindow := gdk_get_default_root_window;
     AWindow^.get_geometry(@x, @y, @w, @h);
+    w:=1; h:=1;
     // ParentPixmap := gdk_pixbuf_get_from_window(AWindow, x, y, w, h);
     // Widget := gdk_cairo_create(AWindow);
     // gdk_cairo_set_source_pixbuf(Widget, ParentPixmap, 0, 0);
@@ -1330,30 +1214,49 @@ begin
     FreeAndNil(FvImage);
 end;
 
-procedure TGtk3DeviceContext.drawPoint(x1: Integer; y1: Integer);
+procedure TGtk3DeviceContext.drawPixel(x, y: Integer; AColor: TColor);
+// Seems that painting line from (a-1, b-1) to (a,b) gives one pixel
 begin
-  applyPen;
-  cairo_move_to(Widget , x1, y1);
-  cairo_line_to(Widget, x1, y1);
+  SetSourceColor(AColor);
+  cairo_set_line_width(Widget, 1);
+  cairo_move_to(Widget, x - PixelOffset, y - PixelOffset);
+  cairo_line_to(Widget, x + PixelOffset, y + PixelOffset);
   cairo_stroke(Widget);
 end;
 
-procedure TGtk3DeviceContext.drawRect(x1: Integer; y1: Integer; w: Integer;
-  h: Integer; const AFill: Boolean);
+function TGtk3DeviceContext.getPixel(x, y: Integer): TColor;
+var
+  pixbuf: PGdkPixbuf;
+  pixels: pointer;
+begin
+  Result := 0;
+  pixbuf := gdk_pixbuf_get_from_surface(CairoSurface, X, Y, 1, 1);
+  if Assigned(pixbuf) then
+  begin
+    pixels := gdk_pixbuf_get_pixels(pixbuf);
+    if Assigned(pixels) then
+      Result := PLongInt(pixels)^ and $FFFFFF; // take first 3 bytes at pixels^
+  end;
+end;
+
+procedure TGtk3DeviceContext.drawRect(x1, y1, w, h: Integer; const AFill, ABorder: Boolean);
 begin
   cairo_save(Widget);
   try
-    applyPen;
-    // strange about adding +1 -1 to rectangle, but this works ok.
-    //cairo_rectangle(Widget, x1 + 1, y1 + 1, w - 1, h -1);
-    cairo_rectangle(Widget, x1, y1, w, h);
+    cairo_rectangle(Widget, x1 + PixelOffset, y1 + PixelOffset, w - 1, h - 1);
+
     if AFill then
     begin
-      cairo_stroke_preserve(Widget);
-      applyBrush;
+      ApplyBrush;
       cairo_fill_preserve(Widget);
-    end else
+    end;
+    if ABorder then
+    begin
+      ApplyPen;
       cairo_stroke(Widget);
+    end;
+
+    cairo_new_path(Widget);
   finally
     cairo_restore(Widget);
   end;
@@ -1364,80 +1267,90 @@ begin
   RoundRect(x, y, w, h, rx, ry);
 end;
 
-procedure TGtk3DeviceContext.drawText(x: Integer; y: Integer; const s: String);
+procedure TGtk3DeviceContext.drawText(X, Y: Integer; AText: PChar; ALen: Integer);
 var
-  e: cairo_font_extents_t;
-  R: Double;
-  G: Double;
-  B: Double;
+  //e: cairo_font_extents_t;
+  R, G, B: Double;
+  gColor: TGdkColor;
+  Attr: PPangoAttribute;
+  AttrList: PPangoAttrList;
+  UseBack: boolean;
 begin
   cairo_save(Widget);
   try
+    {
     // TranslateCairoToDevice;
     // cairo_surface_get_device_offset(CairoSurface, @dx, @dy);
     cairo_font_extents(Widget, @e);
     if e.ascent <> 0 then
     begin
-      // writeln('EXTENTS !!!! ',Format('%2.2n',[e.ascent]));
+      // WriteLn('EXTENTS !!!! ',Format('%2.2n',[e.ascent]));
     end;
-    cairo_move_to(Widget, x, y {+ e.ascent});
-    // writeln('DevOffset ',Format('dx %2.2n dy %2.2n x %d y %d text %s',
-    //  [dx, dy, x, y, s]));
-    // pango_renderer_activate();
-    // pango_cairo_show_layout(Widget, Layout);
-    ColorToCairoRGB(TColor(CurrentTextColor), R, G , B);
+    }
+    cairo_move_to(Widget, X, Y {+ e.ascent});
+    ColorToCairoRGB(TColor(CurrentTextColor), R, G, B);
     cairo_set_source_rgb(Widget, R, G, B);
-    // writeln('DRAWINGTEXT ',S,' WITH R=',dbgs(R),' G=',dbgs(G),' B=',dbgs(B));
-    FCurrentFont.Layout^.set_text(PChar(S), length(S));
-    // writeln('Family: ',FCurrentFont.Handle^.get_family,' size ',FCurrentFont.Handle^.get_size,' weight ',FCurrentFont.Handle^.get_weight);
+
+    FCurrentFont.Layout^.set_text(AText, ALen);
+
+    UseBack := FCurrentBrush.Style <> BS_NULL;
+    if UseBack then
+    begin
+      gColor := TColorToTGDKColor(FCurrentBrush.Color);
+      AttrList := pango_attr_list_new;
+      Attr := pango_attr_background_new(gColor.red, gColor.green, gColor.blue);
+      pango_attr_list_insert(AttrList, Attr);
+      FCurrentFont.Layout^.set_attributes(AttrList);
+    end;
+
+    // WriteLn('Family: ',FCurrentFont.Handle^.get_family,' size ',FCurrentFont.Handle^.get_size,' weight ',FCurrentFont.Handle^.get_weight);
     pango_cairo_show_layout(Widget, FCurrentFont.Layout);
+
+    if UseBack then
+    begin
+      FCurrentFont.Layout^.set_attributes(nil);
+      pango_attribute_destroy(Attr);
+    end;
   finally
     cairo_restore(Widget);
   end;
 end;
 
-procedure TGtk3DeviceContext.drawText(x, y, w, h, flags: Integer; const s: String
-  );
+procedure TGtk3DeviceContext.drawEllipse(x, y, w, h: Integer; AFill, ABorder: Boolean);
 var
-  e: cairo_font_extents_t;
-  R: Double;
-  G: Double;
-  B: Double;
-  // dx, dy: Double;
+  save_matrix:cairo_matrix_t;
 begin
   cairo_save(Widget);
   try
-    // TranslateCairoToDevice;
-    // cairo_surface_get_device_offset(CairoSurface, @dx, @dy);
-    cairo_font_extents(Widget, @e);
-    if e.ascent <> 0 then
+    cairo_get_matrix(Widget, @save_matrix);
+    cairo_translate (Widget, x + w / 2.0 + PixelOffset, y + h / 2.0 + PixelOffset);
+    cairo_scale (Widget, w / 2.0, h / 2.0);
+    cairo_new_path(Widget);
+    cairo_arc
+        (
+          (*cr =*) Widget,
+          (*xc =*) 0,
+          (*yc =*) 0,
+          (*radius =*) 1,
+          (*angle1 =*) 0,
+          (*angle2 =*) 2 * Pi
+        );
+    cairo_close_path(Widget);
+    if AFill then
     begin
-      // writeln('2.EXTENTS !!!! ',Format('%2.2n',[e.ascent]));
+      ApplyBrush;
+      cairo_fill_preserve(Widget);
     end;
-    cairo_move_to(Widget, x, y + e.ascent);
-    ColorToCairoRGB(CurrentTextColor, R, G , B);
-    cairo_set_source_rgb(Widget, R, G, B);
-    // cairo_show_text(Widget, PChar(s));
-    FCurrentFont.Layout^.set_text(PChar(S), length(S));
-    pango_cairo_show_layout(Widget, FCurrentFont.Layout);
   finally
     cairo_restore(Widget);
   end;
-
-end;
-
-procedure TGtk3DeviceContext.drawLine(x1: Integer; y1: Integer; x2: Integer;
-  y2: Integer);
-begin
-  ApplyPen;
-  cairo_move_to(Widget, x1, y1);
-  cairo_line_to(Widget, x2, y2);
-end;
-
-procedure TGtk3DeviceContext.drawEllipse(x: Integer; y: Integer; w: Integer;
-  h: Integer);
-begin
-
+  if ABorder then
+  begin
+    ApplyPen;
+    cairo_stroke(Widget);
+  end;
+  //if ABorder=false, need to clear current path
+  cairo_new_path(Widget);
 end;
 
 procedure TGtk3DeviceContext.drawSurface(targetRect: PRect;
@@ -1452,7 +1365,7 @@ begin
   cairo_save(Widget);
   try
     with targetRect^ do
-      cairo_rectangle(Widget, Left, Top, Right - Left, Bottom - Top);
+      cairo_rectangle(Widget, Left + PixelOffset, Top + PixelOffset, Right - Left, Bottom - Top);
     cairo_set_source_surface(Widget, Surface, 0, 0);
     cairo_matrix_init_identity(@M);
     cairo_matrix_translate(@M, SourceRect^.Left, SourceRect^.Top);
@@ -1469,27 +1382,58 @@ end;
 
 procedure TGtk3DeviceContext.drawImage(targetRect: PRect; image: PGdkPixBuf;
   sourceRect: PRect; mask: PGdkPixBuf; maskRect: PRect);
-var
-  pm: PGdkPixbuf;
-  AData: PByte;
-  ASurface: Pcairo_surface_t;
+//var
+//  pm: PGdkPixbuf;
+//  AData: PByte;
+//  ASurface: Pcairo_surface_t;
 begin
   {$IFDEF VerboseGtk3DeviceContext}
   DebugLn('TGtk3DeviceContext.DrawImage ');
   {$ENDIF}
   cairo_save(Widget);
   try
-    pm := Image;
+    // pm := Image;
     // AData := PByte(gdk_pixbuf_get_pixels(pm));
     // ASurface := cairo_image_surface_create_for_data(AData, CAIRO_FORMAT_ARGB32, gdk_pixbuf_get_width(pm), gdk_pixbuf_get_height(pm), gdk_pixbuf_get_rowstride(pm));
     // cairo_set_source_surface(Widget, ASurface, targetRect^.Left, targetRect^.Top);
     gdk_cairo_set_source_pixbuf(Widget, Image, 0, 0);
+    with targetRect^ do
+      cairo_rectangle(Widget, Left + PixelOffset, Top + PixelOffset, Right - Left, Bottom - Top);
     cairo_paint(Widget);
   finally
     // cairo_surface_destroy(ASurface);
     cairo_restore(Widget);
   end;
 end;
+
+procedure TGtk3DeviceContext.drawImage1(targetRect: PRect; image: PGdkPixBuf;
+  sourceRect: PRect; mask: PGdkPixBuf; maskRect: PRect);
+var
+  M: cairo_matrix_t;
+begin
+  {$IFDEF VerboseGtk3DeviceContext}
+  DebugLn('TGtk3DeviceContext.DrawImage ');
+  {$ENDIF}
+  cairo_save(Widget);
+  try
+    gdk_cairo_set_source_pixbuf(Widget, Image, 0, 0);
+    with targetRect^ do
+      cairo_rectangle(Widget, Left + PixelOffset, Top + PixelOffset, Right - Left, Bottom - Top);
+
+    cairo_matrix_init_identity(@M);
+    cairo_matrix_translate(@M, SourceRect^.Left, SourceRect^.Top);
+    cairo_matrix_scale(@M,  (sourceRect^.Right-sourceRect^.Left) / (targetRect^.Right-targetRect^.Left),
+        (sourceRect^.Bottom-sourceRect^.Top) / (targetRect^.Bottom-targetRect^.Top));
+    cairo_matrix_translate(@M, -targetRect^.Left, -targetRect^.Top);
+    cairo_pattern_set_matrix(cairo_get_source(Widget), @M);
+    //cairo_fill (Widget);
+    cairo_clip(Widget);
+    cairo_paint(Widget);
+  finally
+    cairo_restore(Widget);
+  end;
+end;
+
 
 procedure TGtk3DeviceContext.drawPixmap(p: PPoint; pm: PGdkPixbuf; sr: PRect);
 var
@@ -1513,8 +1457,6 @@ begin
 end;
 
 procedure TGtk3DeviceContext.drawPolyLine(P: PPoint; NumPts: Integer);
-const
-  PixelOffset = 0.5;
 var
   i: Integer;
 begin
@@ -1532,33 +1474,32 @@ begin
 end;
 
 procedure TGtk3DeviceContext.drawPolygon(P: PPoint; NumPts: Integer;
-  FillRule: integer);
+  FillRule: Integer; AFill, ABorder: Boolean);
 var
   i: Integer;
-const
-  PixelOffset = 0.5;
 begin
   cairo_save(Widget);
   try
-    // first apply the fill because the line is drawn over the filled area after
-    applyBrush;
-    cairo_set_fill_rule(Widget, cairo_fill_rule_t(FillRule));
-    // + Offset is so the center of the pixel is used.
-    cairo_move_to(Widget, P[0].X+PixelOffset, P[0].Y+PixelOffset);
-    for i := 1 to NumPts-1 do
-      cairo_line_to(Widget, P[i].X+PixelOffset, P[i].Y+PixelOffset);
-
-    cairo_close_path(Widget);
-    cairo_fill_preserve(Widget);
-
-    // now draw the line
-    ApplyPen;
-    //cairo_set_antialias(widget, CAIRO_ANTIALIAS_SUBPIXEL);
+    // add offset so the center of the pixel is used
     cairo_move_to(Widget, P[0].X+PixelOffset, P[0].Y+PixelOffset);
     for i := 1 to NumPts-1 do
       cairo_line_to(Widget, P[i].X+PixelOffset, P[i].Y+PixelOffset);
     cairo_close_path(Widget);
-    cairo_stroke_preserve(Widget);
+
+    if AFill then
+    begin
+      ApplyBrush;
+      cairo_set_fill_rule(Widget, cairo_fill_rule_t(FillRule));
+      cairo_fill_preserve(Widget);
+    end;
+
+    if ABorder then
+    begin
+      ApplyPen;
+      cairo_stroke(Widget);
+    end;
+
+    cairo_new_path(Widget);
   finally
     cairo_restore(Widget);
   end;
@@ -1566,43 +1507,60 @@ end;
 
 procedure TGtk3DeviceContext.drawPolyBezier(P: PPoint; NumPoints: Integer; Filled, Continuous: boolean);
 var
-  i: Integer;
-const
-  PixelOffset = 0.5;
+  MaxIndex, i: Integer;
+  bFill, bBorder: Boolean;
 begin
   // 3 points per curve + a starting point for the first curve
   if (NumPoints < 4) then
     Exit;
 
+  bFill := CurrentBrush.Style <> BS_NULL;
+  bBorder := CurrentPen.Style <> psClear;
+
+  // we need 3 points left for continuous and 4 for not continous
+  MaxIndex := NumPoints - 3 - Ord(not Continuous);
+
   cairo_save(Widget);
   try
-    ApplyPen;
-
     i := 0;
-    // we need 3 points left for continuous and 4 for not continous
-    while i < NumPoints-1 - (3 + ord(not Continuous)) do
+    while i <= MaxIndex do
     begin
-      if (i = 0) or Not Continuous then
+      if i = 0 then
       begin
         cairo_move_to(Widget, P[i].X+PixelOffset, P[i].Y+PixelOffset); // start point
         Inc(i);
+      end
+      else
+      if not Continuous then
+      begin
+        cairo_line_to(Widget, P[i].X+PixelOffset, P[i].Y+PixelOffset); // start point
+        Inc(i);
       end;
+
       cairo_curve_to(Widget,
                      P[i].X+PixelOffset, P[i].Y+PixelOffset, // control point 1
                      P[i+1].X+PixelOffset, P[i+1].Y+PixelOffset, // control point 2
                      P[i+2].X+PixelOffset, P[i+2].Y+PixelOffset); // end point and start point of next
       Inc(i, 3);
     end;
-    cairo_stroke_preserve(Widget);
 
     if Filled then
     begin
-      ApplyBrush;
-      // join start and end points
       cairo_close_path(Widget);
-      cairo_fill(Widget);
+      if bFill then
+      begin
+        ApplyBrush;
+        cairo_fill_preserve(Widget);
+      end;
     end;
 
+    if bBorder then
+    begin
+      ApplyPen;
+      cairo_stroke(Widget);
+    end
+    else
+      cairo_new_path(Widget);
   finally
     cairo_restore(Widget);
   end;
@@ -1621,10 +1579,6 @@ end;
 
 procedure TGtk3DeviceContext.fillRect(x, y, w, h: Integer; ABrush: HBRUSH);
 var
-  devx, devy, dx, dy, dw, dh: Double;
-  ATarget: Pcairo_surface_t;
-  ANewSurface: Pcairo_surface_t;
-  ACairo: Pcairo_t;
   ATempBrush: TGtk3Brush;
 begin
   {$ifdef VerboseGtk3DeviceContext}
@@ -1632,41 +1586,29 @@ begin
   {$endif}
 
   cairo_save(Widget);
-  ATempBrush := nil;
-  if ABrush <> 0 then
-  begin
-    ATempBrush := FCurrentBrush;
-    fBkMode:=OPAQUE;
-    SetCurrentBrush(TGtk3Brush(ABrush));
+  try
+    ATempBrush := nil;
+    if ABrush <> 0 then
+    begin
+      ATempBrush := FCurrentBrush;
+      fBkMode := OPAQUE;
+      CurrentBrush:= TGtk3Brush(ABrush);
+    end;
+
+    applyBrush;
+    cairo_rectangle(Widget, x + PixelOffset, y + PixelOffset, w - 1, h - 1);
+    cairo_fill_preserve(Widget);
+
+    // must paint border, filling is not enough
+    SetSourceColor(FCurrentBrush.Color);
+    cairo_set_line_width(Widget, 1);
+    cairo_stroke(Widget);
+
+    if ABrush <> 0 then
+      CurrentBrush:= ATempBrush;
+  finally
+    cairo_restore(Widget);
   end;
-
-  applyBrush;
-  cairo_rectangle(Widget, x, y, w, h);
-  cairo_stroke_preserve(Widget);
-  cairo_fill(Widget);
-  // cairo_clip(Widget);
-
-  // cairo_fill_preserve(Widget);
-  if ABrush <> 0 then
-    SetCurrentBrush(ATempBrush);
-  cairo_restore(Widget);
-
-  // ATarget := cairo_get_target(Widget);
-  (*
-  cairo_save(Widget);
-  dx := x;
-  dy := y;
-  dw := w;
-  dh := h;
-  ANewSurface := cairo_surface_create_similar(ATarget, cairo_surface_get_content(ATarget), w, h);
-  cairo_set_source_surface(Widget, ANewSurface, x , y);
-  cairo_clip(Widget);
-  vBrush.SetColor(clRed);
-  cairo_rectangle(Widget, dx, dy, dw, dh);
-  cairo_fill(Widget);
-  cairo_surface_destroy(ANewSurface);
-  cairo_restore(Widget);
-  *)
 end;
 
 procedure TGtk3DeviceContext.fillRect(x, y, w, h: Integer);
@@ -1710,15 +1652,14 @@ begin
   end;
 end;
 
-function TGtk3DeviceContext.RoundRect(X1, Y1, X2, Y2: Integer; RX, RY: Integer
-  ): Boolean;
+function TGtk3DeviceContext.RoundRect(X1, Y1, X2, Y2: Integer; RX, RY: Integer): Boolean;
 var
-  DX: Double;
-  DY: Double;
-  Pt: TPoint;
+  DX, DY: Double;
 begin
   Result := False;
   cairo_surface_get_device_offset(cairo_get_target(Widget), @DX, @DY);
+  DX := DX+PixelOffset;
+  DY := DY+PixelOffset;
   cairo_translate(Widget, DX, DY);
   try
     cairo_move_to(Widget, SX(X1+RX), SY(Y1));
@@ -1799,18 +1740,45 @@ begin
   end;
 end;
 
-function TGtk3DeviceContext.LineTo(const X, Y: Integer): Boolean;
+function TGtk3DeviceContext.LineTo(X, Y: Integer): Boolean;
+var
+  FX, FY: Double;
+  X0, Y0: Integer;
 begin
   if not Assigned(Widget) then
     exit(False);
   ApplyPen;
-  cairo_line_to(Widget, X, Y);
+
+  // we must paint line until, but NOT including, (X,Y)
+  // let's offset X, Y by 1 px, but only for horizontal and vertical lines (yet?)
+  cairo_get_current_point(Widget, @FX, @FY);
+  X0 := Round(FX-PixelOffset);
+  Y0 := Round(FY-PixelOffset);
+  if X0 = X then
+  begin
+    if Y = Y0 then
+      exit
+    else
+    if Y > Y0 then
+      Dec(Y)
+    else
+      Inc(Y);
+  end
+  else
+  if Y0 = Y then
+  begin
+    if X > X0 then
+      Dec(X)
+    else
+      Inc(X);
+  end;
+
+  cairo_line_to(Widget, X+PixelOffset, Y+PixelOffset);
   cairo_stroke(Widget);
   Result := True;
 end;
 
-function TGtk3DeviceContext.MoveTo(const X, Y: Integer; OldPoint: PPoint
-  ): Boolean;
+function TGtk3DeviceContext.MoveTo(const X, Y: Integer; OldPoint: PPoint): Boolean;
 var
   dx: Double;
   dy: Double;
@@ -1823,7 +1791,7 @@ begin
     OldPoint^.X := Round(dx);
     OldPoint^.Y := Round(dy);
   end;
-  cairo_move_to(Widget, X, Y);
+  cairo_move_to(Widget, X+PixelOffset, Y+PixelOffset);
   Result := True;
 end;
 
@@ -1844,26 +1812,6 @@ var
 begin
   TColorToRGB(AColor, R, G, B);
   cairo_set_source_rgb(Widget, R, G, B);
-end;
-
-procedure TGtk3DeviceContext.SetCurrentBrush(ABrush: TGtk3Brush);
-begin
-  FCurrentBrush := ABrush;
-end;
-
-procedure TGtk3DeviceContext.SetCurrentFont(AFont: TGtk3Font);
-begin
-  FCurrentFont := AFont;
-end;
-
-procedure TGtk3DeviceContext.SetCurrentPen(APen: TGtk3Pen);
-begin
-  FCurrentPen := APen;
-end;
-
-procedure TGtk3DeviceContext.SetCurrentImage(AImage: TGtk3Image);
-begin
-  FCurrentImage := AImage;
 end;
 
 procedure TGtk3DeviceContext.SetImage(AImage: TGtk3Image);
@@ -1887,7 +1835,7 @@ begin
   if FOwnsSurface and (CairoSurface <> nil) then
     cairo_surface_destroy(CairoSurface);
   CairoSurface := cairo_image_surface_create_for_data(APixBuf^.pixels,
-                                                AImage.getFormat,
+                                                AImage.Format,
                                                 APixBuf^.get_width,
                                                 APixBuf^.get_height,
                                                 APixBuf^.rowstride);
@@ -1918,65 +1866,10 @@ end;
 
 //various routines for text , copied from gtk2.
 
-{-------------------------------------------------------------------------------
-  function RemoveAmpersands(Src: PChar; LineLength : Longint) : PChar;
-
-  Creates a new PChar removing all escaping ampersands.
--------------------------------------------------------------------------------}
-function RemoveAmpersands(Src: PChar; LineLength : Longint) : PChar;
-var
-  i, j: Longint;
-  ShortenChars, NewLength, SrcLength: integer;
+function ReplaceAmpersandsWithUnderscores(const S: string): string; inline;
 begin
-  // count ampersands and find first ampersand
-  ShortenChars:= 0;  // chars to delete
-  SrcLength:= LineLength;
-
-  { Look for amperands. If found, check if it is an escaped ampersand.
-    If it is, don't count it in. }
-  i:=0;
-  while i<SrcLength do
-  begin
-    if Src[i] = '&' then
-    begin
-      if (i < SrcLength - 1) and (Src[i+1] = '&') then
-      begin
-        // escaping ampersand found
-        inc(ShortenChars);
-        inc(i,2);
-        Continue;
-      end
-      else
-        inc(ShortenChars);
-    end;
-    inc(i);
-  end;
-  // create new PChar
-  NewLength:= SrcLength - ShortenChars;
-
-  Result:=StrAlloc(NewLength+1); // +1 for #0 char at end
-
-  // copy string without ampersands
-  i:=0;
-  j:=0;
-  while (j < NewLength) do begin
-    if Src[i] <> '&' then begin
-      // copy normal char
-      Result[j]:= Src[i];
-    end else begin
-      // ampersand
-      if (i < (SrcLength - 1)) and (Src[i+1] = '&') then begin
-        // escaping ampersand found
-        inc(i);
-        Result[j]:='&';
-      end else
-        // delete single ampersand
-        dec(j);
-    end;
-    Inc(i);
-    Inc(j);
-  end;
-  Result[NewLength]:=#0;
+  Result := StringReplace(S, '_', '__', [rfReplaceAll]);
+  Result := StringReplace(Result, '&', '_', [rfReplaceAll]);
 end;
 
 {-------------------------------------------------------------------------------
@@ -1993,26 +1886,15 @@ procedure GetTextExtentIgnoringAmpersands(TheFont: TGtk3Font;
   lbearing, rbearing, width, ascent, descent : Pgint);
 var
   NewStr : PChar;
-  i: integer;
-  AInkRect: TPangoRectangle;
-  ALogicalRect: TPangoRectangle;
   AMetrics: PPangoFontMetrics;
-  ACharWidth: gint;
+  {ACharWidth,}ATextWidth,ATextHeight: gint;
 begin
-  NewStr:=Str;
-  // first check if Str contains an ampersand:
-  if (Str<>nil) then
-  begin
-    i:=0;
-    while (Str[i]<>'&') and (i<StrLength) do inc(i);
-    if i<StrLength then
-    begin
-      NewStr := RemoveAmpersands(Str, StrLength);
-      StrLength:=StrLen(NewStr);
-    end;
-  end;
-  TheFont.Layout^.set_text(Str, StrLength);
-
+  // check if Str contains an ampersand before removing them all.
+  if StrLScan(Str, '&', StrLength) <> nil then
+    NewStr := RemoveAmpersands(Str, StrLength)
+  else
+    NewStr := Str;
+  TheFont.Layout^.set_text(NewStr, StrLength);
   // TheFont.Layout^.get_extents(@AInkRect, @ALogicalRect);
 
   AMetrics := pango_context_get_metrics(TheFont.Layout^.get_context, TheFont.Handle, TheFont.Layout^.get_context^.get_language);
@@ -2030,8 +1912,10 @@ begin
     descent^ := AMetrics^.get_descent;
   if width <> nil then
   begin
-    ACharWidth := AMetrics^.get_approximate_char_width;
-    width^ := (StrLength * ACharWidth) div PANGO_SCALE;
+    {ACharWidth := AMetrics^.get_approximate_char_width;
+    width^ := (utf8length(Str, StrLength) * ACharWidth) div PANGO_SCALE;}
+    TheFont.Layout^.get_pixel_size(@ATextWidth, @ATextHeight);
+    width^:=ATextWidth;
   end;
   // PANGO_PIXELS(char_width)
 
@@ -2039,7 +1923,7 @@ begin
   // rBearing^ := 0;
   // gdk_text_extents(TheFont, NewStr, StrLength,
   //                 lbearing, rBearing, width, ascent, descent);
-  if NewStr<>Str then
+  if NewStr <> Str then
     StrDispose(NewStr);
   AMetrics^.unref;
 end;

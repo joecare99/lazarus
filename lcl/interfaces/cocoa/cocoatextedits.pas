@@ -124,7 +124,6 @@ type
 
     procedure dealloc; override;
     function acceptsFirstResponder: LCLObjCBoolean; override;
-    function undoManager: NSUndoManager; override;
     function lclGetCallback: ICommonCallback; override;
     procedure lclClearCallback; override;
     procedure resetCursorRects; override;
@@ -153,6 +152,7 @@ type
     // delegate methods
     procedure textDidChange(notification: NSNotification); message 'textDidChange:';
     procedure lclExpectedKeys(var wantTabs, wantArrows, wantReturn, wantAll: Boolean); override;
+    function undoManagerForTextView(view: NSTextView): NSUndoManager; message 'undoManagerForTextView:';
   end;
 
   { TCococaFieldEditorExt }
@@ -395,10 +395,13 @@ type
     procedure scrollWheel(event: NSEvent); override;
   end;
 
-  TCocoaSpinEdit = objcclass(TCocoaTextField, NSTextFieldDelegateProtocol)
+  TCocoaSpinEdit = objcclass(TCocoaTextField)
     Stepper: NSStepper;
     NumberFormatter: NSNumberFormatter;
     decimalPlaces: Integer;
+
+    avoidChangeEvent: Integer;
+
     //Spin: TCustomFloatSpinEdit;
     procedure dealloc; override;
     function updateStepper: boolean; message 'updateStepper';
@@ -408,9 +411,6 @@ type
     procedure PositionSubcontrols(const ALeft, ATop, AWidth, AHeight: Integer); message 'PositionSubcontrols:ATop:AWidth:AHeight:';
     procedure StepperChanged(sender: NSObject); message 'StepperChanged:';
     procedure textDidChange(notification: NSNotification); override;
-    procedure textDidEndEditing(notification: NSNotification); message 'textDidEndEditing:'; override;
-    // NSTextFieldDelegateProtocol
-    procedure controlTextDidChange(obj: NSNotification); override;
     // lcl
     function acceptsFirstResponder: LCLObjCBoolean; override;
     function lclGetCallback: ICommonCallback; override;
@@ -1037,18 +1037,6 @@ begin
   Result := NSViewCanFocus(Self);
 end;
 
-function TCocoaTextView.undoManager: NSUndoManager;
-begin
-  if allowsUndo then
-  begin
-    if not Assigned(FUndoManager) then
-      FUndoManager := NSUndoManager.alloc.init;
-    Result := FUndoManager;
-  end
-  else
-    Result := nil;
-end;
-
 function TCocoaTextView.lclGetCallback: ICommonCallback;
 begin
   Result := callback;
@@ -1185,6 +1173,13 @@ begin
   wantArrows := true;
   wantReturn := true;
   wantAll := true;
+end;
+
+function TCocoaTextView.undoManagerForTextView(view: NSTextView): NSUndoManager;
+begin
+  if not Assigned(FUndoManager) then
+    FUndoManager := NSUndoManager.alloc.init;
+  Result := FUndoManager;
 end;
 
 { TCocoaSecureTextField }
@@ -1958,9 +1953,6 @@ begin
   Stepper.setTarget(Self);
   Stepper.setAction(objcselector('StepperChanged:'));
 
-  // Accept numbers only
-  setDelegate(Self);
-
   { The default way to do this in Cocoa is with NSNumberFormatter
     But it is a bit annoying, it just disallows losing focus from the control
     instead of the Windows like solution to just override with the last value
@@ -2016,27 +2008,20 @@ begin
   setStringValue(lNSStr);
   lNSStr.release;
   // This implements OnChange for both user and code changes
-  if callback <> nil then callback.SendOnTextChanged();
+  if (callback <> nil) and (avoidChangeEvent=0) then
+    callback.SendOnTextChanged();
 end;
 
 procedure TCocoaSpinEdit.textDidChange(notification: NSNotification);
 begin
-  updateStepper;
-  inherited textDidChange(notification);
-end;
-
-procedure TCocoaSpinEdit.textDidEndEditing(notification: NSNotification);
-begin
-  updateStepper;
-  StepperChanged(nil); // and refresh self
-  inherited textDidEndEditing(notification);
-  //if Assigned(callback) then callback.SendOnTextChanged;
-end;
-
-procedure TCocoaSpinEdit.controlTextDidChange(obj: NSNotification);
-begin
-  updateStepper;
-  if Assigned(callback) then callback.SendOnTextChanged;
+  inc(avoidChangeEvent);
+  try
+    updateStepper;
+    StepperChanged(nil); // and refresh self
+    inherited textDidChange(notification);
+  finally
+    dec(avoidChangeEvent);
+  end;
 end;
 
 function TCocoaSpinEdit.acceptsFirstResponder: LCLObjCBoolean;

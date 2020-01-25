@@ -40,6 +40,9 @@ uses
   LConvEncoding, LazFileCache, FileUtil, LazFileUtils, LazLoggerBase, LazUtilities,
   LazUTF8, LazTracer, AvgLvlTree,
   // Codetools
+  {$IFDEF IDE_MEM_CHECK}
+  MemCheck,
+  {$ENDIF}
   BasicCodeTools, CodeToolsStructs, CodeToolManager, FileProcs, DefineTemplates,
   CodeCache, CodeTree, FindDeclarationTool, KeywordFuncLists,
   // IdeIntf
@@ -203,11 +206,9 @@ function SaveEditorFile(const Filename: string; Flags: TSaveFlags): TModalResult
 function CloseEditorFile(AEditor: TSourceEditorInterface; Flags: TCloseFlags):TModalResult;
 function CloseEditorFile(const Filename: string; Flags: TCloseFlags): TModalResult;
 // interactive unit selection
-function SelectProjectItems(ItemList: TViewUnitEntries; ItemType: TIDEProjectItem;
-  MultiSelect: boolean; var MultiSelectCheckedState: Boolean): TModalResult;
+function SelectProjectItems(ItemList: TViewUnitEntries; ItemType: TIDEProjectItem): TModalResult;
 function SelectUnitComponents(DlgCaption: string; ItemType: TIDEProjectItem;
-  Files: TStringList; MultiSelect: boolean;
-  var MultiSelectCheckedState: Boolean): TModalResult;
+  Files: TStringList): TModalResult;
 // unit search
 function FindUnitFileImpl(const AFilename: string; TheOwner: TObject = nil;
                           Flags: TFindUnitFileFlags = []): string;
@@ -230,6 +231,9 @@ procedure OpenProject(aMenuItem: TIDEMenuItem);
 function CompleteLoadingProjectInfo: TModalResult;
 procedure CloseAll;
 procedure InvertedFileClose(PageIndex: LongInt; SrcNoteBook: TSourceNotebook; CloseOnRightSideOnly: Boolean = False);
+function UpdateAppTitleInSource: Boolean;
+function UpdateAppScaledInSource: Boolean;
+function UpdateAppAutoCreateForms: boolean;
 // designer
 function DesignerUnitIsVirtual(aLookupRoot: TComponent): Boolean;
 function CheckLFMInEditor(LFMUnitInfo: TUnitInfo; Quiet: boolean): TModalResult;
@@ -3304,9 +3308,7 @@ begin
   end;
 end;
 
-function SelectProjectItems(ItemList: TViewUnitEntries;
-  ItemType: TIDEProjectItem; MultiSelect: boolean;
-  var MultiSelectCheckedState: Boolean): TModalResult;
+function SelectProjectItems(ItemList: TViewUnitEntries; ItemType: TIDEProjectItem): TModalResult;
 var
   i: integer;
   AUnitName, DlgCaption: string;
@@ -3389,12 +3391,11 @@ begin
     piFrame:     DlgCaption := dlgMainViewFrames;
     else         DlgCaption := '';
   end;
-  Result := ShowViewUnitsDlg(ItemList, MultiSelect, MultiSelectCheckedState, DlgCaption, ItemType);
+  Result := ShowViewUnitsDlg(ItemList, true, DlgCaption, ItemType);
 end;
 
-function SelectUnitComponents(DlgCaption: string;
-  ItemType: TIDEProjectItem; Files: TStringList; MultiSelect: boolean;
-  var MultiSelectCheckedState: Boolean): TModalResult;
+function SelectUnitComponents(DlgCaption: string; ItemType: TIDEProjectItem;
+  Files: TStringList): TModalResult;
 var
   ActiveSourceEditor: TSourceEditor;
   ActiveUnitInfo: TUnitInfo;
@@ -3529,7 +3530,7 @@ begin
       inc(i);
     end;
     // show dialog
-    Result := ShowViewUnitsDlg(UnitList, MultiSelect, MultiSelectCheckedState,
+    Result := ShowViewUnitsDlg(UnitList, false,
                                DlgCaption, ItemType, ActiveUnitInfo.Filename);
     // create list of selected files
     for Entry in UnitList do
@@ -3557,8 +3558,6 @@ var
   AnUnitInfo: TUnitInfo;
   UnitInfos: TFPList;
   UEntry: TViewUnitsEntry;
-const
-  MultiSelectCheckedState: Boolean = true;
 Begin
   if Project1=nil then exit(mrCancel);
   Project1.UpdateIsPartOfProjectFromMainUnit;
@@ -3574,8 +3573,7 @@ Begin
         ViewUnitEntries.Add(AName,AnUnitInfo.FileName,i,false);
       end;
     end;
-    if ShowViewUnitsDlg(ViewUnitEntries, true, MultiSelectCheckedState,
-          lisRemoveFromProject, piUnit) <> mrOk then
+    if ShowViewUnitsDlg(ViewUnitEntries,true,lisRemoveFromProject,piUnit) <> mrOk then
       exit(mrOk);
     { This is where we check what the user selected. }
     UnitInfos:=TFPList.Create;
@@ -4314,6 +4312,112 @@ begin
   end;
 end;
 
+function UpdateAppTitleInSource: Boolean;
+var
+  TitleStat, ProjTitle: String;
+begin
+  Result := True;
+  TitleStat := '';
+  CodeToolBoss.GetApplicationTitleStatement(Project1.MainUnitInfo.Source, TitleStat);
+  ProjTitle:=Project1.GetTitle;
+  //DebugLn(['UpdateAppTitleInSource: Project title=',ProjTitle,
+  //         ', Default=',Project1.GetDefaultTitle,', Title Statement=',TitleStat]);
+  if pfMainUnitHasTitleStatement in Project1.Flags then
+  begin                            // Add Title statement if not there already.
+    if ((TitleStat = '') or (TitleStat = ProjTitle)) and Project1.TitleIsDefault then
+      Exit;
+    //DebugLn(['UpdateAppTitleInSource: Setting Title to ',ProjTitle]);
+    if not CodeToolBoss.SetApplicationTitleStatement(Project1.MainUnitInfo.Source, ProjTitle) then
+    begin
+      IDEMessageDialog(lisProjOptsError,
+        Format(lisUnableToChangeProjectTitleInSource, [LineEnding, CodeToolBoss.ErrorMessage]),
+        mtWarning, [mbOk]);
+      Result := False;
+    end;
+  end
+  else begin                          // Remove Title statement if it is there.
+    if TitleStat <> ProjTitle then
+      Exit;
+    //DebugLn(['UpdateAppTitleInSource: Removing Title']);
+    if not CodeToolBoss.RemoveApplicationTitleStatement(Project1.MainUnitInfo.Source) then
+    begin
+      IDEMessageDialog(lisProjOptsError,
+        Format(lisUnableToRemoveProjectTitleFromSource, [LineEnding, CodeToolBoss.ErrorMessage]),
+        mtWarning, [mbOk]);
+      Result := False;
+    end;
+  end;
+end;
+
+function UpdateAppScaledInSource: Boolean;
+var
+  ScaledStat, ProjScaled: Boolean;
+begin
+  Result := True;
+  ScaledStat := False;
+  CodeToolBoss.GetApplicationScaledStatement(Project1.MainUnitInfo.Source, ScaledStat);
+  ProjScaled:=Project1.Scaled;
+  //DebugLn(['UpdateAppScaledInSource: Project Scaled=',ProjScaled,', Scaled Statement=',ScaledStat]);
+  if pfMainUnitHasScaledStatement in Project1.Flags then
+  begin                           // Add Scaled statement if not there already.
+    if ScaledStat = ProjScaled then
+      Exit;
+    //DebugLn(['UpdateAppScaledInSource: Setting Scaled to ',ProjScaled]);
+    if not CodeToolBoss.SetApplicationScaledStatement(Project1.MainUnitInfo.Source, ProjScaled) then
+    begin
+      IDEMessageDialog(lisProjOptsError,
+        Format(lisUnableToChangeProjectScaledInSource, [LineEnding, CodeToolBoss.ErrorMessage]),
+        mtWarning, [mbOk]);
+      Result := False;
+    end;
+  end
+  else begin                      // Remove Scaled statement if it is there.
+    //DebugLn(['UpdateAppScaledInSource: Removing Scaled']);
+    if not CodeToolBoss.RemoveApplicationScaledStatement(Project1.MainUnitInfo.Source) then
+    begin
+      IDEMessageDialog(lisProjOptsError,
+        Format(lisUnableToRemoveProjectScaledFromSource, [LineEnding, CodeToolBoss.ErrorMessage]),
+        mtWarning, [mbOk]);
+      Result := False;
+    end;
+  end;
+end;
+
+function UpdateAppAutoCreateForms: boolean;
+var
+  i: integer;
+  OldList: TStrings;
+begin
+  Result := True;
+  if not (pfMainUnitHasCreateFormStatements in Project1.Flags) then
+    Exit;
+  OldList := Project1.GetAutoCreatedFormsList;
+  if OldList = nil then
+    Exit;
+  try
+    if OldList.Count = Project1.TmpAutoCreatedForms.Count then
+    begin
+      i := OldList.Count - 1;
+      while (i >= 0)
+      and (CompareText(OldList[i], Project1.TmpAutoCreatedForms[i]) = 0) do
+        Dec(i);
+      if i < 0 then
+        Exit;                  // Just exit if the form list is the same
+    end;
+    if not CodeToolBoss.SetAllCreateFromStatements(Project1.MainUnitInfo.Source,
+      Project1.TmpAutoCreatedForms) then
+    begin
+      IDEMessageDialog(lisProjOptsError,
+        Format(lisProjOptsUnableToChangeTheAutoCreateFormList, [LineEnding]),
+        mtWarning, [mbOK]);
+      Result := False;
+      Exit;
+    end;
+  finally
+    OldList.Free;
+  end;
+end;
+
 function CreateNewCodeBuffer(Descriptor: TProjectFileDescriptor;
   NewOwner: TObject; NewFilename: string;
   var NewCodeBuffer: TCodeBuffer; var NewUnitName: string): TModalResult;
@@ -5010,6 +5114,8 @@ begin
           if AncestorUnit<>nil then
             Ancestor:=AncestorUnit.Component;
           //DebugLn(['SaveUnitComponent Writer.WriteDescendent ARoot=',AnUnitInfo.Component,' Ancestor=',DbgSName(Ancestor)]);
+          if AnUnitInfo.Component is TCustomDesignControl then // set DesignTimePPI on save
+            TCustomDesignControl(AnUnitInfo.Component).DesignTimePPI := TCustomDesignControl(AnUnitInfo.Component).PixelsPerInch;
           Writer.WriteDescendent(AnUnitInfo.Component,Ancestor);
           if DestroyDriver then
             Writer.Driver.Free;
@@ -7286,14 +7392,10 @@ var
   ShortUnitName, UnitPath: String;
   ObsoleteUnitPaths, ObsoleteIncPaths: String;
   i: Integer;
-  Dummy: Boolean;
+  SomeRemoved: Boolean;
 begin
   Result:=mrOk;
-  if UnitInfos=nil then exit;
-  // check if something will change
-  i:=UnitInfos.Count-1;
-  while (i>=0) and (not TUnitInfo(UnitInfos[i]).IsPartOfProject) do dec(i);
-  if i<0 then exit;
+  Assert(Assigned(UnitInfos));
   // check ToolStatus
   if (MainIDE.ToolStatus in [itCodeTools,itCodeToolAborting]) then begin
     debugln('RemoveUnitsFromProject wrong ToolStatus ',dbgs(ord(MainIDE.ToolStatus)));
@@ -7301,19 +7403,21 @@ begin
   end;
   // commit changes from source editor to codetools
   SaveEditorChangesToCodeCache(nil);
-
+  SomeRemoved:=false;
   ObsoleteUnitPaths:='';
   ObsoleteIncPaths:='';
   Project1.BeginUpdate(true);
   try
-    for i:=0 to UnitInfos.Count-1 do begin
+    for i:=0 to UnitInfos.Count-1 do
+    begin
       AnUnitInfo:=TUnitInfo(UnitInfos[i]);
-      //debugln(['RemoveUnitsFromProject Unit ',AnUnitInfo.Filename]);
       if not AnUnitInfo.IsPartOfProject then continue;
       UnitPath:=ChompPathDelim(ExtractFilePath(AnUnitInfo.Filename));
       AnUnitInfo.IsPartOfProject:=false;
+      SomeRemoved:=true;
       Project1.Modified:=true;
-      if FilenameIsPascalUnit(AnUnitInfo.Filename) then begin
+      if FilenameIsPascalUnit(AnUnitInfo.Filename) then
+      begin
         if FilenameIsAbsolute(AnUnitInfo.Filename) then
           ObsoleteUnitPaths:=MergeSearchPaths(ObsoleteUnitPaths,UnitPath);
         // remove from project's unit section
@@ -7321,33 +7425,27 @@ begin
         and (pfMainUnitIsPascalSource in Project1.Flags)
         then begin
           ShortUnitName:=ExtractFileNameOnly(AnUnitInfo.Filename);
-          //debugln(['RemoveUnitsFromProject UnitName=',ShortUnitName]);
           if (ShortUnitName<>'') then begin
-            Dummy:=CodeToolBoss.RemoveUnitFromAllUsesSections(
-                                      Project1.MainUnitInfo.Source,ShortUnitName);
-            if not Dummy then begin
+            if not CodeToolBoss.RemoveUnitFromAllUsesSections(
+                                 Project1.MainUnitInfo.Source,ShortUnitName) then
+            begin
               MainIDE.DoJumpToCodeToolBossError;
               exit(mrCancel);
             end;
           end;
         end;
         // remove CreateForm statement from project
-        if (Project1.MainUnitID>=0)
-        and (pfMainUnitHasCreateFormStatements in Project1.Flags)
-        and (AnUnitInfo.ComponentName<>'') then begin
-          Dummy:=Project1.RemoveCreateFormFromProjectFile(
-              'T'+AnUnitInfo.ComponentName,AnUnitInfo.ComponentName);
-          if not Dummy then begin
-            MainIDE.DoJumpToCodeToolBossError;
-            exit(mrCancel);
-          end;
-        end;
+        if (Project1.MainUnitID>=0) and (AnUnitInfo.ComponentName<>'')
+        and (pfMainUnitHasCreateFormStatements in Project1.Flags) then
+          // Do not care if this fails. A user may have removed the line from source.
+          Project1.RemoveCreateFormFromProjectFile(AnUnitInfo.ComponentName);
       end;
       if CompareFileExt(AnUnitInfo.Filename,'.inc',false)=0 then
         // include file
         if FilenameIsAbsolute(AnUnitInfo.Filename) then
           ObsoleteIncPaths:=MergeSearchPaths(ObsoleteIncPaths,UnitPath);
     end;
+    if not SomeRemoved then exit;  // No units were actually removed.
 
     // removed directories still used for ObsoleteUnitPaths, ObsoleteIncPaths
     AnUnitInfo:=Project1.FirstPartOfProject;
@@ -7371,7 +7469,8 @@ begin
 
   finally
     // all changes were handled automatically by events, just clear the logs
-    CodeToolBoss.SourceCache.ClearAllSourceLogEntries;
+    if SomeRemoved then
+      CodeToolBoss.SourceCache.ClearAllSourceLogEntries;
     Project1.EndUpdate;
   end;
 end;

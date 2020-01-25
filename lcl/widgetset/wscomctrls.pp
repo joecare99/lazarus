@@ -120,6 +120,7 @@ type
     class procedure ColumnSetMinWidth(const ALV: TCustomListView; const AIndex: Integer; const AColumn: TListColumn; const AMinWidth: integer); virtual;
     class procedure ColumnSetWidth(const ALV: TCustomListView; const AIndex: Integer; const AColumn: TListColumn; const AWidth: Integer); virtual;
     class procedure ColumnSetVisible(const ALV: TCustomListView; const AIndex: Integer; const AColumn: TListColumn; const AVisible: Boolean); virtual;
+    class procedure ColumnSetSortIndicator(const ALV: TCustomListView; const AIndex: Integer; const AColumn: TListColumn; const ASortIndicator: TSortIndicator); virtual;
               
     // Item          
     class procedure ItemDelete(const ALV: TCustomListView; const AIndex: Integer); virtual;
@@ -539,6 +540,13 @@ class procedure TWSCustomListView.ColumnSetVisible(const ALV: TCustomListView;
 begin
 end;
 
+class procedure TWSCustomListView.ColumnSetSortIndicator(
+  const ALV: TCustomListView; const AIndex: Integer;
+  const AColumn: TListColumn; const ASortIndicator: TSortIndicator);
+begin
+
+end;
+
 class procedure TWSCustomListView.ItemDelete(const ALV: TCustomListView;
   const AIndex: Integer);
 begin
@@ -874,11 +882,6 @@ const
 begin
   if Done then exit;
   WSRegisterPageControl;
-  RegisterPropertyToSkip(TPageControl, 'Style', 'VCL compatibility property', '');
-  RegisterPropertyToSkip(TPageControl, 'HotTrack', 'VCL compatibility property', '');
-  RegisterPropertyToSkip(TPageControl, 'MultiLine', 'VCL compatibility property', '');
-  RegisterPropertyToSkip(TPageControl, 'TabWidth', 'VCL compatibility property', '');
-  RegisterPropertyToSkip(TPageControl, 'TabHeight', 'VCL compatibility property', '');
   RegisterPropertyToSkip(TPageControl, 'OnPageChanged', 'Was removed in Laz 0.9.31 due to incompatibilities with OnChange, which does the same thing.', '');
 //  if not WSRegisterPageControl then
 //    RegisterWSComponent(TPageControl, TWSPageControl);
