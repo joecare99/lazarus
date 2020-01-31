@@ -1,5 +1,5 @@
 Welcome to Lazarus
-===================
+==================
 
 Lazarus is a Rapid Application Development Tool for Free Pascal.
 It comes with the LCL - Lazarus component library, which contains platform
