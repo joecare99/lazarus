@@ -1,12 +1,6 @@
 {
- /***************************************************************************
-                                  masks.pas
-                                  ---------
-
- ***************************************************************************/
-
  *****************************************************************************
-  This file is part of the Lazarus Component Library (LCL)
+  This file is part of LazUtils.
 
   See the file COPYING.modifiedLGPL.txt, included in this distribution,
   for details about the license.
@@ -19,7 +13,6 @@ unit Masks;
 interface
 
 uses
-  // For Smart Linking: Do not use the LCL!
   Classes, SysUtils, Contnrs, LazUtilsStrConsts, LazUtf8;
 
 type
@@ -102,9 +95,9 @@ var
   Res: AnsiString; //intermediate needed for PChar -> String -> ShortString assignement
 begin
   Result := '';
-  p := UTF8CharStart(PChar(S), Length(S), Index - 1); //zero-based call
+  p := UTF8CodepointStart(PChar(S), Length(S), Index - 1); //zero-based call
   //determine the length in bytes of this UTF-8 character
-  PLen := UTF8CharacterLength(p);
+  PLen := UTF8CodepointSize(p);
   Res := p;
   //Set correct length for Result (otherwise it returns all chars up to the end of the original string)
   SetLength(Res,PLen);
@@ -246,7 +239,7 @@ var
             else
             begin
               //writeln('MaskUtf8: Set:  ' + Last + '-' + UpCase(CP[1]));
-              for C := Last to UpCase(CP[1]) do
+              for C := Last to LowerCase(CP[1]) do
                 Include(CharSet, C)
             end;
             Inc(I);
@@ -261,7 +254,7 @@ var
           if fCaseSensitive then
             Last := CP[1]
           else
-            Last := UpCase(CP[1]);
+            Last := LowerCase(CP[1]);
           Include(CharSet, Last);
           Inc(I);
         end;

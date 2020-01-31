@@ -25,7 +25,7 @@ uses
   LazGtk3, LazGlib2, LazGdk3, LazGObject2, LazPango1,
   // RTL, FCL and LCL
   SysUtils, Classes, Graphics, Controls, Dialogs, ExtDlgs, LCLType,
-  FileUtil, LCLStrConsts, LCLProc, InterfaceBase,
+  LazFileUtils, LCLStrConsts, LCLProc, InterfaceBase,
   // Widgetset
   gtk3int, gtk3widgets,
   WSDialogs;
@@ -230,7 +230,7 @@ var
     end;
   end;
 
-  procedure AddEntries(const Desc: string; MultiMask: string);
+  procedure AddEntries(const Desc: string; const MultiMask: string);
   var i: integer;
     CurDesc: string;
   begin
@@ -478,7 +478,9 @@ begin
         end;
         g_slist_free(cFilenames);
       end;
-    end;
+    end
+    else
+      TheDialog.Files.Clear;
   end;
 
   cFilename := gtk_file_chooser_get_filename(widget);
@@ -490,6 +492,8 @@ begin
     else
       TheDialog.FileName := cFilename;
     g_free(cFilename);
+    if (TheDialog is TOpenDialog) and (not (ofAllowMultiSelect in TOpenDialog(theDialog).Options)) then
+      TheDialog.Files.Add(TheDialog.FileName);
   end;
 
   //?? StoreCommonDialogSetup(theDialog);
@@ -940,7 +944,7 @@ begin
     if theDialog.OnCanClose<>nil then
     begin
       CanClose:=True;
-      theDialog.OnCanClose(theDialog, CanClose);
+      theDialog.DoCanClose(CanClose);
       Result := not CanClose;
     end;
     if not Result then
@@ -962,7 +966,7 @@ function gtkDialogDestroyCB(widget: PGtkWidget; data: gPointer): GBoolean; cdecl
 begin
   Result := True;
   if (Widget=nil) then ;
-  TCommonDialog(data).UserChoice := mrAbort;
+  TCommonDialog(data).UserChoice := mrCancel;
   TCommonDialog(data).Close;
 end;
 
@@ -1514,7 +1518,6 @@ class function TGtk3WSCommonDialog.CreateHandle(
   const ACommonDialog: TCommonDialog): THandle;
 begin
   Result := 0;
-  DebugLn('TGtkWSCommonDialog.CreateHandle is generic dialog handle constructor => implement CreateHandle for: ', dbgsName(ACommonDialog))
 end;
 
 class procedure TGtk3WSCommonDialog.ShowModal(const ACommonDialog: TCommonDialog);

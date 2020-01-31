@@ -36,11 +36,10 @@ unit LR_BarC;
 interface
 
 uses
-  Classes, SysUtils, LResources,
-  Graphics, Controls, Forms, Dialogs,Buttons,
-  StdCtrls, Menus, Barcode,
-  
-  LCLType,LR_Class, ExtCtrls, ButtonPanel;
+  Classes, SysUtils,
+  LCLPlatformDef, InterfaceBase, Graphics, Controls, Forms, Dialogs,
+  Buttons, StdCtrls, Menus, Barcode, ExtCtrls, ButtonPanel,
+  LCLType, LR_Class;
 
 
 {.$DEFINE BC_1_25} //For Barcode version 1.25 actually in debug
@@ -161,7 +160,7 @@ implementation
 
 {$R *.lfm}
 
-uses LR_Var, LR_Flds, LR_Const, LR_Utils, InterfaceBase;
+uses LR_Var, LR_Flds, LR_Const, LR_Utils;
 
 
 var
@@ -200,6 +199,7 @@ const
 
    defaultFontSize = 10;
 
+{$PUSH}
 {$HINTS OFF}
 {$NOTES OFF}
 function isNumeric(St: String): Boolean;
@@ -210,8 +210,7 @@ begin
   Val(St, R, E);
   Result := (E = 0);
 end;
-{$NOTES ON}
-{$HINTS ON}
+{$POP}
 
 function TfrCustomBarCodeView.GetBarType: TBarcodeType;
 begin

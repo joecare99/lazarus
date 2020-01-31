@@ -123,6 +123,7 @@ type
     ttOf,
     ttOperator,
     ttOut,
+    ttOtherwise,
     ttPackage,
     ttPacked,
     ttProcedure,
@@ -191,6 +192,8 @@ type
     ttGeneric,
     ttCVar,
     ttNostackframe,
+    ttNested,
+    ttVectorcall,
     // used in asm
     ttOffset,
     ttPtr,
@@ -364,12 +367,12 @@ const
     ttOverload, ttReintroduce,
     ttDeprecated, ttLibrary, ttPlatform, ttExperimental, ttUnimplemented,
     ttStatic, ttFinal, ttVarArgs, ttUnsafe, ttEnumerator, ttNostackframe, ttInterrupt,
-    ttPublic];
+    ttPublic, ttVectorcall];
 
   ClassDirectives: TTokenTypeSet =
     [ttPrivate, ttProtected, ttPublic, ttPublished, ttAutomated, ttStrict];
   HintDirectives: TTokenTypeSet  = [ttDeprecated, ttLibrary, ttPlatform,
-                                    ttExperimental, ttUnimplemented];
+                                    ttExperimental, ttUnimplemented, ttStatic];
 
   AllDirectives: TTokenTypeSet =
   [ttAbsolute, ttExternal, ttPascal, ttSafecall,
@@ -380,7 +383,7 @@ const
     ttNear, ttReadOnly, ttDynamic, ttNoDefault, ttRegister,
     ttExport, ttOverride, ttOverload, ttResident, ttLocal,
     ttImplements, ttReintroduce,
-    ttLibrary, ttPlatform, ttStatic, ttFinal, ttVarArgs, ttCVar];    
+    ttLibrary, ttPlatform, ttStatic, ttFinal, ttVarArgs, ttCVar, ttVectorcall];    
 
   ProcedureWords: TTokenTypeSet = [ttProcedure, ttFunction, ttConstructor, ttDestructor, ttOperator];
 
@@ -581,6 +584,7 @@ begin
   AddKeyword('array', wtReservedWord, ttArray);
   AddKeyword('asm', wtReservedWord, ttAsm);
   AddKeyword('begin', wtReservedWord, ttBegin);
+  AddKeyword('bitpacked', wtReservedWord, ttPacked);
   AddKeyword('case', wtReservedWord, ttCase);
   AddKeyword('class', wtReservedWord, ttClass);
   AddKeyword('const', wtReservedWord, ttConst);
@@ -614,6 +618,7 @@ begin
   AddKeyword('of', wtReservedWord, ttOf);
   AddKeyword('operator', wtReservedWord, ttOperator);
   AddKeyword('out', wtReservedWordDirective, ttOut);
+  AddKeyword('otherwise', wtReservedWord, ttOtherwise);
   AddKeyword('packed', wtReservedWord, ttPacked);
   AddKeyword('procedure', wtReservedWord, ttProcedure);
   AddKeyword('program', wtReservedWord, ttProgram);
@@ -681,12 +686,14 @@ begin
   AddKeyword('resident', wtReservedWordDirective, ttResident);
   AddKeyword('local', wtReservedWordDirective, ttLocal);
   AddKeyword('generic', wtReservedWordDirective, ttGeneric);
+  AddKeyword('vectorcall', wtReservedWordDirective, ttVectorcall);
 
   AddKeyword('implements', wtReservedWordDirective, ttImplements);
   AddKeyword('reintroduce', wtReservedWordDirective, ttReintroduce);
 
   AddKeyword('cvar', wtReservedWordDirective, ttCVar);
   AddKeyword('nostackframe', wtReservedWordDirective, ttNostackframe);
+  AddKeyword('nested', wtReservedWordDirective, ttNested);
 
   // asm
   AddKeyword('offset', wtReservedWordDirective, ttOffset);

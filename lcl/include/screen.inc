@@ -265,12 +265,8 @@ begin
 end;
 
 procedure TScreen.UpdateScreen;
-var
-  DC: HDC;
 begin
-  DC := GetDC(0);
-  FPixelsPerInch := GetDeviceCaps(DC, LOGPIXELSX);
-  ReleaseDC(0, DC);
+  FPixelsPerInch := ScreenInfo.PixelsPerInchX;
 end;
 
 procedure TScreen.RemoveAllHandlersOfObject(AnObject: TObject);
@@ -413,6 +409,22 @@ begin
   FreeAndNil(AFormList);
 end;
 
+function TScreen.UpdatedMonitor(AHandle: HMONITOR; ADefault: TMonitorDefaultTo;
+  AErrorMsg: string): TMonitor;
+var
+  i: Integer;
+begin
+  Result := nil;
+  if (AHandle = 0) and (ADefault = mdNull) then
+    Exit;
+  // the user expects some monitor but handle wasn't found -> the monitor list has probably changed
+  UpdateMonitors;
+  for i := 0 to MonitorCount - 1 do
+    if Monitors[i].Handle = AHandle then
+      Exit(Monitors[i]);
+  RaiseGDBException(AErrorMsg); // internal error
+end;
+
 function TScreen.MonitorFromPoint(const Point: TPoint;
   MonitorDefault: TMonitorDefaultTo): TMonitor;
 var
@@ -431,7 +443,7 @@ begin
     Result := MonitorFromRect(R, MonitorDefault);
   end
   else
-    Result := nil;
+    Result := UpdatedMonitor(MonitorHandle, MonitorDefault, 'TScreen.MonitorFromPoint');
 end;
 
 function TScreen.MonitorFromRect(const Rect: TRect;
@@ -466,27 +478,26 @@ begin
           Result := Monitors[i];
         end
       end;
-      Distance := Min(Min(Abs(Rect.Left - MonitorRect.Right), Abs(Rect.Right - MonitorRect.Left)),
-                      Min(Abs(Rect.Top - MonitorRect.Bottom), Abs(Rect.Bottom - MonitorRect.Top)));
-      if Distance < BestDistance then
+      if MonitorDefault = mdNearest then
       begin
-        BestDistance := Distance;
-        Nearest := Monitors[i];
+        Distance := Min(Min(Abs(Rect.Left - MonitorRect.Right), Abs(Rect.Right - MonitorRect.Left)),
+                        Min(Abs(Rect.Top - MonitorRect.Bottom), Abs(Rect.Bottom - MonitorRect.Top)));
+        if Distance < BestDistance then
+        begin
+          BestDistance := Distance;
+          Nearest := Monitors[i];
+        end;
       end;
     end;
     if Result = nil then
-    begin
-      if MonitorDefault = mdPrimary then
-        Result := PrimaryMonitor
-      else
-      if MonitorDefault = mdNull then
-        Result := nil
-      else
-        Result := Nearest;
-    end;
+      case MonitorDefault of
+        mdPrimary: Result := PrimaryMonitor;
+        mdNull   : Result := nil;
+        mdNearest: Result := Nearest;
+      end;
   end
   else
-    Result := nil;
+    Result := UpdatedMonitor(MonitorHandle, MonitorDefault, 'TScreen.MonitorFromRect');
 end;
 
 function TScreen.MonitorFromWindow(const Handle: THandle;
@@ -506,7 +517,7 @@ begin
     Result := MonitorFromRect(R, MonitorDefault);
   end
   else
-    Result := nil;
+    Result := UpdatedMonitor(MonitorHandle, MonitorDefault, 'TScreen.MonitorFromWindow');
 end;
 
 procedure GetScreenFontsList(FontList: TStrings);
@@ -811,11 +822,13 @@ end;
 function TScreen.GetHintFont: TFont;
 begin
   if (FHintFont = nil) then
-    FHintFont := TFont.Create;
-  if not WidgetSet.InitStockFont(FHintFont, sfHint) then
   begin
-    FHintFont.FontData := DefFontData;
-    FHintFont.Color := clInfoText;
+    FHintFont := TFont.Create;
+    if not WidgetSet.InitStockFont(FHintFont, sfHint) then
+    begin
+      FHintFont.FontData := DefFontData;
+      FHintFont.Color := clInfoText;
+    end;
   end;
   Result := FHintFont;
 end;

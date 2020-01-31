@@ -27,7 +27,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -39,8 +39,15 @@ unit CmdLineDebugger;
 interface
 
 uses
-  Classes, Types, process, FileUtil, LCLProc, LazLoggerBase, UTF8Process,
-  DbgIntfDebuggerBase, Forms, DebugUtils;
+  Classes, Types, process,
+  // LCL
+  Forms,
+  // LazUtils
+  LazLoggerBase, UTF8Process,
+  // DebuggerIntf
+  DbgIntfDebuggerBase,
+  // LazDebuggerGdbmi
+  DebugUtils;
 
 type
 
@@ -48,6 +55,10 @@ type
 
   TCmdLineDebugger = class(TDebuggerIntf)
   private
+    {$IFdef MSWindows}
+    FAggressiveWaitTime: Cardinal;
+    FLastWrite: QWord;
+    {$EndIf}
     FDbgProcess: TProcessUTF8;   // The process used to call the debugger
     FLineEnds: TStringDynArray;  // List of strings considered as lineends
     FOutputBuf: String;
@@ -78,11 +89,13 @@ type
   public
     constructor Create(const AExternalDebugger: String); override;
     destructor Destroy; override;
-    procedure TestCmd(const ACommand: String); virtual;// For internal debugging purposes
-    class function CanExternalDebugSymbolsFile: boolean; override;
+    procedure TestCmd(const ACommand: String); override;// For internal debugging purposes
   public
     property DebugProcess: TProcessUTF8 read FDbgProcess;
     property DebugProcessRunning: Boolean read GetDebugProcessRunning;
+    {$IFdef MSWindows}
+    property AggressiveWaitTime: Cardinal read FAggressiveWaitTime write FAggressiveWaitTime;
+    {$EndIf}
   end;
 
 
@@ -216,15 +229,17 @@ var
   TotalBytesAvailable: dword;
   R: LongBool;
   n: integer;
-  Step: Integer;
-  t, t2, t3: DWord;
+  Step, FullTimeOut: Integer;
+  t, t2, t3: QWord;
   CurCallStamp: Int64;
 begin
   Result := 0;
   CurCallStamp := FReadLineCallStamp;
   Step:=IDLE_STEP_COUNT-1;
-  if ATimeOut > 0
-  then t := GetTickCount;
+  //if ATimeOut > 0
+  //then
+  t := GetTickCount64;
+  FullTimeOut := ATimeOut;
 
   while Result=0 do
   begin
@@ -249,38 +264,68 @@ begin
     if CurCallStamp <> FReadLineCallStamp then
       exit;
 
-    if (ATimeOut > 0) then begin
-      t2 := GetTickCount;
+    t2 := GetTickCount64;
+    if (FullTimeOut > 0) then begin
       if t2 < t
       then t3 := t2 + (High(t) - t)
       else t3 := t2 - t;
-      if (t3 >= ATimeOut)
+      if (t3 >= FullTimeOut)
       then begin
         ATimeOut := 0;
         break;
       end
       else begin
-        ATimeOut := ATimeOut - t3;
-        t := t2;
+        ATimeOut := FullTimeOut - t3;
       end;
     end;
 
-    ProcessWhileWaitForHandles;
-    // process messages
-    inc(Step);
-    if Step=IDLE_STEP_COUNT then begin
-      Step:=0;
-      Application.Idle(false);
+    {$IFdef MSWindows}
+    if t2 < FLastWrite
+    then t3 := t2 + (High(FLastWrite) - FLastWrite)
+    else t3 := t2 - FLastWrite;
+    if (t3 > FAggressiveWaitTime) or (FAggressiveWaitTime = 0) then begin
+    {$EndIf}
+      ProcessWhileWaitForHandles;
+      // process messages
+      inc(Step);
+      if Step=IDLE_STEP_COUNT then begin
+        Step:=0;
+        Application.Idle(false);
+      end;
+      try
+        Application.ProcessMessages;
+      except
+        Application.HandleException(Application);
+      end;
+      if Application.Terminated or not DebugProcessRunning then Break;
+      // sleep a bit
+      Sleep(10);
+    {$IFdef MSWindows}
+    end
+    else
+    if t3 div 64 > Step then begin
+      ProcessWhileWaitForHandles;
+      inc(Step);
+      try
+        Application.ProcessMessages;
+      except
+        Application.HandleException(Application);
+      end;
     end;
+    {$EndIf}
+
+  end;
+  {$IFdef MSWindows}
+  if Step = IDLE_STEP_COUNT-1 then begin
+    ProcessWhileWaitForHandles;
+    Application.Idle(false);
     try
       Application.ProcessMessages;
     except
       Application.HandleException(Application);
     end;
-    if Application.Terminated or not DebugProcessRunning then Break;
-    // sleep a bit
-    Sleep(10);
   end;
+  {$EndIf}
 end;
 {$ELSE win32}
 begin
@@ -335,7 +380,7 @@ begin
   then begin
     FDbgProcess := TProcessUTF8.Create(nil);
     try
-      FDbgProcess.CommandLine := ExternalDebugger + ' ' + AOptions;
+      FDbgProcess.ParseCmdLine(ExternalDebugger + ' ' + AOptions);
       FDbgProcess.Options:= [poUsePipes, poNoConsole, poStdErrToOutPut, poNewProcessGroup];
       {$if defined(windows) and not defined(wince)}
       // under win9x and winMe should be created with console,
@@ -345,6 +390,7 @@ begin
       {$endif windows}
       FDbgProcess.ShowWindow := swoNone;
       FDbgProcess.Environment:=DebuggerEnvironment;
+      FDbgProcess.PipeBufferSize:=64*1024;
     except
       FreeAndNil(FDbgProcess);
     end;
@@ -360,7 +406,7 @@ begin
     except
       on E: Exception do begin
         FOutputBuf := E.Message;
-        DebugLn('Exeption while executing debugger: ', FOutputBuf);
+        DebugLn('Exception while executing debugger: ', FOutputBuf);
       end;
     end;
   end;
@@ -376,7 +422,7 @@ begin
   try
     FreeAndNil(FDbgProcess);
   except
-    on E: Exception do DebugLn('Exeption while freeing debugger: ', E.Message);
+    on E: Exception do DebugLn('Exception while freeing debugger: ', E.Message);
   end;
 end;
 
@@ -422,11 +468,12 @@ end;
 function TCmdLineDebugger.ReadLine(const APeek: Boolean; ATimeOut: Integer = -1): String;
 
   function ReadData(const AStream: TStream; var ABuffer: String): Integer;
+  const READ_LEN = 32*1024;
   var
     S: String;
   begin
-    SetLength(S, 1024);
-    Result := AStream.Read(S[1], 1024);
+    SetLength(S, READ_LEN);
+    Result := AStream.Read(S[1], READ_LEN);
     if Result > 0
     then begin
       SetLength(S, Result);
@@ -570,6 +617,9 @@ begin
     // for windows and *nix (1 or 2 character line ending)
     LE := LineEnding;
     FDbgProcess.Input.Write(LE[1], Length(LE));
+    {$IFdef MSWindows}
+    FLastWrite := GetTickCount64;
+    {$EndIf}
   end
   else begin
     DebugLn('[TCmdLineDebugger.SendCmdLn] Unable to send <', ACommand, '>. No process running.');
@@ -607,13 +657,8 @@ begin
   SendCmdLn(ACommand);
 end;
 
-class function TCmdLineDebugger.CanExternalDebugSymbolsFile: boolean;
-begin
-  Result:=true;
-end;
-
 initialization
-  DBG_CMD_ECHO      := DebugLogger.RegisterLogGroup('DBG_CMD_ECHO' {$IF defined(DBG_VERBOSE) or defined(DBG_CMD_ECHO)} , True {$ENDIF} );
-  DBG_CMD_ECHO_FULL := DebugLogger.RegisterLogGroup('DBG_CMD_ECHO_FULL' {$IF defined(DBG_VERBOSE_FULL_DATA) or defined(DBG_CMD_ECHO_FULL)} , True {$ENDIF} );
+  DBG_CMD_ECHO      := DebugLogger.FindOrRegisterLogGroup('DBG_CMD_ECHO' {$IF defined(DBG_VERBOSE) or defined(DBG_CMD_ECHO)} , True {$ENDIF} );
+  DBG_CMD_ECHO_FULL := DebugLogger.FindOrRegisterLogGroup('DBG_CMD_ECHO_FULL' {$IF defined(DBG_VERBOSE_FULL_DATA) or defined(DBG_CMD_ECHO_FULL)} , True {$ENDIF} );
 
 end.

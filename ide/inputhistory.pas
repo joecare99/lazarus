@@ -20,7 +20,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -36,9 +36,18 @@ unit InputHistory;
 interface
 
 uses
-  Classes, SysUtils, FileProcs, LazFileCache, DiffPatch, IDEProcs,
-  AvgLvlTree, Laz2_XMLCfg, SynEditTypes, LazConf, Dialogs, LazUTF8, IDEDialogs,
-  ProjectIntf, LazFileUtils;
+  // RTL + LCL
+  Classes, SysUtils, Laz_AVL_Tree,
+  // LCL
+  Dialogs,
+  // LazUtils
+  LazFileCache, LazFileUtils, LazUTF8, AvgLvlTree, Laz2_XMLCfg,
+  // Codetools
+  FileProcs,
+  // IdeIntf
+  ProjectIntf, IDEDialogs,
+  // IDE
+  DiffPatch, LazConf, IDEProcs;
 
 {$ifdef Windows}
 {$define CaseInsensitiveFilenames}
@@ -46,18 +55,13 @@ uses
 
 const
   // these are the names of the various history lists in the IDE:
-  hlPublishProjectDestDirs = 'PublishProjectDestinationDirectories';
-  hlPublishProjectCommandsAfter = 'PublishProjectCommmandsAfter';
-  hlPublishProjectIncludeFileFilter = 'PublishProjectIncludeFileFilter';
-  hlPublishProjectExcludeFileFilter = 'PublishProjectExcludeFileFilter';
+  hlPublishModuleDestDirs = 'PublishModuleDestinationDirectories';
+  hlPublishModuleFileFilter = 'PublishModuleFileFilter';
   hlMakeResourceStringSections = 'MakeResourceStringSections';
   hlMakeResourceStringPrefixes = 'MakeResourceStringPrefixes';
   hlMakeResourceStringLengths = 'MakeResourceStringLengths';
   hlCodeToolsDirectories = 'CodeToolsDirectories';
   hlCompilerOptsImExport = 'CompilerOptsImExport';
-  hlLaunchingApplication = 'LaunchingApplication';
-  hlCmdLineParameters = 'CommandLineParameters';
-  hlWorkingDirectory = 'WorkingDirectory';
   hlCleanBuildFileMask = 'CleanBuildFileMask';
 
 type
@@ -124,6 +128,7 @@ type
     fifRegExpr,
     fifMultiLine,
     fifSearchProject,    // search in all project files
+    fifSearchProjectGroup,// search in all files of project group
     fifSearchOpen,       // search in all open files in editor
     fifSearchActive,     // search in active open file in editor
     fifSearchDirectories,// search in directories
@@ -138,8 +143,8 @@ type
 
   TIHIgnoreIDEQuestionList = class(TIgnoreIDEQuestionList)
   private
-    FItems: TAvgLvlTree; // tree of TIgnoreIDEQuestionItem
-    function FindNode(const Identifier: string): TAvgLvlTreeNode;
+    FItems: TAvlTree; // tree of TIgnoreIDEQuestionItem
+    function FindNode(const Identifier: string): TAvlTreeNode;
   public
     constructor Create;
     destructor Destroy; override;
@@ -167,7 +172,6 @@ type
     FFindHistory: TStringList;
     FFindInFilesSearchOptions: TLazFindInFileSearchOptions;
     FFindAutoComplete: boolean;
-    FFindOptions: TSynSearchOptions;
     FIgnores: TIHIgnoreIDEQuestionList;
     FLastConvertDelphiPackage: string;
     FLastConvertDelphiProject: string;
@@ -182,11 +186,13 @@ type
     
     // various history lists
     FHistoryLists: THistoryLists;
-    
     // file encodings
     fFileEncodings: TStringToStringTree;
     
     procedure SetFilename(const AValue: string);
+  protected
+    procedure LoadSearchOptions(XMLConfig: TXMLConfig; const Path: string); virtual; abstract;
+    procedure SaveSearchOptions(XMLConfig: TXMLConfig; const Path: string); virtual; abstract;
   public
     constructor Create;
     destructor Destroy;  override;
@@ -222,7 +228,6 @@ type
                                                  write FFindInFilesPathHistory;
     property FindInFilesMaskHistory: TStringList read FFindInFilesMaskHistory
                                                  write FFindInFilesMaskHistory;
-    property FindOptions: TSynSearchOptions read FFindOptions write FFindOptions;
     property FindInFilesSearchOptions: TLazFindInFileSearchOptions
                read FFindInFilesSearchOptions write FFindInFilesSearchOptions;
     property FindAutoComplete: boolean read FFindAutoComplete
@@ -242,7 +247,6 @@ type
     property DiffText2: string read FDiffText2 write FDiffText2;
     property DiffText2OnlySelection: boolean read FDiffText2OnlySelection
                                              write FDiffText2OnlySelection;
-
     // new dialog
     property NewProjectType: string read FNewProjectType write FNewProjectType;
     property NewFileType: string read FNewFileType write FNewFileType;
@@ -267,21 +271,6 @@ type
   end;
 
 const
-  LazFindSearchOptionsDefault = [];
-  LazFindSearchOptionNames: array[TSynSearchOption] of string = (
-    'MatchCase',
-    'WholeWord',
-    'Backwards',
-    'EntireScope',
-    'SelectedOnly',
-    'Replace',
-    'ReplaceAll',
-    'Prompt',
-    'SearchInReplacement',
-    'RegExpr',
-    'RegExprMultiLine',
-    'ssoFindContinue'
-    );
   LazFindInFileSearchOptionsDefault = [fifSearchOpen, fifIncludeSubDirs];
   LazFindInFileSearchOptionNames: array[TLazFindInFileSearchOption] of string =(
     'MatchCase',
@@ -289,6 +278,7 @@ const
     'RegExpr',
     'MultiLine',
     'SearchProject',
+    'SearchProjectGroup',
     'SearchOpen',
     'SearchCurrent',
     'SearchDirectories',
@@ -362,7 +352,6 @@ begin
   FFindInFilesPathHistory:=TStringList.Create;
   FFindInFilesMaskHistory:=TStringList.Create;
   FFindInFilesSearchOptions:=LazFindInFileSearchOptionsDefault;
-  FFindOptions:=LazFindSearchOptionsDefault;
 
   // file dialog
   FFileDialogSettings.HistoryList:=TStringList.Create;
@@ -370,9 +359,7 @@ begin
   
   // various history lists
   FHistoryLists:=THistoryLists.Create;
-  
   fFileEncodings:=TStringToStringTree.Create({$IFDEF CaseInsensitiveFilenames}false{$ELSE}true{$ENDIF});
-
   FIgnores:=TIHIgnoreIDEQuestionList.Create;
   IgnoreQuestions:=FIgnores;
 
@@ -423,7 +410,6 @@ procedure TInputHistories.LoadFromXMLConfig(XMLConfig: TXMLConfig; const Path: s
 var
   DiffFlag: TTextDiffFlag;
   FIFOption: TLazFindInFileSearchOption;
-  FindOption: TSynSearchOption;
 begin
   // Find- and replace-history
   FMaxFindHistory:=XMLConfig.GetValue(Path+'Find/History/Max',FMaxFindHistory);
@@ -443,16 +429,7 @@ begin
     then
       Include(FFindInFilesSearchOptions,FIFOption);
   end;
-
-  FFindOptions:=[];
-  for FindOption:=Low(FFindOptions) to High(FFindOptions)
-  do begin
-    if XMLConfig.GetValue(
-      Path+'Find/Options/'+LazFindSearchOptionNames[FindOption],
-      FindOption in LazFindSearchOptionsDefault)
-    then
-      Include(FFindOptions,FindOption);
-  end;
+  LoadSearchOptions(XMLConfig, Path); // Search Options depend on SynEdit.
 
   // file dialog
   with FFileDialogSettings do begin
@@ -503,7 +480,6 @@ procedure TInputHistories.SaveToXMLConfig(XMLConfig: TXMLConfig; const Path: str
 var
   DiffFlag: TTextDiffFlag;
   FIFOption: TLazFindInFileSearchOption;
-  FindOption: TSynSearchOption;
 begin
   // Find- and replace-history
   XMLConfig.SetDeleteValue(Path+'Find/History/Max',FMaxFindHistory,20);
@@ -521,12 +497,7 @@ begin
       FIFOption in FindInFilesSearchOptions,
       FIFOption in LazFindInFileSearchOptionsDefault);
   end;
-  for FindOption:=Low(FFindOptions) to High(FFindOptions) do begin
-    XMLConfig.SetDeleteValue(
-      Path+'Find/Options/'+LazFindSearchOptionNames[FindOption],
-      FindOption in FindOptions,
-      FindOption in LazFindSearchOptionsDefault);
-  end;
+  SaveSearchOptions(XMLConfig, Path); // Search Options depend on SynEdit.
 
   // file dialog
   with FFileDialogSettings do begin
@@ -606,8 +577,7 @@ begin
   try
     InvalidateFileStateCache;
     XMLConfig:=TXMLConfig.CreateClean(FFileName);
-    XMLConfig.SetDeleteValue('InputHistory/Version/Value',
-      InputHistoryVersion,0);
+    XMLConfig.SetDeleteValue('InputHistory/Version/Value',InputHistoryVersion,0);
     SaveToXMLConfig(XMLConfig,'InputHistory/');
     XMLConfig.Flush;
     XMLConfig.Free;
@@ -682,7 +652,7 @@ begin
     if WorkDirectoryDialog.Execute then begin
       Result := WorkDirectoryDialog.Filename;
     end;
-    InputHistories.StoreFileDialogSettings(WorkDirectoryDialog);
+    StoreFileDialogSettings(WorkDirectoryDialog);
   finally
     WorkDirectoryDialog.Free;
   end;
@@ -715,7 +685,8 @@ end;
 
 function THistoryList.Push(const Entry: string): integer;
 begin
-  AddToRecentList(Entry,Self,MaxCount,ListType);
+  if Entry<>'' then
+    AddToRecentList(Entry,Self,MaxCount,ListType);
   Result:=-1;
 end;
 
@@ -854,14 +825,14 @@ end;
 
 { TIHIgnoreIDEQuestionList }
 
-function TIHIgnoreIDEQuestionList.FindNode(const Identifier: string): TAvgLvlTreeNode;
+function TIHIgnoreIDEQuestionList.FindNode(const Identifier: string): TAvlTreeNode;
 begin
   Result:=FItems.FindKey(Pointer(Identifier),@CompareAnsiStringWithIHIgnoreItem);
 end;
 
 constructor TIHIgnoreIDEQuestionList.Create;
 begin
-  FItems:=TAvgLvlTree.Create(@CompareIHIgnoreItems);
+  FItems:=TAvlTree.Create(@CompareIHIgnoreItems);
 end;
 
 destructor TIHIgnoreIDEQuestionList.Destroy;
@@ -879,7 +850,7 @@ end;
 function TIHIgnoreIDEQuestionList.Add(const Identifier: string;
   const Duration: TIgnoreQuestionDuration; const Flag: string): TIgnoreIDEQuestionItem;
 var
-  Node: TAvgLvlTreeNode;
+  Node: TAvlTreeNode;
 begin
   Node:=FindNode(Identifier);
   if Node<>nil then begin
@@ -895,7 +866,7 @@ end;
 
 procedure TIHIgnoreIDEQuestionList.Delete(const Identifier: string);
 var
-  Node: TAvgLvlTreeNode;
+  Node: TAvlTreeNode;
 begin
   Node:=FindNode(Identifier);
   if Node<>nil then
@@ -904,7 +875,7 @@ end;
 
 function TIHIgnoreIDEQuestionList.Find(const Identifier: string): TIgnoreIDEQuestionItem;
 var
-  Node: TAvgLvlTreeNode;
+  Node: TAvlTreeNode;
 begin
   Node:=FindNode(Identifier);
   if Node<>nil then
@@ -951,7 +922,7 @@ procedure TIHIgnoreIDEQuestionList.SaveToXMLConfig(XMLConfig: TXMLConfig;
   const Path: string);
 var
   i: Integer;
-  Node: TAvgLvlTreeNode;
+  Node: TAvlTreeNode;
   Item: TIgnoreIDEQuestionItem;
   SubPath: String;
 begin
@@ -973,10 +944,6 @@ begin
   end;
   XMLConfig.SetDeleteValue(Path+'Count',i,0);
 end;
-
-initialization
-  InputHistories:= nil;
-
 
 end.
 

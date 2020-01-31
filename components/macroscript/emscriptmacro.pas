@@ -16,6 +16,9 @@ uses
 {$ifend}
 {$if defined(cpusparc) }  {$DEFINE PasScriptNotAvail } {$ifend}
 
+const
+  EMSSupported = {$IFDEF PasScriptNotAvail} False {$ELSE} True {$ENDIF} ;
+
 type
 
   { TEMSEditorMacro }
@@ -293,10 +296,10 @@ begin
     Compile;
     if IsInvalid then exit;
 
-    Compiler.GetOutput({%H-}s);
+    Compiler.GetOutput(s{%H-});
     if not Exec.LoadData(s) then // Load the data from the Data string.
       exit;
-    Compiler.GetDebugOutput({%H-}s2);
+    Compiler.GetDebugOutput(s2{%H-});
     Exec.LoadDebugData(s2);
 
     Exec.SynEdit := aEditor as TCustomSynEdit;

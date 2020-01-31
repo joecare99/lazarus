@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -25,9 +25,13 @@ unit codetools_general_options;
 interface
 
 uses
-  Classes, SysUtils, FileUtil, Forms, Controls, StdCtrls, Buttons,
-  Dialogs, ExtCtrls, Graphics, EditBtn,
-  CodeToolsOptions, LazarusIDEStrConsts, IDEOptionsIntf;
+  SysUtils,
+  // LCL
+  Forms, StdCtrls, Dialogs, Graphics, EditBtn, Spin,
+  // IdeIntf
+  IDEOptionsIntf, IDEOptEditorIntf,
+  // IDE
+  CodeToolsOptions, LazarusIDEStrConsts;
 
 type
 
@@ -35,6 +39,7 @@ type
 
   TCodetoolsGeneralOptionsFrame = class(TAbstractIDEOptionsEditor)
     AdjustTopLineDueToCommentCheckBox: TCheckBox;
+    AvoidUnnecessaryJumpsCheckBox: TCheckBox;
     GeneralAutoIndent: TLabel;
     IndentOnPasteCheckBox: TCheckBox;
     IndentOnLineBreakCheckBox: TCheckBox;
@@ -42,11 +47,14 @@ type
     CursorBeyondEOLCheckBox: TCheckBox;
     IndentFileEdit: TFileNameEdit;
     IndentationGroupBox: TGroupBox;
-    JumpCenteredCheckBox: TCheckBox;
     JumpingGroupBox: TGroupBox;
     IndentFileLabel: TLabel;
     JumpToMethodBodyCheckBox: TCheckBox;
     SkipForwardDeclarationsCheckBox: TCheckBox;
+    JumpSingleLinePosLabel: TLabel;
+    JumpSingleLinePosEdit: TSpinEdit;
+    JumpCodeBlockPosEdit: TSpinEdit;
+    JumpCodeBlockPosLabel: TLabel;
     procedure GeneralAutoIndentClick(Sender: TObject);
     procedure GeneralAutoIndentMouseEnter(Sender: TObject);
     procedure GeneralAutoIndentMouseLeave(Sender: TObject);
@@ -118,7 +126,9 @@ begin
 
   JumpingGroupBox.Caption:=dlgJumpingETC;
   AdjustTopLineDueToCommentCheckBox.Caption:=dlgAdjustTopLine;
-  JumpCenteredCheckBox.Caption:=dlgcentercursorline;
+  JumpSingleLinePosLabel.Caption:=dlgJumpSingleLinePos;
+  JumpCodeBlockPosLabel.Caption:=dlgJumpCodeBlockPos;
+  AvoidUnnecessaryJumpsCheckBox.Caption:=dlgAvoidUnnecessaryJumps;
   CursorBeyondEOLCheckBox.Caption:=dlgcursorbeyondeol;
   SkipForwardDeclarationsCheckBox.Caption:=dlgSkipForwardClassDeclarations;
   JumpToMethodBodyCheckBox.Caption := dlgJumpToMethodBody;
@@ -141,7 +151,9 @@ begin
   with AOptions as TCodeToolsOptions do
   begin
     AdjustTopLineDueToCommentCheckBox.Checked := AdjustTopLineDueToComment;
-    JumpCenteredCheckBox.Checked := JumpCentered;
+    JumpCodeBlockPosEdit.Value := JumpCodeBlockPos;
+    JumpSingleLinePosEdit.Value := JumpSingleLinePos;
+    AvoidUnnecessaryJumpsCheckBox.Checked := AvoidUnnecessaryJumps;
     CursorBeyondEOLCheckBox.Checked := CursorBeyondEOL;
     SkipForwardDeclarationsCheckBox.Checked := SkipForwardDeclarations;
     JumpToMethodBodyCheckBox.Checked := JumpToMethodBody;
@@ -158,7 +170,9 @@ begin
   with AOptions as TCodeToolsOptions do
   begin
     AdjustTopLineDueToComment := AdjustTopLineDueToCommentCheckBox.Checked;
-    JumpCentered := JumpCenteredCheckBox.Checked;
+    JumpCodeBlockPos := JumpCodeBlockPosEdit.Value;
+    JumpSingleLinePos := JumpSingleLinePosEdit.Value;
+    AvoidUnnecessaryJumps := AvoidUnnecessaryJumpsCheckBox.Checked;
     CursorBeyondEOL := CursorBeyondEOLCheckBox.Checked;
     SkipForwardDeclarations := SkipForwardDeclarationsCheckBox.Checked;
     JumpToMethodBody:=JumpToMethodBodyCheckBox.Checked;

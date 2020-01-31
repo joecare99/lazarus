@@ -29,8 +29,9 @@ unit frBlankLines;
 interface
 
 uses
-  Classes, Math, StdCtrls, Spin,
-  IDEOptionsIntf;
+  Classes, Math,
+  StdCtrls, Spin,
+  IDEOptionsIntf, IDEOptEditorIntf;
 
 
 type
@@ -95,7 +96,7 @@ end;
 
 procedure TfBlankLines.ReadSettings(AOptions: TAbstractIDEOptions);
 begin
-  with FormatSettings.Returns do
+  with FormattingSettings.Returns do
   begin
     cbRemoveVarBlankLines.Checked   := RemoveVarBlankLines;
     cbRemoveBlankLinesAfterProcHeader.Checked := RemoveProcHeaderBlankLines;
@@ -113,7 +114,7 @@ end;
 
 procedure TfBlankLines.WriteSettings(AOptions: TAbstractIDEOptions);
 begin
-  with FormatSettings.Returns do
+  with FormattingSettings.Returns do
   begin
     RemoveVarBlankLines   := cbRemoveVarBlankLines.Checked;
     RemoveProcHeaderBlankLines := cbRemoveBlankLinesAfterProcHeader.Checked;
@@ -133,7 +134,7 @@ end;
 
 class function TfBlankLines.SupportedOptionsClass: TAbstractIDEOptionsClass;
 begin
-  Result := TFormatSettings;
+  Result := TFormattingSettings;
 end;
 
 initialization

@@ -104,6 +104,7 @@ begin
   FOnIdle := nil;
   FIcon := TIcon.Create;
   FIcon.OnChange := @IconChanged;
+  FLastKeyDownKeys := TWordList.Create;
   FNavigation := [anoTabToSelectNext,anoReturnForDefaultControl,
                   anoEscapeForCancelControl,anoF1ForHelp,anoArrowToSelectNextInParent];
   FUpdateFormatSettings := True;
@@ -155,6 +156,7 @@ begin
   ApplicationActionComponent:=nil;
   FreeThenNil(FIcon);
   FreeIconHandles;
+  FreeThenNil(FLastKeyDownKeys);
   FreeThenNil(FRestoreStayOnTop);
 
   for HandlerType:=Low(TApplicationHandlerType) to High(TApplicationHandlerType) do
@@ -249,6 +251,11 @@ Begin
   Result := ParamStrUTF8(0);
 end;
 
+function TApplication.GetHandle: THandle;
+begin
+  Result := WidgetSet.AppHandle;
+end;
+
 function TApplication.GetMainFormHandle: HWND;
 var
   i: Integer;
@@ -336,11 +343,13 @@ begin
       FOnModalBegin(Self);
     FApplicationHandlers[ahtModalBegin].CallNotifyEvents(Self);
   end;
+  RemoveStayOnTop(True);
 end;
 
 procedure TApplication.ModalFinished;
 begin
   dec(FModalLevel);
+  RestoreStayOnTop(True);
   if (FModalLevel = 0) then
   begin
     if Assigned(FOnModalEnd) then
@@ -544,6 +553,11 @@ procedure TApplication.SetFlags(const AValue: TApplicationFlags);
 begin
   { Only allow AppNoExceptionMessages to be changed }
   FFlags := Flags - [AppNoExceptionMessages] + AValue*[AppNoExceptionMessages];
+end;
+
+procedure TApplication.SetHandle(const AHandle: THandle);
+begin
+  WidgetSet.AppHandle := AHandle;
 end;
 
 procedure TApplication.SetMainFormOnTaskBar(const AValue: Boolean);
@@ -764,7 +778,7 @@ procedure TApplication.ShowHintWindow(const Info: THintInfoAtMouse);
 
   function GetCursorHeightMargin: integer;
   begin
-    Result:=25;
+    Result:=25; // To-Do: better height margin (DPI or cursor aware).
   end;
 
 var
@@ -840,6 +854,8 @@ begin
     // make the hint have the same BiDiMode as the activating control
     FHintWindow.BiDiMode := FHintControl.BiDiMode;
     // calculate the width of the hint based on HintStr and MaxWidth
+    FHintWindow.Left := HintInfo.HintPos.X;
+    FHintWindow.Top := HintInfo.HintPos.Y;
     with HintInfo do
       HintWinRect := FHintWindow.CalcHintRect(HintMaxWidth, HintStr, HintData);
     //Position HintWindow depending on LTR/RTL
@@ -1181,44 +1197,50 @@ end;
 
  ------------------------------------------------------------------------------}
 procedure TApplication.HandleException(Sender: TObject);
+  procedure ShowInvalidException(ExObject: TObject; ExAddr: Pointer);
+  // use shortstring. On exception, the heap may be corrupt.
+  var
+    Buf: ShortString;
+  begin
+    if Assigned(SysUtils.OnShowException) then
+    begin
+      SetLength(Buf,ExceptionErrorMessage(ExObject,ExAddr,@Buf[1],255));
+      SysUtils.OnShowException(Buf);
+    end;
+  end;
+
 var
   i: LongInt;
   Skip: Boolean;
 begin
   if Self = nil then
     Exit;
-  if AppHandlingException in FFlags then
+  if FExceptionCounter>1 then
+  begin
+    // multiple exception circle, just exit
+    Exit;
+  end;
+  if FExceptionCounter=1 then
   begin
     // there was an exception during showing the exception -> break the circle
-    DebugLn('TApplication.HandleException: ',
-      'there was another exception during showing the first exception');
+    Inc(FExceptionCounter);
+    if ExceptObject is Exception then
+    begin
+      if Assigned(OnCircularException) then
+        OnCircularException(Sender, Exception(ExceptObject));
+    end else
+      ShowInvalidException(ExceptObject, ExceptAddr);
+
     HaltingProgram:=true;
-    DumpExceptionBackTrace;
     Halt;
   end;
-  Include(FFlags,AppHandlingException);
+  Inc(FExceptionCounter);
   
   if StopOnException then
     inherited Terminate;
 
   Skip := ExceptObject is EAbort;
 
-  if not (AppNoExceptionMessages in FFlags) then
-  begin
-    // before we do anything, write it down
-    if ExceptObject is Exception then
-    begin
-      if not Skip then
-      begin
-        DebugLn('TApplication.HandleException ',Exception(ExceptObject).Message);
-        DumpExceptionBackTrace;
-      end;
-    end else
-    begin
-      DebugLn('TApplication.HandleException Strange Exception ');
-      DumpExceptionBackTrace;
-    end;
-  end;
   // release capture and hide all forms with stay on top, so that
   // a message can be shown
   if GetCapture <> 0 then SendMessage(GetCapture, LM_CANCELMODE, 0, 0);
@@ -1242,10 +1264,10 @@ begin
     end;
   end
   else
-    SysUtils.ShowException(ExceptObject, ExceptAddr);
+    ShowInvalidException(ExceptObject, ExceptAddr);
   if not Skip then
     RestoreStayOnTop(True);
-  Exclude(FFlags, AppHandlingException);
+  Dec(FExceptionCounter);
 end;
 
 {------------------------------------------------------------------------------
@@ -1313,6 +1335,7 @@ begin
     Exit;
   if Screen = nil then
     Exit;
+  Inc(FRemoveStayOnTopCounter);
   for i := 0 to Screen.CustomFormCount - 1 do
   begin
     AForm := Screen.CustomForms[i];
@@ -1335,7 +1358,8 @@ var
 begin
   if WidgetSet.AppRestoreStayOnTopFlags(ASystemTopAlso) then
     Exit;
-  if FRestoreStayOnTop <> nil then
+  Dec(FRemoveStayOnTopCounter);
+  if (FRestoreStayOnTop <> nil) and (FRemoveStayOnTopCounter = 0) then
     for i := FRestoreStayOnTop.Count - 1 downto 0 do
     begin
       TCustomForm(FRestoreStayOnTop[i]).FormStyle := fsStayOnTop;
@@ -1409,6 +1433,18 @@ begin
 end;
 
 procedure TApplication.Deactivate(Data: PtrInt);
+  procedure HideHintWindows;
+  var
+    I: Integer;
+    Form: TCustomForm;
+  begin
+    for I := Screen.CustomFormCount-1 downto 0 do
+    begin
+      Form := Screen.CustomForms[I];
+      if Form.Visible and (Form is THintWindow) then
+        Form.Hide;
+    end;
+  end;
 begin
   if (AppDestroying in FFlags) or (not (AppActive in FFlags)) then Exit;
 
@@ -1419,6 +1455,7 @@ begin
   begin
     Exclude(FFlags, AppActive);
     NotifyDeactivateHandler;
+    HideHintWindows;
   end;
 end;
 
@@ -1539,7 +1576,7 @@ var
 begin
   if AppNoExceptionMessages in FFlags then exit;
   Msg := E.Message;
-  if FindInvalidUTF8Character(PChar(Msg), Length(Msg)) > 0 then
+  if FindInvalidUTF8Codepoint(PChar(Msg), Length(Msg)) > 0 then
     Msg := AnsiToUtf8(Msg);
   if (Msg <> '') and (Msg[length(Msg)] <> '.') then Msg := Msg + '.';
   if (not Terminated) and (Self <> nil) and (AppInitialized in FFlags) then
@@ -1548,17 +1585,17 @@ begin
     try
       if ExceptionDialog=aedOkMessageBox then
       begin
-        MsgResult := mrOk;
-        MessageBox(PChar(msg), PChar(GetTitle), MB_OK + MB_ICONERROR);
+        MsgResult:=PromptUser(GetTitle, msg,
+          idDialogError, [idButtonOk], 0, idButtonCancel);
       end else
-        MsgResult:=MessageBox(PChar(
-          Format(rsPressOkToIgnoreAndRiskDataCorruptionPressCancelToK,
-                 [Msg, LineEnding+LineEnding, LineEnding])),
-          PChar(GetTitle), MB_OKCANCEL + MB_ICONERROR);
+        MsgResult:=PromptUser(GetTitle,
+          Format(rsPressOkToIgnoreAndRiskDataCorruptionPressAbortToK,
+                 [Msg, LineEnding+LineEnding, LineEnding]),
+          idDialogError, [idButtonOk, idButtonAbort], 0, idButtonCancel);
     finally
       EnableIdleHandler;
     end;
-    if MsgResult<>mrOk then
+    if MsgResult=idButtonAbort then
     begin
       Include(FFlags, AppNoExceptionMessages);
       HaltingProgram := True;
@@ -1649,6 +1686,8 @@ begin
   begin
     AControl := TWinControl(Sender);
     //debugln('TApplication.ControlKeyDown A ',DbgSName(AControl));
+    if FLastKeyDownSender <> AControl then
+      FLastKeyDownKeys.Clear;
     FLastKeyDownSender := AControl;
 
     // handle navigation key
@@ -1656,41 +1695,62 @@ begin
     DoArrowKey(AControl, Key, Shift);
   end
   else
+  begin
+    if FLastKeyDownSender <> nil then
+      FLastKeyDownKeys.Clear;
     FLastKeyDownSender := nil;
+  end;
   //DebugLn(['TApplication.ControlKeyDown Sender=',DbgSName(Sender),' Key=',Key,' Shift=',dbgs(Shift)]);
-  FLastKeyDownKey := Key;
   FLastKeyDownShift := Shift;
+  if FLastKeyDownShift <> Shift then
+    FLastKeyDownKeys.Clear;
+  FLastKeyDownKeys.Add(Key);
 end;
 
 procedure TApplication.ControlKeyUp(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 var
   AControl: TWinControl;
+  AIndex: Integer;
+  AKey: Word;
 begin
   if Key = VK_UNKNOWN then exit;
 
-  if Sender is TWinControl then
-  begin
-    AControl := TWinControl(Sender);
-    //debugln('TApplication.ControlKeyUp A ',DbgSName(AControl),' Key=',dbgs(Key),' Shift=',dbgs(Shift));
-    if FLastKeyDownKey = VK_UNKNOWN then
-    begin
-      // key was already handled in key down
-      //debugln('TApplication.ControlKeyUp key was handled in key down');
-      Exit;
-    end;
-    if (Key <> FLastKeyDownKey) or (Shift <> FLastKeyDownShift) or (AControl <> FLastKeyDownSender) then
-    begin
-      // a key up, without key down
-      //debugln('TApplication.ControlKeyUp key was handled in key down or in key up');
-      Exit;
-    end;
+  AKey := Key;
 
-    // handle special navigation keys
-    DoReturnKey(AControl, Key, Shift);
-    DoEscapeKey(AControl, Key, Shift);
+  try
+    if Sender is TWinControl then
+    begin
+      AControl := TWinControl(Sender);
+      //debugln('TApplication.ControlKeyUp A ',DbgSName(AControl),' Key=',dbgs(Key),' Shift=',dbgs(Shift));
+
+      AIndex := FLastKeyDownKeys.IndexOf(Key);
+      if (AIndex = -1) and (FLastKeyDownKeys.Count > 0) then
+        FLastKeyDownKeys.Clear;
+
+      if FLastKeyDownKeys.Count = 0 then
+      begin
+        // key was already handled in key down
+        //debugln('TApplication.ControlKeyUp key was handled in key down');
+        Exit;
+      end;
+
+      if (Shift <> FLastKeyDownShift) or (AControl <> FLastKeyDownSender) then
+      begin
+        FLastKeyDownKeys.Clear;
+        //debugln('TApplication.ControlKeyUp key was handled in key down or in key up');
+        Exit;
+      end;
+
+      // handle special navigation keys
+      DoReturnKey(AControl, Key, Shift);
+      DoEscapeKey(AControl, Key, Shift);
+    end;
+  finally
+    AIndex := FLastKeyDownKeys.IndexOf(AKey);
+    if AIndex <> -1 then
+      FLastKeyDownKeys.Delete(AIndex);
   end;
-  FLastKeyDownKey := VK_UNKNOWN;
 end;
 
 procedure TApplication.AddOnIdleHandler(Handler: TIdleEvent;
@@ -1985,9 +2045,15 @@ end;
 procedure TApplication.IntfSettingsChange;
 begin
   if FUpdateFormatSettings then
-  {$ifdef win32}
-    GetFormatSettings
+  begin
+  {$ifdef windows}
+    {$ifdef DisableUTF8RTL}
+      GetFormatSettings;
+    {$else}
+      GetFormatSettingsUTF8;
+    {$endif}
   {$endif};
+  end;
 end;
 
 procedure TApplication.IntfThemeOptionChange(AThemeServices: TThemeServices;
@@ -2013,7 +2079,7 @@ procedure TApplication.DoArrowKey(AControl: TWinControl; var Key: Word;
 begin
   if (Key in [VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN]) and (Shift = []) and
      (AControl.Perform(CM_WANTSPECIALKEY, Key, 0) = 0) and
-     (AControl.Perform(LM_GETDLGCODE, 0, 0) and DLGC_WANTARROWS = 0) and
+     (AControl.Perform(LM_GETDLGCODE, Key, 0) and DLGC_WANTARROWS = 0) and
      (anoArrowToSelectNextInParent in Navigation) and AControl.Focused and
      Assigned(AControl.Parent)  then
   begin
@@ -2070,18 +2136,27 @@ procedure TApplication.DoEscapeKey(AControl: TWinControl; var Key: Word;
   Shift: TShiftState);
 var
   Form: TCustomForm;
+  lCancelControl: TControl;
 begin
   if (Shift = []) and (Key = VK_ESCAPE) and
      (AControl.Perform(CM_WANTSPECIALKEY, Key, 0) = 0) and
-     (AControl.Perform(LM_GETDLGCODE, 0, 0) and DLGC_WANTALLKEYS = 0) and
+     (AControl.Perform(LM_GETDLGCODE, Key, 0) and DLGC_WANTALLKEYS = 0) and
      (anoEscapeForCancelControl in Navigation) then
   begin
     Form := GetParentForm(AControl);
-    if Assigned(Form) and Assigned(Form.CancelControl) then
+    if Assigned(Form) then
     begin
-      //debugln('TApplication.ControlKeyUp VK_ESCAPE ', Acontrol.Name);
-      Form.CancelControl.ExecuteCancelAction;
-      Key := VK_UNKNOWN;
+      lCancelControl := Form.CancelControl;
+      if Assigned(lCancelControl)
+        and lCancelControl.Enabled and lCancelControl.Visible then
+      begin
+        //debugln('TApplication.ControlKeyUp VK_ESCAPE ', Acontrol.Name);
+        try
+          lCancelControl.ExecuteCancelAction;
+        finally
+          Key := VK_UNKNOWN;
+        end;
+      end;
     end;
   end;
 end;
@@ -2094,7 +2169,7 @@ var
 begin
   if (Shift = []) and (Key = VK_RETURN) and
      (AControl.Perform(CM_WANTSPECIALKEY, Key, 0) = 0) and
-     (AControl.Perform(LM_GETDLGCODE, 0, 0) and DLGC_WANTALLKEYS = 0) and
+     (AControl.Perform(LM_GETDLGCODE, Key, 0) and DLGC_WANTALLKEYS = 0) and
      (anoReturnForDefaultControl in Navigation) then
   begin
     //DebugLn(['TApplication.DoReturnKey ',DbgSName(AControl)]);
@@ -2111,9 +2186,12 @@ begin
         //debugln('TApplication.DoReturnKey VK_RETURN ', Acontrol.Name);
         //Setting Key to VK_UKNOWN prevents the calling of KeyUpAfterInterface,
         //which tiggers EditingDone when Key = VK_RETURN, so we call it here
-        AControl.EditingDone;
-        lDefaultControl.ExecuteDefaultAction;
-        Key := VK_UNKNOWN;
+        try
+          AControl.EditingDone;
+          lDefaultControl.ExecuteDefaultAction;
+        finally
+          Key := VK_UNKNOWN;
+        end;
       end;
     end;
   end;
@@ -2124,7 +2202,7 @@ procedure TApplication.DoTabKey(AControl: TWinControl; var Key: Word;
 begin
   if (Key = VK_TAB) and ((Shift - [ssShift]) = []) and
      (AControl.Perform(CM_WANTSPECIALKEY, Key, 0) = 0) and
-     (AControl.Perform(LM_GETDLGCODE, 0, 0) and DLGC_WANTTAB = 0) and
+     (AControl.Perform(LM_GETDLGCODE, Key, 0) and DLGC_WANTTAB = 0) and
      (anoTabToSelectNext in Navigation) and AControl.Focused then
   begin
     // traverse tabstop controls inside form

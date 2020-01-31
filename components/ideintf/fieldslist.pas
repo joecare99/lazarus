@@ -15,7 +15,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -25,15 +25,18 @@
 
 }
 
-unit fieldslist;
+unit FieldsList;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Graphics, Dialogs,
-  Buttons, DB, StdCtrls, ObjInspStrConsts, ComponentEditors, PropEdits;
+  Classes, SysUtils, DB,
+  // LCL
+  Forms, Dialogs, Buttons, StdCtrls,
+  // IdeIntf
+  ObjInspStrConsts, PropEdits, ComponentEditors, IDEWindowIntf;
 
 type
 
@@ -44,13 +47,16 @@ type
     BitBtnCancel: TBitBtn;
     ListBox1: TListBox;
     procedure BitBtnOkClick(Sender: TObject);
+    procedure FormClose(Sender: TObject; var {%H-}CloseAction: TCloseAction);
+    procedure FormCreate(Sender: TObject);
   private
-    { private declarations }
     FDesigner: TComponentEditorDesigner;
     LinkDataset: TDataset;
-    procedure RefreshFieldsList;
+  protected
+    procedure RefreshFieldsList; virtual;
+    procedure SelectAll; virtual;
+    procedure DoShow; override;
   public
-    { public declarations }
     constructor Create(AOwner: TComponent; ADataset: TDataset;
       ADesigner: TComponentEditorDesigner); reintroduce;
   end;
@@ -64,6 +70,16 @@ implementation
 
 { TFieldsListFrm }
 
+procedure TFieldsListFrm.FormCreate(Sender: TObject);
+begin
+  IDEDialogLayoutList.ApplyLayout(Self);
+end;
+
+procedure TFieldsListFrm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+begin
+  IDEDialogLayoutList.SaveLayout(Self);
+end;
+
 procedure TFieldsListFrm.BitBtnOkClick(Sender: TObject);
 var
   i: integer;
@@ -72,25 +88,19 @@ var
   PreActive: boolean;
   FieldDef: TFieldDef;
 
-  function FieldNameToPascalIdentifer(const AName: string): string;
+  function FieldNameToPascalIdentifier(const AName: string): string;
   var
     i : integer;
   begin
     Result := '';
-    // FieldName is an ansistring
     for i := 1 to Length(AName) do
       if AName[i] in ['0'..'9','a'..'z','A'..'Z','_'] then
         Result := Result + AName[i];
-    if (Length(Result) > 0) and (not (Result[1] in ['0'..'9'])) then
-        Exit;
-    if Assigned(FieldDef.FieldClass) then
-    begin
-      Result := FieldDef.FieldClass.ClassName + Result;
-      if Copy(Result, 1, 1) = 'T' then
-        Result := Copy(Result, 2, Length(Result) - 1);
-    end
-    else
-      Result := 'Field' + Result;
+    if (Result = '') or (Result[1] in ['0'..'9']) then
+      if Assigned(FieldDef.FieldClass) then  // Try with FieldDef
+        Result := ClassNameToComponentName(FieldDef.FieldClass.ClassName) + Result
+      else
+        Result := 'Field' + Result;
   end;
 
   function CreateFieldName(Owner: TComponent; const AName: string): string;
@@ -102,7 +112,7 @@ var
       if CompareText(Owner.Components[j].Name, AName) = 0 then
       begin
         Result := FDesigner.CreateUniqueComponentName(LinkDataset.Name +
-          FieldNameToPascalIdentifer(NewField.FieldName));
+          FieldNameToPascalIdentifier(NewField.FieldName));
         exit;
       end;
     end;
@@ -125,7 +135,7 @@ begin
             Continue;
           NewField := FieldDef.CreateField(LinkDataset.Owner);
           NewField.Name := CreateFieldName(LinkDataset.Owner, LinkDataset.Name +
-            FieldNameToPascalIdentifer(NewField.FieldName));
+            FieldNameToPascalIdentifier(NewField.FieldName));
           FDesigner.PropertyEditorHook.PersistentAdded(NewField, True);
           fModified := True;
         end;
@@ -186,6 +196,21 @@ begin
     if PreActive then
       LinkDataset.Active:=True;
   end;    
+end;
+
+procedure TFieldsListFrm.SelectAll;
+begin
+  if BitBtnOk.Enabled then
+  begin
+    ListBox1.SelectAll;
+    ListBox1.MakeCurrentVisible;
+  end;
+end;
+
+procedure TFieldsListFrm.DoShow;
+begin
+  inherited DoShow;
+  SelectAll;
 end;
 
 constructor TFieldsListFrm.Create(AOwner: TComponent; ADataset: TDataset;

@@ -23,8 +23,9 @@ unit ExtendedNotebook;
 interface
 
 uses
-  Classes, sysutils, math, LCLIntf, LCLType, LResources, Forms, Controls,
-  Graphics, Dialogs, ExtCtrls, ComCtrls, LMessages
+  Classes, sysutils, math,
+  // LCL
+  LCLIntf, LCLType, LMessages, Controls, ComCtrls
   {$IFDEF ExtNBookDebug} , LCLProc {$ENDIF};
 
 type
@@ -102,14 +103,7 @@ type
              default dmManual;
   end;
 
-procedure Register;
-
 implementation
-
-procedure Register;
-begin
-  RegisterComponents('LazControls',[TExtendedNotebook]);
-end;
 
 { TExtendedNotebook }
 
@@ -132,7 +126,7 @@ function TExtendedNotebook.TabIndexForDrag(x, y: Integer): Integer;
 var
   TabPos: TRect;
 begin
-  Result := TabIndexAtClientPos(Point(X,Y));
+  Result := IndexOfPageAt(X, Y);
   if Result < 0 then begin
     TabPos := TabRect(PageCount-1);
     // Check empty space after last tab
@@ -165,7 +159,7 @@ Begin
     // On GTK2 if BeginDrag is called before PageChanging, the GTK notebook no longer works
     FMouseWaitForDrag := True;
     if FMouseDownIndex < 0 then
-      FMouseDownIndex := TabIndexAtClientPos(Point(X,Y));
+      FMouseDownIndex := IndexOfPageAt(X, Y);
     FMouseDownX := X;
     FMouseDownY := Y;
     FTriggerDragX := GetSystemMetrics(SM_CXDRAG);
@@ -205,7 +199,7 @@ Begin
   else
   if Message.NMHdr^.code = TCN_SELCHANGING then Begin
     if (fTabDragMode = dmAutomatic) and (not FMouseWaitForDrag) then
-      FMouseDownIndex := TabIndexAtClientPos(ScreenToClient(Mouse.CursorPos));
+      FMouseDownIndex := IndexOfPageAt(ScreenToClient(Mouse.CursorPos));
     {$IFDEF ExtNBookDebug}debugln(['TExtendedNotebook.CNNotify: FMouseWaitForDrag=', FMouseWaitForDrag, ' Idx=',FMouseDownIndex]);{$ENDIF}
   end;
   inherited CNNotify(Message);

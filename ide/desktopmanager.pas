@@ -7,31 +7,39 @@ interface
 uses
   Classes, SysUtils, Types,
   LCLIntf, LCLType, LCLProc, Forms, Controls, Graphics, Dialogs, StdCtrls,
-  Buttons, ButtonPanel, Menus, ComCtrls, ActnList,
+  Buttons, ButtonPanel, Menus, ComCtrls, ActnList, ExtCtrls,
   // LazUtils
   Laz2_XMLCfg,
   // IdeIntf
-  IDEImagesIntf, ToolBarIntf,
+  IDEImagesIntf, ToolBarIntf, IDEWindowIntf, IDEDialogs,
   // IDE
-  LazarusIDEStrConsts, EnvironmentOpts, IDEOptionDefs, InputHistory;
+  LazarusIDEStrConsts, EnvironmentOpts, IDEOptionDefs, InputHistory, MainIntf;
 
 type
 
   { TDesktopForm }
 
   TDesktopForm = class(TForm)
+    AssociatedDebugDesktopComboBox: TComboBox;
+    DeleteButton: TBitBtn;
     ExportBitBtn: TBitBtn;
     ImportBitBtn: TBitBtn;
     ImportAction: TAction;
     ExportAction: TAction;
     ExportAllAction: TAction;
+    AssociatedDebugDesktopLabel: TLabel;
+    MoveDownButton: TBitBtn;
     MoveUpAction: TAction;
     MoveDownAction: TAction;
     DeleteAction: TAction;
+    MoveUpButton: TBitBtn;
     RenameAction: TAction;
+    RenameButton: TBitBtn;
+    SaveAsButton: TBitBtn;
+    SetActiveDesktopButton: TBitBtn;
     SetDebugDesktopAction: TAction;
     SetActiveDesktopAction: TAction;
-    SaveAction: TAction;
+    SaveAsAction: TAction;
     ActionList1: TActionList;
     AutoSaveActiveDesktopCheckBox: TCheckBox;
     ButtonPanel1: TButtonPanel;
@@ -40,17 +48,9 @@ type
     ExportItem: TMenuItem;
     ExportAllItem: TMenuItem;
     DesktopListBox: TListBox;
-    ToolBar1: TToolBar;
-    SaveTB: TToolButton;
-    ToolButton1: TToolButton;
-    SetActiveDesktopTB: TToolButton;
-    SetDebugDesktopTB: TToolButton;
-    RenameTB: TToolButton;
-    DeleteTB: TToolButton;
-    MoveUpTB: TToolButton;
-    MoveDownTB: TToolButton;
-    ToolButton2: TToolButton;
-    ToolButton3: TToolButton;
+    Panel1: TPanel;
+    SetDebugDesktopButton: TBitBtn;
+    procedure AssociatedDebugDesktopComboBoxChange(Sender: TObject);
     procedure DeleteActionClick(Sender: TObject);
     procedure DesktopListBoxDrawItem(Control: TWinControl; Index: Integer;
       ARect: TRect; {%H-}State: TOwnerDrawState);
@@ -59,26 +59,30 @@ type
     procedure ExportAllActionClick(Sender: TObject);
     procedure ExportActionClick(Sender: TObject);
     procedure ExportBitBtnClick(Sender: TObject);
+    procedure FormClose(Sender: TObject; var {%H-}CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure HelpButtonClick(Sender: TObject);
     procedure ImportActionClick(Sender: TObject);
     procedure MoveUpDownActionClick(Sender: TObject);
     procedure RenameActionClick(Sender: TObject);
-    procedure SaveActionClick(Sender: TObject);
+    procedure SaveAsActionClick(Sender: TObject);
     procedure SetActiveDesktopActionClick(Sender: TObject);
     procedure SetDebugDesktopActionClick(Sender: TObject);
   private
     FActiveDesktopChanged: Boolean;
 
     procedure RefreshList(SelectName: string = '');
-    procedure ExportDesktops(const aDesktops: array of TDesktopOpt);
+    procedure RefreshAssociatedDebugList(SelectedDesktop: TCustomDesktopOpt);
+    procedure ExportDesktops(const aDesktops: array of TCustomDesktopOpt);
   end;
 
   TShowDesktopItem = class(TMenuItem)
   public
     DesktopName: string;
   end;
+
+  { TShowDesktopsToolButton }
 
   TShowDesktopsToolButton = class(TIDEToolButton)
   private class var
@@ -87,6 +91,7 @@ type
     procedure ChangeDesktop(Sender: TObject);
     class procedure DoChangeDesktop({%H-}Data: PtrInt);
     procedure SaveAsDesktop(Sender: TObject);
+    procedure SaveDesktop(Sender: TObject);
     procedure ToggleAsDebugDesktop(Sender: TObject);
     procedure MenuOnPopup(Sender: TObject);
 
@@ -159,7 +164,9 @@ begin
     else
       Desktops.Insert(dskIndex, dsk);
     debugln(['TDesktopForm.SaveBitBtnClick: Assign from active desktop to ', aDesktopName]);
-    Desktop.ImportSettingsFromIDE;
+    if ObjectInspector1<>nil then
+      EnvironmentOptions.ObjectInspectorOptions.Assign(ObjectInspector1);
+    Desktop.ImportSettingsFromIDE(EnvironmentOptions);
     dsk.Assign(Desktop);
     ActiveDesktopName := aDesktopName;
     Result := True;
@@ -169,7 +176,7 @@ end;
 function ToggleDebugDesktop(const aDesktopName: string;
   const aShowIncompatibleDialog: Boolean): Boolean;
 var
-  xDsk: TDesktopOpt;
+  xDsk: TCustomDesktopOpt;
 begin
   Result := False;
   xDsk := EnvironmentOptions.Desktops.Find(aDesktopName);
@@ -183,7 +190,8 @@ begin
     Exit;
   end;
 
-  if EnvironmentOptions.DebugDesktopName = aDesktopName then
+  if (EnvironmentOptions.DebugDesktopName = aDesktopName) or
+      (EnvironmentOptions.ActiveDesktopName = aDesktopName) then
     EnvironmentOptions.DebugDesktopName := ''
   else
     EnvironmentOptions.DebugDesktopName := aDesktopName;
@@ -199,7 +207,7 @@ end;
 class procedure TShowDesktopsToolButton.DoChangeDesktop(Data: PtrInt);
 var
   xDesktopName: string;
-  xDesktop: TDesktopOpt;
+  xDesktop: TCustomDesktopOpt;
 begin
   xDesktopName := DoChangeDesktopName;
   if xDesktopName = '' then
@@ -209,13 +217,13 @@ begin
   if xDesktop = nil then
     Exit;
 
-  if not xDesktop.Compatible then
+  if not xDesktop.Compatible or not (xDesktop is TDesktopOpt) then
   begin
     MessageDlg(dlgCannotUseDockedUndockedDesktop, mtError, [mbOK], 0);
     Exit;
   end;
 
-  EnvironmentOptions.UseDesktop(xDesktop);
+  EnvironmentOptions.UseDesktop(TDesktopOpt(xDesktop));
 end;
 
 procedure TShowDesktopsToolButton.DoOnAdded;
@@ -235,7 +243,8 @@ begin
 end;
 
 procedure TShowDesktopsToolButton.RefreshMenu;
-  procedure _AddItem(const _Desktop: TDesktopOpt; const _Parent: TMenuItem;
+
+  procedure _AddItem(const _Desktop: TCustomDesktopOpt; const _Parent: TMenuItem;
     const _OnClick: TNotifyEvent; const _AllowIncompatible: Boolean);
   var
     xItem: TShowDesktopItem;
@@ -250,27 +259,34 @@ procedure TShowDesktopsToolButton.RefreshMenu;
     xItem.DesktopName := _Desktop.Name;
     xItem.Checked := _Desktop.Name = EnvironmentOptions.ActiveDesktopName;
     if not _Desktop.Compatible then
-      xItem.ImageIndex := IDEImages.LoadImage(16, 'state_warning')
+      xItem.ImageIndex := IDEImages.LoadImage('state_warning')
     else
     if _Desktop.Name = EnvironmentOptions.DebugDesktopName then
-      xItem.ImageIndex := IDEImages.LoadImage(16, 'debugger');
+      xItem.ImageIndex := IDEImages.LoadImage('debugger');
   end;
 
 var
   xPM: TPopupMenu;
   i: Integer;
-  xDesktop: TDesktopOpt;
-  xMISaveAs, xMISaveAsNew, xMIToggleDebug: TMenuItem;
+  xDesktop: TCustomDesktopOpt;
+  xMISave, xMISaveAs, xMISaveAsNew, xMIToggleDebug: TMenuItem;
 begin
   xPM := DropdownMenu;
   xPM.Items.Clear;
 
+  xMISave := TMenuItem.Create(xPM);
+  xMISave.Caption := dlgSaveCurrentDesktop;
+  xMISave.ImageIndex := IDEImages.LoadImage('laz_save');
+  xMISave.OnClick := @SaveDesktop;
+
   xMISaveAs := TMenuItem.Create(xPM);
   xMISaveAs.Caption := dlgSaveCurrentDesktopAs;
-  xMISaveAs.ImageIndex := IDEImages.LoadImage(16, 'laz_save');
+  xMISaveAs.ImageIndex := IDEImages.LoadImage('menu_saveas');
+
   xMIToggleDebug := TMenuItem.Create(xPM);
-  xMIToggleDebug.Caption := dlgToggleDebugDesktop;
-  xMIToggleDebug.ImageIndex := IDEImages.LoadImage(16, 'debugger');
+  xMIToggleDebug.Caption := dlgToggleDebugDesktopBtnCaption;
+  xMIToggleDebug.ImageIndex := IDEImages.LoadImage('debugger');
+
   // Saved desktops
   for i:=0 to EnvironmentOptions.Desktops.Count-1 do
   begin
@@ -282,6 +298,7 @@ begin
 
   if xPM.Items.Count > 0 then
     xPM.Items.AddSeparator;
+  xPM.Items.Add(xMISave);
   xPM.Items.Add(xMISaveAs);
   xPM.Items.Add(xMIToggleDebug);
 
@@ -291,7 +308,7 @@ begin
   xMISaveAs.Add(xMISaveAsNew);
   xMISaveAsNew.Caption := dlgNewDesktop;
   xMISaveAsNew.OnClick := @SaveAsDesktop;
-  xMISaveAsNew.ImageIndex := IDEImages.LoadImage(16, 'menu_saveas');
+  xMISaveAsNew.ImageIndex := IDEImages.LoadImage('menu_saveas');
 end;
 
 procedure TShowDesktopsToolButton.SaveAsDesktop(Sender: TObject);
@@ -315,6 +332,11 @@ begin
   SaveCurrentDesktop(xDesktopName, xShowOverwriteDlg);
 end;
 
+procedure TShowDesktopsToolButton.SaveDesktop(Sender: TObject);
+begin
+  SaveCurrentDesktop(EnvironmentOptions.ActiveDesktopName, False);
+end;
+
 procedure TShowDesktopsToolButton.ToggleAsDebugDesktop(Sender: TObject);
 begin
   ToggleDebugDesktop((Sender as TShowDesktopItem).DesktopName, True);
@@ -324,27 +346,48 @@ end;
 
 procedure TDesktopForm.FormCreate(Sender: TObject);
 begin
+  IDEDialogLayoutList.ApplyLayout(Self, 470, 326);
+
   // buttons captions & text
-  ToolBar1.Images := IDEImages.Images_16;
+
+  ActionList1.Images := IDEImages.Images_16;  // for TDesktopForm.DesktopListBoxDrawItem only
+
   Caption := dlgManageDesktops;
-  SaveAction.Hint := dlgSaveCurrentDesktopAs;
-  SaveAction.ImageIndex := IDEImages.LoadImage(16, 'laz_save');
-  DeleteAction.Hint := lisDelete;
-  DeleteAction.ImageIndex := IDEImages.LoadImage(16, 'laz_cancel');
-  RenameAction.Hint := lisRename;
-  RenameAction.ImageIndex := IDEImages.LoadImage(16, 'laz_edit');
-  MoveUpAction.Hint := lisMenuEditorMoveUp;
-  MoveUpAction.ImageIndex := IDEImages.LoadImage(16, 'arrow_up');
-  MoveDownAction.Hint := lisMenuEditorMoveDown;
-  MoveDownAction.ImageIndex := IDEImages.LoadImage(16, 'arrow_down');
-  SetActiveDesktopAction.Hint := dlgSetActiveDesktop;
-  SetActiveDesktopAction.ImageIndex := IDEImages.LoadImage(16, 'laz_tick');
-  SetDebugDesktopAction.Hint := dlgToggleDebugDesktop;
-  SetDebugDesktopAction.ImageIndex := IDEImages.LoadImage(16, 'debugger');
+
+  SaveAsAction.Caption := dlgSaveCurrentDesktopAsBtnCaption;
+  SaveAsAction.Hint := dlgSaveCurrentDesktopAsBtnHint;
+  IDEImages.AssignImage(SaveAsButton, 'menu_saveas');
+
+  DeleteAction.Caption := dlgDeleteSelectedDesktopBtnCaption;
+  DeleteAction.Hint := dlgDeleteSelectedDesktopBtnHint;
+  IDEImages.AssignImage(DeleteButton, 'laz_cancel');
+
+  RenameAction.Caption := dlgRenameSelectedDesktopBtnCaption;
+  RenameAction.Hint := dlgRenameSelectedDesktopBtnHint;
+  IDEImages.AssignImage(RenameButton, 'laz_edit');
+
+  MoveUpAction.Caption := lisMoveUp;
+  MoveUpAction.Hint := lisMoveUp;
+  IDEImages.AssignImage(MoveUpButton, 'arrow_up');
+
+  MoveDownAction.Caption := lisMoveDown;
+  MoveDownAction.Hint := lisMoveDown;
+  IDEImages.AssignImage(MoveDownButton, 'arrow_down');
+
+  SetActiveDesktopAction.Caption := dlgSetActiveDesktopBtnCaption;
+  SetActiveDesktopAction.Hint := dlgSetActiveDesktopBtnHint;
+  IDEImages.AssignImage(SetActiveDesktopButton, 'laz_tick');
+
+  SetDebugDesktopAction.Caption := dlgToggleDebugDesktopBtnCaption;
+  SetDebugDesktopAction.Hint := dlgToggleDebugDesktopBtnHint;
+  IDEImages.AssignImage(SetDebugDesktopButton, 'debugger');
+
   AutoSaveActiveDesktopCheckBox.Caption := dlgAutoSaveActiveDesktop;
   AutoSaveActiveDesktopCheckBox.Hint := dlgAutoSaveActiveDesktopHint;
-  LblGrayedInfo.Caption := dlgGrayedDesktopsUndocked;
-  LblGrayedInfo.Font.Color := clGrayText;
+  LblGrayedInfo.Caption := '';
+  //AssociatedDebugDesktopLabel.Caption := dlgAssociatedDebugDesktop;  // moved to TDesktopForm.DesktopListBoxSelectionChange
+  AssociatedDebugDesktopLabel.Hint := dlgAssociatedDebugDesktopHint;
+  LblGrayedInfo.Font.Color := clGrayText;  // perhaps better clInactiveCaption
 
   ExportAction.Hint := lisExport;
   ExportAction.Caption := lisExportSelected;
@@ -378,7 +421,7 @@ end;
 
 procedure TDesktopForm.RefreshList(SelectName: string);
 var
-  DskTop: TDesktopOpt;
+  DskTop: TCustomDesktopOpt;
   i: Integer;
   HasNonCompatible: Boolean;
 begin
@@ -388,16 +431,25 @@ begin
   HasNonCompatible := False;
   DesktopListBox.Clear;
   // Saved desktops
-  for i:=0 to EnvironmentOptions.Desktops.Count-1 do
-  begin
-    DskTop := EnvironmentOptions.Desktops[i];
-    DesktopListBox.Items.Add(DskTop.Name);
-    if not DskTop.Compatible then
-      HasNonCompatible := True;
+  DesktopListBox.Items.BeginUpdate;
+  try
+    for i:=0 to EnvironmentOptions.Desktops.Count-1 do
+    begin
+      DskTop := EnvironmentOptions.Desktops[i];
+      DesktopListBox.Items.AddObject(DskTop.Name, DskTop);
+      if not DskTop.Compatible then
+        HasNonCompatible := True;
+    end;
+  finally
+    DesktopListBox.Items.EndUpdate;
   end;
   if HasNonCompatible then
-    LblGrayedInfo.Caption := dlgGrayedDesktopsUndocked
-  else
+  begin
+    if IDEDockMaster=nil then
+      LblGrayedInfo.Caption := dlgGrayedDesktopsDocked
+    else
+      LblGrayedInfo.Caption := dlgGrayedDesktopsUndocked;
+  end else
     LblGrayedInfo.Caption := '';
 
   i := DesktopListBox.Items.IndexOf(SelectName);
@@ -446,6 +498,19 @@ begin
   end;
 end;
 
+procedure TDesktopForm.AssociatedDebugDesktopComboBoxChange(Sender: TObject);
+var
+  SelDesktop: TDesktopOpt;
+begin
+  if DesktopListBox.ItemIndex = -1 then
+    Exit;
+
+  SelDesktop := DesktopListBox.Items.Objects[DesktopListBox.ItemIndex] as TDesktopOpt;
+  SelDesktop.AssociatedDebugDesktopName := AssociatedDebugDesktopComboBox.Text;
+  if SelDesktop.Name = EnvironmentOptions.ActiveDesktopName then
+    EnvironmentOptions.Desktop.AssociatedDebugDesktopName := SelDesktop.AssociatedDebugDesktopName;
+end;
+
 procedure TDesktopForm.DeleteActionClick(Sender: TObject);
 var
   dskName: String;
@@ -474,7 +539,7 @@ end;
 procedure TDesktopForm.ExportActionClick(Sender: TObject);
 var
   xDesktopName: String;
-  xDesktop: TDesktopOpt;
+  xDesktop: TCustomDesktopOpt;
 begin
   if DesktopListBox.ItemIndex < 0 then
     Exit;
@@ -498,7 +563,13 @@ begin
   ExportMenu.PopUp(p.x,p.y);
 end;
 
-procedure TDesktopForm.ExportDesktops(const aDesktops: array of TDesktopOpt);
+procedure TDesktopForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+begin
+  IDEDialogLayoutList.SaveLayout(Self);
+end;
+
+procedure TDesktopForm.ExportDesktops(
+  const aDesktops: array of TCustomDesktopOpt);
 var
   xXMLCfg: TRttiXMLConfig;
   xConfigStore: TXMLOptionsStorage;
@@ -510,7 +581,7 @@ begin
   if Length(aDesktops) = 0 then
     Exit;
 
-  xSaveDialog := TSaveDialog.Create(nil);
+  xSaveDialog := IDESaveDialogClass.Create(nil);
   try
     try
       InputHistories.ApplyFileDialogSettings(xSaveDialog);
@@ -558,14 +629,14 @@ procedure TDesktopForm.ImportActionClick(Sender: TObject);
 var
   xXMLCfg: TRttiXMLConfig;
   xConfigStore: TXMLOptionsStorage;
-  xOpenDialog: TOpenDialog;
+  xOpenDialog: TIDEOpenDialog;
   xDesktopName, xOldDesktopName, xFileName, xDesktopDockMaster: string;
   xCurPath, xDesktopPath: string;
   I: Integer;
   xCount, xImportedCount: Integer;
-  xDsk: TDesktopOpt;
+  xDsk: TCustomDesktopOpt;
 begin
-  xOpenDialog := TOpenDialog.Create(nil);
+  xOpenDialog := IDEOpenDialogClass.Create(nil);
   try
     try
       InputHistories.ApplyFileDialogSettings(xOpenDialog);
@@ -663,6 +734,30 @@ begin
   RefreshList(xOldName);
 end;
 
+procedure TDesktopForm.RefreshAssociatedDebugList(SelectedDesktop: TCustomDesktopOpt);
+var
+  DskTop: TCustomDesktopOpt;
+  i: Integer;
+begin
+  AssociatedDebugDesktopComboBox.Items.BeginUpdate;
+  try
+    AssociatedDebugDesktopComboBox.Clear;
+    AssociatedDebugDesktopComboBox.Enabled := SelectedDesktop<>nil;
+    if not AssociatedDebugDesktopComboBox.Enabled then
+      Exit;
+    AssociatedDebugDesktopComboBox.Items.AddObject(dlgPOIconDescNone, nil);
+    // Saved desktops
+    for i:=0 to EnvironmentOptions.Desktops.Count-1 do
+    begin
+      DskTop := EnvironmentOptions.Desktops[i];
+      if DskTop.Compatible = SelectedDesktop.Compatible then
+        AssociatedDebugDesktopComboBox.Items.AddObject(DskTop.Name, DskTop);
+    end;
+  finally
+    AssociatedDebugDesktopComboBox.Items.EndUpdate;
+  end;
+end;
+
 procedure TDesktopForm.DesktopListBoxDrawItem(Control: TWinControl;
   Index: Integer; ARect: TRect; State: TOwnerDrawState);
 var
@@ -673,7 +768,7 @@ var
   OldTextStyle: TTextStyle;
   NewTextStyle: TTextStyle;
   OldFontStyle: TFontStyles;
-  xDesktop: TDesktopOpt;
+  xDesktop: TCustomDesktopOpt;
   xTextLeft, xIconLeft: Integer;
 begin
   xLB := Control as TListBox;
@@ -712,7 +807,7 @@ begin
     raise Exception.Create('Desktop manager internal error: the desktop list doesn''t match the listbox content.');
   end;
   xInfo := '';
-  xTextLeft := ARect.Left+ToolBar1.Images.Width + 4;
+  xTextLeft := ARect.Left+ActionList1.Images.Width + 4;
   xIconLeft := ARect.Left+2;
   if (xDesktopName <> '') and (EnvironmentOptions.ActiveDesktopName = xDesktopName) then
   begin
@@ -720,7 +815,7 @@ begin
       xInfo := xInfo + ', ';
     xInfo := xInfo + dlgActiveDesktop;
     xLB.Canvas.Font.Style := xLB.Canvas.Font.Style + [fsBold];
-    ToolBar1.Images.Draw(xLB.Canvas, xIconLeft, (ARect.Top+ARect.Bottom-ToolBar1.Images.Height) div 2, SetActiveDesktopTB.ImageIndex, xDesktop.Compatible);//I don't see a problem painting the tick over the "run" icon...
+    ActionList1.Images.Draw(xLB.Canvas, xIconLeft, (ARect.Top+ARect.Bottom-ActionList1.Images.Height) div 2, SetActiveDesktopButton.ImageIndex, xDesktop.Compatible);//I don't see a problem painting the tick over the "run" icon...
   end;
   if (xDesktopName <> '') and (EnvironmentOptions.DebugDesktopName = xDesktopName) then
   begin
@@ -729,10 +824,10 @@ begin
     xInfo := xInfo + dlgDebugDesktop;
     if (EnvironmentOptions.ActiveDesktopName = xDesktopName) then
     begin
-      xTextLeft := xTextLeft + ToolBar1.Images.Width;
-      xIconLeft := xIconLeft + ToolBar1.Images.Width;
+      xTextLeft := xTextLeft + ActionList1.Images.Width;
+      xIconLeft := xIconLeft + ActionList1.Images.Width;
     end;
-    ToolBar1.Images.Draw(xLB.Canvas, xIconLeft, (ARect.Top+ARect.Bottom-ToolBar1.Images.Height) div 2, SetDebugDesktopTB.ImageIndex, xDesktop.Compatible);
+    ActionList1.Images.Draw(xLB.Canvas, xIconLeft, (ARect.Top+ARect.Bottom-ActionList1.Images.Height) div 2, SetDebugDesktopButton.ImageIndex, xDesktop.Compatible);
   end;
   ARect.Left := xTextLeft;
   xText := xDesktopName;
@@ -758,10 +853,21 @@ procedure TDesktopForm.DesktopListBoxSelectionChange(Sender: TObject; User: bool
 var
   HasSel, IsActive, IsDebug: Boolean;
   CurName: String;
+  SelDesktop: TCustomDesktopOpt;
 begin
   HasSel := DesktopListBox.ItemIndex>=0;
   if HasSel then
   begin
+    SelDesktop := DesktopListBox.Items.Objects[DesktopListBox.ItemIndex] as TCustomDesktopOpt;
+    RefreshAssociatedDebugList(SelDesktop);
+    if (SelDesktop.AssociatedDebugDesktopName<>'') then
+    begin
+      AssociatedDebugDesktopComboBox.ItemIndex :=
+        AssociatedDebugDesktopComboBox.Items.IndexOfObject(EnvironmentOptions.Desktops.Find(SelDesktop.AssociatedDebugDesktopName));
+      if AssociatedDebugDesktopComboBox.ItemIndex<0 then
+        AssociatedDebugDesktopComboBox.ItemIndex := 0;
+    end else
+      AssociatedDebugDesktopComboBox.ItemIndex := 0;
     CurName := DesktopListBox.Items[DesktopListBox.ItemIndex];
     IsActive := CurName = EnvironmentOptions.ActiveDesktopName;
     IsDebug := CurName = EnvironmentOptions.DebugDesktopName;
@@ -769,6 +875,7 @@ begin
   else begin
     IsActive := False;
     IsDebug := False;
+    RefreshAssociatedDebugList(nil);
   end;
   SetActiveDesktopAction.Enabled := HasSel and not IsActive;
   SetDebugDesktopAction.Enabled := HasSel and not IsDebug;
@@ -779,11 +886,14 @@ begin
   ExportAction.Enabled := HasSel;
   ExportAllAction.Enabled := DesktopListBox.Items.Count>0;
   ExportBitBtn.Enabled := ExportItem.Enabled or ExportAllItem.Enabled;
+  if DesktopListBox.Items.Count>0 then
+    AssociatedDebugDesktopLabel.Caption:=Format(dlgAssociatedDebugDesktop,
+      [DesktopListBox.Items[DesktopListBox.ItemIndex]]);
 end;
 
 procedure TDesktopForm.ExportAllActionClick(Sender: TObject);
 var
-  xDesktops: array of TDesktopOpt;
+  xDesktops: array of TCustomDesktopOpt;
   I: Integer;
 begin
   SetLength(xDesktops, EnvironmentOptions.Desktops.Count);
@@ -792,7 +902,7 @@ begin
   ExportDesktops(xDesktops);
 end;
 
-procedure TDesktopForm.SaveActionClick(Sender: TObject);
+procedure TDesktopForm.SaveAsActionClick(Sender: TObject);
 var
   xDesktopName, xOldDesktopName: string;
 begin

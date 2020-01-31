@@ -45,7 +45,7 @@ type
     destructor Destroy; override;
     procedure Show;
     function GetPosition: TPoint;
-    procedure Update(NewPixBuf: PGdkPixbuf; NewHint: String);
+    procedure Update(NewPixBuf: PGdkPixbuf; const NewHint: String);
   end;
 
 const
@@ -384,7 +384,7 @@ begin
     FStatusIcon := gtk_status_icon_new();
     gtk_status_icon_set_from_pixbuf(FStatusIcon, {%H-}PGdkPixbuf(FTrayIcon.Icon.Handle));
     gtk_status_icon_set_tooltip(FStatusIcon, PChar(FTrayIcon.Hint));
-    g_object_set(PGObject(FStatusIcon), 'has-tooltip', TRUE);
+    g_object_set(PGObject(FStatusIcon), 'has-tooltip', gTRUE, nil);
     fEmbedded := gtk_status_icon_is_embedded(FStatusIcon);
 
     g_signal_connect(FStatusIcon, 'activate', TGCallback(@activate_cb_statusicon), fTrayIcon);
@@ -479,14 +479,14 @@ begin
   end;
 end;
 
-procedure TGtk2TrayIconHandle.Update(NewPixBuf: PGdkPixbuf; NewHint: String);
+procedure TGtk2TrayIconHandle.Update(NewPixBuf: PGdkPixbuf; const NewHint: String);
 begin
 {$ifdef UseStatusIcon}
   if FStatusIcon <> nil then
   begin
     gtk_status_icon_set_from_pixbuf(FStatusIcon, NewPixBuf);
     gtk_status_icon_set_tooltip(FStatusIcon, PChar(NewHint));
-    g_object_set(PGObject(FStatusIcon), 'has-tooltip', TRUE);
+    g_object_set(PGObject(FStatusIcon), 'has-tooltip', gTRUE, nil);
   end
   else
 {$endif}

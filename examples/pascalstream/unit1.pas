@@ -5,7 +5,7 @@ unit Unit1;
 interface
 
 uses
-  Classes, SysUtils, LCLProc, typinfo, ComponentStreamPas;
+  Classes, SysUtils, typinfo, CompWriterPas, LazLogger;
 
 type
   TMyEnum = (myEnum1, myEnum2, myEnum3);
@@ -79,8 +79,6 @@ type
   end;
 
 
-  { TStreamAsXMLForm }
-
   { TStreamAsPasForm }
 
   TStreamAsPasForm = class(TComponent)
@@ -99,7 +97,7 @@ type
 
     procedure WriteComponents;
     procedure ReadComponents;
-    procedure OnFindComponentClass(Reader: TReader; const AClassName: string;
+    procedure OnFindComponentClass({%H-}Reader: TReader; const AClassName: string;
                                    var ComponentClass: TComponentClass);
     property Filename: string read FFilename write SetFilename;
   end;
@@ -199,7 +197,7 @@ begin
     SetLength(s,ms.Size);
     if s<>'' then
       ms.Read(s[1],length(s));
-    debugln(['TStreamAsPasForm.WriteComponents ',s]);
+    DebugLn(['TStreamAsPasForm.WriteComponents ',s]);
   finally
     ms.Free;
   end;

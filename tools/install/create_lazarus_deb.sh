@@ -9,12 +9,15 @@
 #     qt                compile IDE and programs for qt.
 #     append-revision   append the svn revision to the .deb version
 #     chmhelp           add package chmhelp and add chm,kwd files in docs/chm
+#     pas2jszip <pas2js-linux-version.zip>
+#                       unzip pas2js release zip to "pas2js/version"
 
 set -e
 
 LCLWidgetset=
 LazVersionPostfix=
 UseCHMHelp=
+Pas2jsZip=
 LazRelease='0'
 
 while [ $# -gt 0 ]; do
@@ -53,6 +56,23 @@ while [ $# -gt 0 ]; do
     UseCHMHelp=1
     ;;
 
+  pas2jszip)
+    shift
+    echo "param=$1"
+    Pas2jsZip=$1
+    Pattern="*pas2js*.zip"
+    if [[ $Pas2jsZip == $Pattern ]]; then
+      echo "using pas2js zip file $Pas2jsZip"
+    else
+      echo "invalid pas2js zip file $Pas2jsZip"
+      exit -1
+    fi
+    if [ ! -f $Pas2jsZip ]; then
+      echo "missing pas2js zip file $Pas2jsZip"
+      exit -1
+    fi
+    ;;
+
   *)
     echo "invalid parameter $1"
     echo "Usage: ./create_lazarus_deb.sh [chmhelp] [gtk1] [qt] [qtlib=<dir>] [release=svn] "
@@ -62,10 +82,11 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# get FPC version
-FPCVersion=$(fpc -v | grep 'Compiler version' | sed 's/.*\([0-9]\.[0-9]\.[0-9]\).*/\1/')
-echo "FPCVersion=$FPCVersion"
+# get date
+Date=`date +%Y%m%d`
+ChangeLogDate=`date --rfc-822`
 
+# get FPC version
 Arch=`dpkg --print-architecture`
 echo "debian architecture=$Arch"
 targetos=$Arch
@@ -88,22 +109,28 @@ else
     fi 
   fi 
 fi
+FPCVersion=$($ppcbin -v | grep version| sed 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/')
 
-Date=`date +%Y%m%d`
-LazVersion=$(./get_lazarus_version.sh)$LazVersionPostfix
-SrcTGZ=lazarus-$LazVersion-$LazRelease.tar.gz
+# get Lazarus version
+LazVersion=$(./get_lazarus_version.sh)
+# get consistent major.minor.release version, to avoid dpkg install an older version
+if [ $(echo $LazVersion | egrep '^[^.]*\.[^.]*$') ]; then
+  LazVersion=${LazVersion}.0
+fi
+LazVersion=$LazVersion$LazVersionPostfix
+
+PkgName=lazarus-project
+SrcTGZ=$PkgName-$LazVersion-$LazRelease.tar.gz
 CurDir=`pwd`
-TmpDir=~/tmp/lazarus$LazVersion
-LazBuildDir=$TmpDir/lazarus_build
-LazDeb=$CurDir/lazarus_${LazVersion}-${LazRelease}_$Arch.deb
+TmpDir=~/tmp/$PkgName$LazVersion
+LazBuildDir=$TmpDir/${PkgName}_build
+LazDeb=$CurDir/${PkgName}_${LazVersion}-${LazRelease}_$Arch.deb
 DebianSrcDir=$CurDir/debian_lazarus
 EtcSrcDir=$CurDir/linux
 LazSrcDir=../..
 LazDestDir=$LazBuildDir/usr/share/lazarus/${LazVersion}
 LazDestDirInstalled=/usr/share/lazarus/${LazVersion}
- 
-FPCVersion=$($ppcbin -v | grep version| sed 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/')
-ChangeLogDate=`date --rfc-822`
+Pas2jsVer=
 
 echo "ppcbin=$ppcbin"
 echo "LazVersion=$LazVersion"
@@ -136,6 +163,19 @@ if [ "$UseCHMHelp" = "1" ]; then
   cp -v *.kwd *.chm $LazDestDir/docs/chm/
   cd -
 fi
+if [ ! "x$Pas2jsZip" = "x" ]; then
+  # unzip pas2jszip to pas2js/version
+  mkdir $LazDestDir/pas2js   # fails if already there -> good
+  unzip $Pas2jsZip -d $LazDestDir/pas2js
+  Pas2jsBin="$LazDestDir/pas2js/*pas2js*/bin/pas2js"
+  if [ ! -f $Pas2jsBin ]; then
+    echo "missing $Pas2jsZip/*pas2js*/bin/pas2js"
+    exit 1
+  fi
+  Pas2jsVer=$($Pas2jsBin -iV | tr -d '\n')
+  mv $LazDestDir/pas2js/*pas2js* $LazDestDir/pas2js/$Pas2jsVer
+fi
+chmod a-x $LazDestDir/debian/rules
 
 # compile
 echo
@@ -154,6 +194,7 @@ mkdir -p units/${targetos}-linux/qt
 
 export LCL_PLATFORM=
 
+find . -name '*.or' -delete
 strip lazarus
 strip startlazarus
 strip lazbuild
@@ -178,14 +219,21 @@ cat $DebianSrcDir/control$LCLWidgetset | \
       -e "s/LAZVERSION/$LazVersion/g" \
       -e "s/ARCH/$Arch/g" \
       -e "s/LAZSIZE/$LazSize/g" \
+      -e "s/PKGNAME/$PkgName/g" \
   > $LazBuildDir/DEBIAN/control
+cp $DebianSrcDir/conffiles $LazBuildDir/DEBIAN/
 
 # copyright and changelog files
 echo "copying copyright and changelog files"
-mkdir -p $LazBuildDir/usr/share/doc/lazarus
-cp $DebianSrcDir/{copyright,changelog,changelog.Debian} $LazBuildDir/usr/share/doc/lazarus/
-gzip --best $LazBuildDir/usr/share/doc/lazarus/changelog
-gzip --best $LazBuildDir/usr/share/doc/lazarus/changelog.Debian
+LazBuildDocDir=$LazBuildDir/usr/share/doc/$PkgName
+mkdir -p $LazBuildDocDir
+cp $DebianSrcDir/copyright $LazBuildDocDir/
+cat $LazSrcDir/debian/changelog | sed -e "s/^lazarus (/$PkgName (/" > $LazBuildDocDir/changelog
+cp $LazBuildDocDir/changelog $LazBuildDocDir/changelog.Debian
+gzip -n --best $LazBuildDocDir/changelog
+gzip -n --best $LazBuildDocDir/changelog.Debian
+mkdir -p $LazBuildDir/usr/share/lintian/overrides
+cat $DebianSrcDir/lintian.overrides | sed -e "s/^lazarus:/$PkgName:/" > $LazBuildDir/usr/share/lintian/overrides/$PkgName
 
 # icons, links
 mkdir -p $LazBuildDir/usr/share/pixmaps
@@ -202,21 +250,28 @@ ln -s $LazDestDirInstalled/lazbuild $LazBuildDir/usr/bin/lazbuild
 # docs
 mkdir -p $LazBuildDir/usr/share/man/man1
 for exe in lazbuild lazarus-ide startlazarus lazres svn2revisioninc updatepofiles; do
-cat $LazDestDir/install/man/man1/$exe.1 | gzip > $LazBuildDir/usr/share/man/man1/$exe.1.gz
+  cat $LazDestDir/install/man/man1/$exe.1 | gzip -n --best > $LazBuildDir/usr/share/man/man1/$exe.1.gz
 done
 
 # default configs
 mkdir -p $LazBuildDir/etc/lazarus
-cp $EtcSrcDir/editoroptions.xml $LazBuildDir/etc/lazarus/
 cat $EtcSrcDir/environmentoptions.xml | \
   sed -e "s#__LAZARUSDIR__#$LazDestDirInstalled/#" \
       -e "s#__FPCSRCDIR__#/usr/share/fpcsrc/\$(FPCVER)/#" \
   > $LazBuildDir/etc/lazarus/environmentoptions.xml
+if [ -n $Pas2jsZip ]; then
+  cat $EtcSrcDir/pas2jsdsgnoptions.xml | \
+    sed -e "s#__PAS2JSVERSION__#$Pas2jsVer#" \
+    > $LazBuildDir/etc/lazarus/pas2jsdsgnoptions.xml
+  cat $LazBuildDir/etc/lazarus/pas2jsdsgnoptions.xml
+fi
 chmod 644 $LazBuildDir/etc/lazarus/*.xml
 
 # fixing permissions
 echo "fixing permissions ..."
-find $LazBuildDir -type d | xargs -d '\n' chmod 755  # this is needed, don't ask me why
+find $LazBuildDir -type d -exec chmod 755 {} \;
+find $LazBuildDir -perm 775 -exec chmod 755 {} \;
+find $LazBuildDir -perm 664 -exec chmod 644 {} \;
 
 # postinst + postrm:
 #  don't know
@@ -226,7 +281,7 @@ echo "creating deb ..."
 cd $TmpDir
 fakeroot dpkg-deb --build $LazBuildDir
 mv $LazBuildDir.deb $LazDeb
-echo "the new deb can be found at $LazDeb"
+echo "you can now test it with lintian $LazDeb"
 cd -
 
 # removing temporary files

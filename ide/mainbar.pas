@@ -22,7 +22,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -83,6 +83,7 @@ type
       //itmFileOpenSave: TIDEMenuSection;
         itmFileOpen: TIDEMenuCommand;
         itmFileRevert: TIDEMenuCommand;
+        itmFileOpenUnit: TIDEMenuCommand;
         //itmFileRecentOpen: TIDEMenuSection;
         itmFileSave: TIDEMenuCommand;
         itmFileSaveAs: TIDEMenuCommand;
@@ -105,6 +106,7 @@ type
         itmEditCut: TIDEMenuCommand;
         itmEditCopy: TIDEMenuCommand;
         itmEditPaste: TIDEMenuCommand;
+        itmEditMultiPaste: TIDEMenuCommand;
       //itmEditSelect: TIDEMenuSection;
         itmEditSelectAll: TIDEMenuCommand;
         itmEditSelectToBrace: TIDEMenuCommand;
@@ -203,7 +205,7 @@ type
         itmSourceToggleComment: TIDEMenuCommand;
         itmSourceEncloseBlock: TIDEMenuCommand;
         itmSourceEncloseInIFDEF: TIDEMenuCommand;
-        itmSourceCompleteCode: TIDEMenuCommand;
+        itmSourceCompleteCodeInteractive: TIDEMenuCommand;
         itmSourceUseUnit: TIDEMenuCommand;
       //itmSourceCodeToolChecks: TIDEMenuSection;
         itmSourceSyntaxCheck: TIDEMenuCommand;
@@ -262,6 +264,7 @@ type
       //itmProjectSaveSection: TIDEMenuSection;
         itmProjectSave: TIDEMenuCommand;
         itmProjectSaveAs: TIDEMenuCommand;
+        itmProjectResaveFormsWithI18n: TIDEMenuCommand;
         itmProjectPublish: TIDEMenuCommand;
       //itmProjectWindowSection: TIDEMenuSection;
         itmProjectInspector: TIDEMenuCommand;
@@ -284,6 +287,7 @@ type
         itmRunMenuBuildManyModes: TIDEMenuCommand;
         itmRunMenuAbortBuild: TIDEMenuCommand;
       //itmRunnning: TIDEMenuSection;
+        itmRunMenuRunWithoutDebugging: TIDEMenuCommand;
         itmRunMenuRun: TIDEMenuCommand;
         itmRunMenuPause: TIDEMenuCommand;
         itmRunMenuShowExecutionPoint: TIDEMenuCommand;
@@ -324,9 +328,6 @@ type
         itmPkgPkgGraph: TIDEMenuCommand;
         itmPkgPackageLinks: TIDEMenuCommand;
         itmPkgEditInstallPkgs: TIDEMenuCommand;
-        {$IFDEF CustomIDEComps}
-        itmCompsConfigCustomComps: TIDEMenuCommand;
-        {$ENDIF}
 
     // tools menu
     //mnuTools: TIDEMenuSection;
@@ -414,41 +415,48 @@ procedure TMainIDEBar.DoSetMainIDEHeight(const AIDEIsMaximized: Boolean; ANewHei
 begin
   if not Showing then Exit;
 
-  if Assigned(IDEDockMaster) then
-  begin
-    if EnvironmentOptions.Desktop.AutoAdjustIDEHeight then
+  //DebugLn(['TMainIDEBar.DoSetMainIDEHeight: IDEStarted=', LazarusIDE.IDEStarted]);
+
+  DisableAutoSizing{$IFDEF DebugDisableAutoSizing}('TMainIDEBar.DoSetMainIDEHeight'){$ENDIF};
+  try
+    if Assigned(IDEDockMaster) then
     begin
-      if ANewHeight <= 0 then
-        ANewHeight := CalcMainIDEHeight;
-      IDEDockMaster.AdjustMainIDEWindowHeight(Self, True, ANewHeight)
-    end
-    else
-      IDEDockMaster.AdjustMainIDEWindowHeight(Self, False, 0);
-  end else
-  begin
-    if (AIDEIsMaximized or EnvironmentOptions.Desktop.AutoAdjustIDEHeight) then
-    begin
-      if ANewHeight <= 0 then
-        ANewHeight := CalcMainIDEHeight;
-      Inc(ANewHeight, CalcNonClientHeight);
-      if ANewHeight <> Constraints.MaxHeight then
+      if EnvironmentOptions.Desktop.AutoAdjustIDEHeight then
       begin
-        Constraints.MaxHeight := ANewHeight;
-        Constraints.MinHeight := ANewHeight;
-        ClientHeight := ANewHeight;
-      end else if ClientHeight <> ANewHeight then
-        ClientHeight := ANewHeight;
+        if ANewHeight <= 0 then
+          ANewHeight := CalcMainIDEHeight;
+        IDEDockMaster.AdjustMainIDEWindowHeight(Self, True, ANewHeight)
+      end
+      else
+        IDEDockMaster.AdjustMainIDEWindowHeight(Self, False, 0);
     end else
-    if Constraints.MaxHeight <> 0 then
     begin
-      Constraints.MaxHeight := 0;
-      Constraints.MinHeight := 0;
+      if (AIDEIsMaximized or EnvironmentOptions.Desktop.AutoAdjustIDEHeight) then
+      begin
+        if ANewHeight <= 0 then
+          ANewHeight := CalcMainIDEHeight;
+        Inc(ANewHeight, CalcNonClientHeight);
+        if ANewHeight <> Constraints.MaxHeight then
+        begin
+          Constraints.MaxHeight := ANewHeight;
+          Constraints.MinHeight := ANewHeight;
+          ClientHeight := ANewHeight;
+        end else if ClientHeight <> ANewHeight then
+          ClientHeight := ANewHeight;
+      end else
+      if Constraints.MaxHeight <> 0 then
+      begin
+        Constraints.MaxHeight := 0;
+        Constraints.MinHeight := 0;
+      end;
     end;
+  finally
+    EnableAutoSizing{$IFDEF DebugDisableAutoSizing}('TMainIDEBar.DoSetMainIDEHeight'){$ENDIF};
   end;
 end;
 
 function TMainIDEBar.CalcNonClientHeight: Integer;
-{$IF DEFINED(LCLWin32) OR DEFINED(LCLGtk2) OR DEFINED(LCLQt)}
+{$IF DEFINED(LCLWin32) OR DEFINED(LCLGtk2) OR DEFINED(LCLQt) OR DEFINED(LCLQt5)}
 var
   WindowRect, WindowClientRect: TRect;
 {$ENDIF}
@@ -465,13 +473,11 @@ begin
       http://bugs.freepascal.org/view.php?id=28033
       http://bugs.freepascal.org/view.php?id=28034
       http://bugs.freepascal.org/view.php?id=28036
-
   }
-
   if not Showing then
     Exit(0);
 
-  {$IF DEFINED(LCLWin32) OR DEFINED(LCLGtk2) OR DEFINED(LCLQt)}
+  {$IF DEFINED(LCLWin32) OR DEFINED(LCLGtk2) OR DEFINED(LCLQt) OR DEFINED(LCLQt5)}
   //Gtk2 + Win32 + Qt
   //retrieve real main menu height because
   // - Win32: multi-line is possible (SM_CYMENU reflects only single line)
@@ -482,17 +488,20 @@ begin
 
   Result := WindowClientRect.Top - WindowRect.Top;
 
-  {$IFDEF LCLQt}
+  {$IF DEFINED(LCLQt) OR DEFINED(LCLQt5)}
   // ToDo: fix this properly for QT.
   //  Result can be negative (-560) when both Coolbar and Palette are hidden.
   if Result < 0 then
+  begin
+    DebugLn(['TMainIDEBar.CalcNonClientHeight: Height ',Result,' is below zero. Forcing it to 55.']);
     Result := 55;
+  end;
   {$ENDIF LCLQt}
-  Assert(Result >= 0, 'TMainIDEBar.CalcNonClientHeight: Result < 0');
+  Assert(Result >= 0, 'TMainIDEBar.CalcNonClientHeight: Result '+IntToStr(Result)+' is below zero.');
 
   {$IFDEF LCLWin32}
-  //Win32 the constrained height has to be without SM_CYSIZEFRAME and SM_CYMENU
-  Result := Result - (LCLIntf.GetSystemMetrics(SM_CYSIZEFRAME) + LCLIntf.GetSystemMetrics(SM_CYMENU));
+  //Win32 the constrained height has to be without SM_CYSIZEFRAME and SM_CYCAPTION;
+  Result := Result - (LCLIntf.GetSystemMetrics(SM_CYSIZEFRAME) + LCLIntf.GetSystemMetrics(SM_CYCAPTION));
   {$ENDIF LCLWin32}
 
   {$ELSE}
@@ -554,11 +563,14 @@ begin
   // This form has no resource => must be constructed using CreateNew
   inherited CreateNew(TheOwner, 1);
   AllowDropFiles:=true;
+  Scaled:=true;
   OnDropFiles:=@MainIDEBarDropFiles;
+  {$IFNDEF LCLGtk2}
   try
     Icon.LoadFromResourceName(HInstance, 'WIN_MAIN');
   except
   end;
+  {$ENDIF}
 end;
 
 procedure TMainIDEBar.HideIDE;
@@ -582,7 +594,7 @@ begin
   OptionsMenuItem.Caption := lisOptions;
   OptionsMenuItem.Enabled := True;
   OptionsMenuItem.Visible := True;
-  OptionsMenuItem.ImageIndex := IDEImages.LoadImage(16, 'menu_environment_options');
+  OptionsMenuItem.ImageIndex := IDEImages.LoadImage('menu_environment_options');
   OptionsPopupMenu.Items.Add(OptionsMenuItem);
 end;
 
@@ -644,23 +656,18 @@ end;
 
 procedure TMainIDEBar.UpdateIDEComponentPalette(IfFormChanged: boolean);
 var
-  OldLastCompPaletteForm, LastActiveForm: TCustomForm;
-  AResult: Boolean;
+  LastActiveForm: TCustomForm;
 begin
   // Package manager updates the palette initially.
   LastActiveForm := LazarusIDE.LastFormActivated;
   if not LazarusIDE.IDEStarted
   or (IfFormChanged and (LastCompPaletteForm=LastActiveForm)) then
     exit;
-  OldLastCompPaletteForm:=LastCompPaletteForm;
-  LastCompPaletteForm:=LastActiveForm;
-  AResult:=(LastActiveForm<>nil) and (LastActiveForm.Designer<>nil)
+  LastCompPaletteForm := LastActiveForm;
+  IDEComponentPalette.HideControls :=
+    (LastActiveForm<>nil) and (LastActiveForm.Designer<>nil)
     and (LastActiveForm.Designer.LookupRoot<>nil)
     and not (LastActiveForm.Designer.LookupRoot is TControl);
-  IDEComponentPalette.HideControls:=AResult;
-  // Don't update palette at the first time if not hiding controls.
-  if (OldLastCompPaletteForm = Nil) and not IDEComponentPalette.HideControls then
-    exit;
   {$IFDEF VerboseComponentPalette}
   DebugLn(['* TMainIDEBar.UpdateIDEComponentPalette: Updating palette *',
            ', HideControls=', IDEComponentPalette.HideControls]);
@@ -683,6 +690,7 @@ var
   I: Integer;
   CoolBand: TCoolBand;
   CoolBarOpts: TIDECoolBarOptions;
+  CurToolBar: TIDEToolBar;
 begin
   CoolBarOpts := EnvironmentOptions.Desktop.IDECoolBarOptions;
   //read general settings
@@ -700,14 +708,21 @@ begin
   IDECoolBar.Sort;
   for I := 0 to IDECoolBar.ToolBars.Count - 1 do
   begin
-    CoolBand := CoolBar.Bands.Add;
-    CoolBand.Break := IDECoolBar.ToolBars[I].CurrentOptions.Break;
-    CoolBand.Control := IDECoolBar.ToolBars[I].ToolBar;
-    CoolBand.MinWidth := 25;
-    CoolBand.MinHeight := 22;
-    CoolBand.FixedSize := True;
-    IDECoolBar.ToolBars[I].UseCurrentOptions;
+    CurToolBar:=IDECoolBar.ToolBars[I];
+    CurToolBar.ToolBar.BeginUpdate;
+    try
+      CoolBand := CoolBar.Bands.Add;
+      CoolBand.Break := CurToolBar.CurrentOptions.Break;
+      CoolBand.Control := CurToolBar.ToolBar;
+      CoolBand.MinWidth := 25;
+      CoolBand.MinHeight := 22;
+      CoolBand.FixedSize := True;
+      CurToolBar.UseCurrentOptions;
+    finally
+      CurToolBar.ToolBar.EndUpdate;
+    end;
   end;
+  CoolBar.AutoAdjustLayout(lapAutoAdjustForDPI, 96, PixelsPerInch, 0, 0);
   CoolBar.AutosizeBands;
 
   CoolBar.Visible := CoolBarOpts.Visible;
@@ -717,9 +732,13 @@ end;
 
 procedure TMainIDEBar.Resizing(State: TWindowState);
 begin
-  case State of
-    wsMaximized, wsNormal: DoSetMainIDEHeight(State = wsMaximized);
-  end;
+  if LazarusIDE.IDEStarted then
+    case State of
+      wsMaximized, wsNormal: begin
+        //DebugLn('TMainIDEBar.Resizing: Setting main IDE height');
+        DoSetMainIDEHeight(State = wsMaximized);
+      end;
+    end;
 
   inherited Resizing(State);
 end;
@@ -818,6 +837,7 @@ procedure TMainIDEBar.AllowCompilation(aAllow: Boolean);
 // Enables or disables IDE GUI controls associated with compiling and building.
 // Does it interfere with DebugBoss.UpdateButtonsAndMenuItems? Maybe should be refactored and combined.
 begin
+  itmRunMenuRunWithoutDebugging.Enabled:=aAllow;
   itmRunMenuRun.Enabled:=aAllow;
   itmRunMenuCompile.Enabled:=aAllow;
   itmRunMenuBuild.Enabled:=aAllow;

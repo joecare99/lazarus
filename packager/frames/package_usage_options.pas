@@ -5,9 +5,15 @@ unit Package_Usage_Options;
 interface
 
 uses
-  SysUtils, LazFileUtils, Forms, Controls, StdCtrls, Dialogs,
-  PathEditorDlg, IDEOptionsIntf, MacroIntf,
-  LazarusIDEStrConsts, IDEProcs, PackageDefs;
+  SysUtils,
+  // LazUtils
+  LazFileUtils,
+  // LCL
+  Forms, Controls, StdCtrls, Dialogs,
+  // IdeIntf
+  IDEOptionsIntf, IDEOptEditorIntf, MacroIntf,
+  // IDE
+  PathEditorDlg, LazarusIDEStrConsts, IDEProcs, PackageDefs;
 
 type
 
@@ -110,7 +116,7 @@ begin
     Parent := AddPathsGroupBox;
     Caption := '...';
     AutoSize := False;
-    Width := 50;
+    Width := Height;
     Anchors := [akRight];
     AnchorParallel(akRight, 6, AddPathsGroupBox);
     AnchorParallel(akTop, 0, UnitPathEdit);
@@ -133,7 +139,7 @@ begin
     Parent := AddPathsGroupBox;
     Caption := '...';
     AutoSize := False;
-    Width := 50;
+    Width := Height;
     Anchors := [akRight];
     AnchorParallel(akRight, 6, AddPathsGroupBox);
     AnchorParallel(akTop, 0, IncludePathEdit);
@@ -151,7 +157,7 @@ begin
     Parent := AddPathsGroupBox;
     Caption := '...';
     AutoSize := False;
-    Width := 50;
+    Width := Height;
     Anchors := [akRight];
     AnchorParallel(akRight, 6, AddPathsGroupBox);
     AnchorParallel(akTop, 0, ObjectPathEdit);
@@ -169,7 +175,7 @@ begin
     Parent := AddPathsGroupBox;
     Caption := '...';
     AutoSize := False;
-    Width := 50;
+    Width := Height;
     Anchors := [akRight];
     AnchorParallel(akRight, 6, AddPathsGroupBox);
     AnchorParallel(akTop, 0, LibraryPathEdit);

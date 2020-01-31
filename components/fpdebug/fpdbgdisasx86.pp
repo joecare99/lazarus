@@ -27,7 +27,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -40,7 +40,7 @@ interface
 
 uses
   SysUtils,
-  FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools;
+  FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools, LazLoggerBase;
 
 {                   
   The function Disassemble decodes the instruction at the given address.
@@ -57,7 +57,12 @@ uses
 
 procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String);
 
+// returns byte len of call instruction at AAddress // 0 if not a call intruction
+function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
+
 implementation
+var
+  DBG_WARNINGS: PLazLoggerLogGroup;
 
 type
   TFlag = (flagRex, flagSib, flagModRM, rexB, rexX, rexR, rexW, preOpr, preAdr, preLock, preRep{N}, preRepNE);
@@ -239,7 +244,7 @@ var
     Inc(OperIdx);
     if OperIdx > High(Operand)
     then begin
-      Log('AddOperand: Only %d operands supported, got %d', [High(Operand), OperIdx]);
+      Debugln(DBG_WARNINGS, 'AddOperand: Only %d operands supported, got %d', [High(Operand), OperIdx]);
       Exit;
     end;
 
@@ -378,7 +383,7 @@ var
     begin
       case Mode of
         0: begin
-          if rm = 6 // disp16 -> exeption to the regs
+          if rm = 6 // disp16 -> exception to the regs
           then AddOperand('%s', ASize, 2, [hvfSigned, hvfIncludeHexchar], [ofMemory])
           else AddOperand(REGS16[rm], ASize, 0, [], [ofMemory]);
         end;
@@ -3016,7 +3021,7 @@ var
       Inc(CodeIdx);
       if CodeIdx > 16 // max instruction length
       then begin
-        Log('Disassemble: instruction longer than 16 bytes');
+        Debugln(DBG_WARNINGS, 'Disassemble: instruction longer than 16 bytes');
         Exit;
       end;
     until Opcode <> '';
@@ -3096,5 +3101,30 @@ begin
   Inc(AAddress, CodeIdx);
 end;
 
+function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
+var
+  OutBytes, Code: String;
+  a: PByte;
+begin
+  Result := 0;
+  a := AAddress;
+  // skip prefix bytes
+  while (a < AAddress + 16) and (a^ in [$26, $2E, $36, $3E, $40..$4F, $64..$67, $F0, $F2, $F3]) do
+    inc(a);
+  // check if it may be a call
+  if not (a^ in [$9A, $E8, $FF]) then
+    exit;
 
+  Disassemble(AAddress, A64Bit, OutBytes, Code);
+  if (Length(Code) < 5) or
+     (code[1] <> 'c') or (code[2] <> 'a') or (code[3] <> 'l') or (code[4] <> 'l') or
+     (code[5] <> ' ')
+  then
+    exit;
+  Result := Length(OutBytes) div 2;
+end;
+
+
+initialization
+  DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
 end.

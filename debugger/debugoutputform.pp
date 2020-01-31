@@ -22,7 +22,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -145,9 +145,7 @@ end;
 {$IFDEF DBG_WITH_DEBUGGER_DEBUG}
 procedure TDbgOutputForm.Button1Click(Sender: TObject);
 begin
-  if DebugBoss.Debugger is TCmdLineDebugger then begin
-    TCmdLineDebugger(DebugBoss.Debugger).TestCmd(Edit1.Text);
-  end;
+  DebugBoss.Debugger.TestCmd(Edit1.Text);
 end;
 {$ENDIF}
 

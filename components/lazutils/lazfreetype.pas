@@ -828,9 +828,10 @@ uses
   var
     ins : PInstance;
   begin
+    {$push}
     {$hints off}
     fillchar(m, sizeof(m),0);
-    {$hints on}
+    {$pop}
     ins := _ins.z;
     if ins <> nil then
       begin
@@ -1227,6 +1228,7 @@ uses
   function TT_Copy_Outline( var source : TT_Outline;
                             var target : TT_Outline ) : TT_Error;
   begin
+    Result := 0;
     if (source.n_points   = target.n_points) and
        (source.n_contours = target.n_contours) then
       begin

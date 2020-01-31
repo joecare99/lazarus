@@ -156,6 +156,7 @@ msgid "Submit"
 msgstr "Küldés"
 
 #: fpwebstrconsts.shtmltagproperty
+#, object-pascal-format
 msgid "Tag property: %s"
 msgstr "Cimke tulajdonság: %s"
 
@@ -181,7 +182,7 @@ msgstr "Írja ide a javascript kódot"
 
 #: fpwebstrconsts.smihtmleditor
 msgid "HTML Editor"
-msgstr "HTML-szerkesztő"
+msgstr "HTML szerkesztő"
 
 #: fpwebstrconsts.smihtmlformbuttton
 msgid "Insert Button control"
@@ -394,3 +395,4 @@ msgstr "Hely &bejegyzése a fájlok kiszolgálására"
 #: fpwebstrconsts.susethreads
 msgid "Use &threads to serve requests in"
 msgstr "Szá&lak használata a kérések kiszolgálására"
+

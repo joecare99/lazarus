@@ -22,6 +22,7 @@ interface
 
 uses
   Types, Classes, SysUtils, LCLProc, LResources, LCLType, LCLStrConsts,
+  InterfaceBase, LCLPlatformDef,
   FileUtil, LazFileUtils, Controls, Dialogs, GraphType, Graphics, ExtCtrls,
   StdCtrls, Forms, Calendar, Buttons, Masks, CalcForm;
 
@@ -54,8 +55,8 @@ type
     class procedure WSRegisterClass; override;
     procedure CreatePreviewControl; virtual;
     procedure InitPreviewControl; virtual;
+    function DoExecute: boolean; override;
   public
-    function Execute: boolean; override;
     constructor Create(TheOwner: TComponent); override;
     property PreviewFileControl: TPreviewFileControl read FPreviewFileControl;
   end;
@@ -148,6 +149,9 @@ type
     procedure SetDialogScale(AValue: integer);
   protected
     class procedure WSRegisterClass; override;
+    procedure OnDialogClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure OnDialogShow(Sender: TObject);
+    procedure OnDialogCloseQuery(Sender : TObject; var CanClose : boolean);
     procedure Change; virtual;
     procedure CalcKey(var Key: char); virtual;
     function DefaultTitle: string; override;
@@ -191,8 +195,12 @@ type
     FOKCaption: TCaption;
     FCancelCaption: TCaption;
     FCalendar: TCalendar;
+    okButton: TButton;
+    cancelButton: TButton;
+    panel: TPanel;
     procedure OnDialogClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure OnDialogCloseQuery(Sender : TObject; var CanClose : boolean);
+    procedure OnDialogShow(Sender: TObject);
     procedure OnCalendarDayChanged(Sender: TObject);
     procedure OnCalendarMonthChanged(Sender: TObject);
     procedure OnCalendarYearChanged(Sender: TObject);
@@ -290,10 +298,10 @@ begin
   FPreviewFileControl.Name:='PreviewFileControl';
 end;
 
-function TPreviewFileDialog.Execute: boolean;
+function TPreviewFileDialog.DoExecute: boolean;
 begin
   CreatePreviewControl;
-  Result:=inherited Execute;
+  Result:=inherited DoExecute;
 end;
 
 constructor TPreviewFileDialog.Create(TheOwner: TComponent);
@@ -540,6 +548,24 @@ begin
   RegisterCalculatorDialog;
 end;
 
+procedure TCalculatorDialog.OnDialogClose(Sender: TObject;
+  var CloseAction: TCloseAction);
+begin
+  DoClose;
+end;
+
+procedure TCalculatorDialog.OnDialogShow(Sender: TObject);
+begin
+  DoShow;
+end;
+
+procedure TCalculatorDialog.OnDialogCloseQuery(Sender: TObject;
+  var CanClose: boolean);
+begin
+  UserChoice := DlgForm.ModalResult;
+  DoCanClose(CanClose);
+end;
+
 function TCalculatorDialog.GetDisplay: Double;
 begin
   if Assigned(DlgForm) then
@@ -592,8 +618,12 @@ begin
 
   DlgForm:=CreateCalculatorForm(Application, FLayout, HelpContext);
   try
+    ResetShowCloseFlags;
     (DlgForm as TCalculatorForm).OnCalcKey:= @Self.CalcKey;
     (DlgForm as TCalculatorForm).OnDisplayChange:= @Self.DisplayChange;
+    (DlgForm as TCalculatorForm).OnShow := @Self.OnDialogShow;
+    (DlgForm as TCalculatorForm).OnClose := @Self.OnDialogClose;
+    (DlgForm as TCalculatorForm).OnCloseQuery :=@Self.OnDialogCloseQuery;
 
     if FDialogScale<>100 then
       DlgForm.ScaleBy(FDialogScale,100);
@@ -667,9 +697,12 @@ procedure TCalendarDialog.CalendarDblClick(Sender: TObject);
 var
   CalendarForm: TForm;
   P: TPoint;
+  htRes: TCalendarPart;
 begin
   P := FCalendar.ScreenToClient(Mouse.CursorPos);
-  if FCalendar.HitTest(P) in [cpNoWhere, cpDate] then
+  //if FCalendar.HitTest(P) in [cpNoWhere, cpDate] then
+  htRes := FCalendar.HitTest(P);
+  if {(htRes = cpNoWhere) or }((htRes = cpDate) and (FCalendar.GetCalendarView = cvMonth)) then
   begin
     GetNewDate(Sender);
     CalendarForm:=TForm(TComponent(Sender).Owner);
@@ -686,13 +719,61 @@ end;
 procedure TCalendarDialog.OnDialogClose(Sender: TObject;
   var CloseAction: TCloseAction);
 begin
-  if Assigned(OnClose) then OnClose(Self);
+  //if Assigned(OnClose) then OnClose(Self);
+  DoClose;
 end;
 
 procedure TCalendarDialog.OnDialogCloseQuery(Sender: TObject;
   var CanClose: boolean);
 begin
-  if Assigned(OnCanClose) then OnCanClose(Sender, CanClose);
+  //if Assigned(OnCanClose) then OnCanClose(Sender, CanClose);
+  if DlgForm.ModalResult = mrOK then
+    UserChoice := mrOk
+  else
+    UserChoice := mrCancel;
+  DoCanClose(CanClose);
+end;
+
+procedure TCalendarDialog.OnDialogShow(Sender: TObject);
+var
+  frm: TForm;
+  NBtnSize, NSpace, NCalSize: integer;
+const
+  cSpace = 16; // space between 2 buttons
+begin
+  // Calendar form size for Cocoa cannot be fixed on WS level
+  // see issue 35336
+  if WidgetSet.LCLPlatform = lpCocoa then begin
+    frm := TForm(Sender);
+
+    okButton.Constraints.MinWidth := 0;
+    okButton.Constraints.MaxWidth := 0;
+    cancelButton.Constraints.MinWidth := 0;
+    cancelButton.Constraints.MaxWidth := 0;
+    okButton.AutoSize := true;
+    cancelButton.AutoSize := true;
+    FCalendar.AutoSize := true;
+
+    NBtnSize := Max(okButton.Width, cancelButton.Width);
+    NCalSize := FCalendar.Width;
+    NSpace := NBtnSize * 2 + cSpace;
+    NSpace := Max(NCalSize, NSpace);
+
+    frm.AutoSize := false;
+    okButton.AutoSize := false;
+    cancelButton.AutoSize := false;
+
+    frm.ClientWidth := NSpace;
+    panel.Anchors := [];
+    FCalendar.Align := alNone;
+    FCalendar.Left := (NSpace-NCalSize) div 2;
+    okButton.Width := NBtnSize;
+    cancelButton.Width := NBtnSize;
+    cancelButton.Left := 0;
+    okButton.Left := frm.ClientWidth - okButton.Width;
+  end;
+
+  DoShow;
 end;
 
 procedure TCalendarDialog.OnCalendarDayChanged(Sender: TObject);
@@ -730,12 +811,10 @@ function TCalendarDialog.Execute:boolean;
 const
   dw=8;
   bbs=2;
-var
-  okButton,cancelButton: TButton;
-  panel: TPanel;
 begin
   DlgForm:=TForm.CreateNew(Application, 0);
   try
+    ResetShowCloseFlags;
     DlgForm.DisableAlign;
     DlgForm.Caption:=Title;
     if (csDesigning in ComponentState) then
@@ -752,7 +831,7 @@ begin
     DlgForm.BorderStyle:=bsDialog;
     DlgForm.AutoScroll:=false;
     DlgForm.AutoSize:=true;
-    DlgForm.OnShow:=Self.OnShow;
+    DlgForm.OnShow := @OnDialogShow;
     DlgForm.OnClose:=@OnDialogClose;
     DlgForm.OnCloseQuery:=@OnDialogCloseQuery;
 
@@ -828,5 +907,6 @@ begin
     DlgForm := nil;
   end;
 end;
+
 
 end.

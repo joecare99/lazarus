@@ -1,4 +1,4 @@
-object MenuDesigner: TMenuDesigner
+object MenuDesignerForm: TMenuDesignerForm
   Left = 504
   Height = 400
   Top = 291
@@ -11,9 +11,11 @@ object MenuDesigner: TMenuDesigner
   KeyPreview = True
   OnCreate = FormCreate
   OnDestroy = FormDestroy
+  OnHide = FormHide
+  OnShow = FormShow
   Position = poScreenCenter
   ShowHint = True
-  LCLVersion = '1.7'
+  LCLVersion = '1.9.0.0'
   object LeftPanel: TPanel
     Left = 0
     Height = 400
@@ -161,7 +163,6 @@ object MenuDesigner: TMenuDesigner
         Top = 6
         Width = 168
         Anchors = [akTop, akLeft, akRight]
-        AutoSize = False
         BorderSpacing.Left = 6
         BorderSpacing.Around = 6
         Caption = 'CaptionedItemsCountLabel'
@@ -181,7 +182,6 @@ object MenuDesigner: TMenuDesigner
         Top = 27
         Width = 168
         Anchors = [akTop, akLeft, akRight]
-        AutoSize = False
         BorderSpacing.Left = 6
         BorderSpacing.Around = 6
         Caption = 'ShortcutItemsCountLabel'
@@ -201,7 +201,6 @@ object MenuDesigner: TMenuDesigner
         Top = 48
         Width = 168
         Anchors = [akTop, akLeft, akRight]
-        AutoSize = False
         BorderSpacing.Left = 6
         BorderSpacing.Around = 6
         Caption = 'DeepestNestingLevelLabel'
@@ -221,7 +220,6 @@ object MenuDesigner: TMenuDesigner
         Top = 69
         Width = 168
         Anchors = [akTop, akLeft, akRight]
-        AutoSize = False
         BorderSpacing.Left = 6
         BorderSpacing.Around = 6
         Caption = 'IconCountLabel'
@@ -241,7 +239,6 @@ object MenuDesigner: TMenuDesigner
         Top = 90
         Width = 168
         Anchors = [akTop, akLeft, akRight]
-        AutoSize = False
         BorderSpacing.Left = 6
         BorderSpacing.Bottom = 6
         BorderSpacing.Around = 6
@@ -259,41 +256,42 @@ object MenuDesigner: TMenuDesigner
       AnchorSideBottom.Control = LeftPanel
       AnchorSideBottom.Side = asrBottom
       Left = 7
-      Height = 25
-      Top = 368
-      Width = 75
+      Height = 26
+      Top = 367
+      Width = 71
       Anchors = [akLeft, akBottom]
+      AutoSize = True
       BorderSpacing.Around = 6
       DefaultCaption = True
       Kind = bkHelp
       OnClick = HelpButtonClick
       TabOrder = 2
     end
-    object SubmenuGroupBox: TGroupBox
+    object RadioItemGroupBox: TGroupBox
       AnchorSideLeft.Control = LeftPanel
       AnchorSideTop.Control = StatisticsGroupBox
       AnchorSideTop.Side = asrBottom
       AnchorSideRight.Control = LeftPanel
       AnchorSideRight.Side = asrBottom
       Left = 7
-      Height = 64
+      Height = 68
       Top = 254
       Width = 190
       Anchors = [akTop, akLeft, akRight]
+      AutoSize = True
       BorderSpacing.Around = 6
-      Caption = 'SubmenuGroupBox'
-      ClientHeight = 44
+      Caption = 'RadioItemGroupBox'
+      ClientHeight = 48
       ClientWidth = 186
       TabOrder = 3
       object GroupIndexLabel: TLabel
-        AnchorSideLeft.Control = SubmenuGroupBox
-        AnchorSideTop.Control = RadioGroupsLabel
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = SubmenuGroupBox
+        AnchorSideLeft.Control = RadioItemGroupBox
+        AnchorSideTop.Control = RadioItemGroupBox
+        AnchorSideRight.Control = RadioItemGroupBox
         AnchorSideRight.Side = asrBottom
         Left = 12
         Height = 15
-        Top = 27
+        Top = 6
         Width = 168
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 6
@@ -302,13 +300,14 @@ object MenuDesigner: TMenuDesigner
         ParentColor = False
       end
       object RadioGroupsLabel: TLabel
-        AnchorSideLeft.Control = SubmenuGroupBox
-        AnchorSideTop.Control = SubmenuGroupBox
-        AnchorSideRight.Control = SubmenuGroupBox
+        AnchorSideLeft.Control = RadioItemGroupBox
+        AnchorSideTop.Control = GroupIndexLabel
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Control = RadioItemGroupBox
         AnchorSideRight.Side = asrBottom
         Left = 12
         Height = 15
-        Top = 6
+        Top = 27
         Width = 168
         Anchors = [akTop, akLeft, akRight]
         BorderSpacing.Left = 6

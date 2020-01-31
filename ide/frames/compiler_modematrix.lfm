@@ -2,9 +2,9 @@ object CompOptModeMatrixFrame: TCompOptModeMatrixFrame
   Left = 0
   Height = 429
   Top = 0
-  Width = 614
+  Width = 725
   ClientHeight = 429
-  ClientWidth = 614
+  ClientWidth = 725
   TabOrder = 0
   DesignLeft = 414
   DesignTop = 101
@@ -12,7 +12,7 @@ object CompOptModeMatrixFrame: TCompOptModeMatrixFrame
     Left = 0
     Height = 26
     Top = 0
-    Width = 614
+    Width = 725
     ButtonHeight = 25
     Caption = 'BMMatrixToolBar'
     EdgeBorders = []
@@ -52,7 +52,7 @@ object CompOptModeMatrixFrame: TCompOptModeMatrixFrame
       ShowHint = True
     end
     object BMMDeleteButton: TToolButton
-      Left = 505
+      Left = 375
       Top = 0
       Caption = 'Delete'
       OnClick = BMMDeleteButtonClick
@@ -75,12 +75,12 @@ object CompOptModeMatrixFrame: TCompOptModeMatrixFrame
       Caption = 'DoSepToolButton'
       Style = tbsSeparator
     end
-    object SystemEncodingSepToolButton: TToolButton
-      Left = 495
+    object AddSepToolButton: TToolButton
+      Left = 365
       Height = 25
       Top = 0
       Width = 10
-      Caption = 'SystemEncodingSepToolButton'
+      Caption = 'AddSepToolButton'
       Style = tbsSeparator
     end
     object BMMAddOtherButton: TToolButton
@@ -96,6 +96,8 @@ object CompOptModeMatrixFrame: TCompOptModeMatrixFrame
       Top = 0
       Caption = 'Add LCLWidgetType'
       OnClick = BMMAddLclWidgetButtonClick
+      ParentShowHint = False
+      ShowHint = True
       Style = tbsButtonDrop
     end
     object LCLMacroSepToolButton: TToolButton
@@ -107,19 +109,19 @@ object CompOptModeMatrixFrame: TCompOptModeMatrixFrame
       Style = tbsSeparator
     end
     object BMMSystemEncodingButton: TToolButton
-      Left = 375
+      Left = 426
       Top = 0
       Caption = 'Use system encoding'
       OnClick = BMMSystemEncodingButtonClick
       ParentShowHint = False
       ShowHint = True
     end
-    object AddOtherSepToolButton: TToolButton
-      Left = 365
+    object DeleteSepToolButton: TToolButton
+      Left = 416
       Height = 25
       Top = 0
       Width = 10
-      Caption = 'AddOtherSepToolButton'
+      Caption = 'DeleteSepToolButton'
       Style = tbsSeparator
     end
   end

@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -431,7 +431,7 @@ Function  TElementEditor.CurrentXML : String;
 
 Var
   I : Integer;
-  S,L,LT : String;
+  S,L,LT,T : String;
 
 begin
   Result:='';
@@ -446,9 +446,9 @@ begin
     LT:=Trim(lbxSeeAlso.Items[i]);
     if (LT<>'') then
       begin
-      SplitLinkText(LT,L,LT);
-      If (LT<>'') then
-        S:=S+'<link id="'+L+'">'+LT+'</link>'
+      SplitLinkText(LT,L,T);
+      If (T<>'') then
+        S:=S+'<link id="'+L+'">'+T+'</link>'
       else
         S:=S+'<link id="'+L+'"/>';
       end;
@@ -516,7 +516,7 @@ var
   S : String;
   SS:integer;
 begin
-  If Assigned(CurrentEditable) and (CurrentEditable is TCustomEdit) then
+  If CurrentEditable is TCustomEdit then
     with TCustomEdit(CurrentEditable)do
     begin
       S:=SelText;

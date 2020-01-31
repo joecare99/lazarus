@@ -224,6 +224,7 @@ type
 const
   ETO_OPAQUE = 2;
   ETO_CLIPPED = 4;
+  ETO_RTLREADING = 128;
 
   CS_VREDRAW = dword(1);
   CS_HREDRAW = dword(2);
@@ -250,6 +251,7 @@ const
   DT_SINGLELINE = $20;
   DT_EXPANDTABS = $40;
   DT_NOCLIP = $100;
+  //DT_EXTERNALLEADING = $200;
   DT_CALCRECT = $400;
   DT_NOPREFIX = $800;
   DT_INTERNAL = $1000;
@@ -257,6 +259,9 @@ const
   DT_END_ELLIPSIS = $8000;
   DT_MODIFYSTRING = $10000;
   DT_RTLREADING =  $20000;
+  //DT_WORDREADING = $40000;
+  //DT_HIDEPREFIX = $100000;
+  //DT_PREFIXONLY = $200000;
 
 //==============================================
 // Draw frame constants
@@ -1113,6 +1118,13 @@ type
   PMonitorInfoExW = ^TMonitorInfoExW;
   TMonitorInfoExW = tagMonitorInfoExW;
 
+  MONITOR_DPI_TYPE = (
+    MDT_EFFECTIVE_DPI = 0,
+    MDT_ANGULAR_DPI = 1,
+    MDT_RAW_DPI = 2,
+    MDT_DEFAULT = MDT_EFFECTIVE_DPI);
+  TMonitorDpiType = MONITOR_DPI_TYPE;
+
 {painting stuff}
 
   PDrawItemStruct = ^TDrawItemStruct;
@@ -1135,7 +1147,7 @@ type
     odSelected, odGrayed, odDisabled, odChecked,
     odFocused, odDefault, odHotLight, odInactive, odNoAccel,
     odNoFocusRect, odReserved1, odReserved2, odComboBoxEdit,
-    odPainted  // item already painted
+    odBackgroundPainted  // item background already painted
     );
   TOwnerDrawState = set of TOwnerDrawStateType;
 
@@ -1319,6 +1331,7 @@ type
     Alpha: Byte;
   end;
   PRGBAQuad = ^TRGBAQuad;
+  TRGBAQuadArray = array of TRGBAQuad;
 
 
   PBitmapInfo = ^TBitmapInfo;
@@ -1697,7 +1710,7 @@ const
   SYS_COLOR_BASE = TColorRef($80000000);
 
   // !! deprecated colors !!
-
+  {$IFDEF DefineCLXColors}
   // CLX base, mapped, pseudo, rgb values
   COLOR_clForeground =  32;
   COLOR_clButton =  COLOR_clForeground+1;
@@ -1761,6 +1774,7 @@ const
   COLOR_clActiveShadow =  COLOR_clActiveForeground+11;
   COLOR_clActiveHighlight =  COLOR_clActiveForeground+12;
   COLOR_clActiveHighlightedText =  COLOR_clActiveForeground+13;
+  {$ENDIF}
 
 //==============================================
 // Stock Objects
@@ -1935,6 +1949,8 @@ const
   SM_LCLMAXIMIZEDHEIGHT = 122;
 
   SM_LCLHasFormAlphaBlend = 123;
+
+  SM_REMOTESESSION = $1000;
 
 //==============================================
 // SystemParametersInfo constants
@@ -2320,6 +2336,15 @@ type
   TLogBrush = tagLOGBRUSH;
   LOGBRUSH = tagLOGBRUSH;
 
+  // non-winapi radial gradient log info
+  TLogGradientStop = record
+    radColorR, radColorG, radColorB, radColorA: Word;
+    radPosition: Double; // must be in 0..1
+  end;
+  TLogRadialGradient = record
+    radCenterX, radCenterY, radRadius, radFocalX, radFocalY: Integer;
+    radStops: array of TLogGradientStop;
+  end;
 
   PMaxLogPalette = ^TMaxLogPalette; // not in Windows Headers
   TMaxLogPalette = record
@@ -2695,23 +2720,10 @@ type
       pcfPixmap,
       pcfIcon,
       pcfPicture,
+      pcfMetaFilePict,
       pcfObject,
       pcfComponent,
-      pcfCustomData,
-
-      // Delphi definitions (only for compatibility)
-      pcfDelphiText,
-      pcfDelphiBitmap,
-      pcfDelphiPicture,
-      pcfDelphiMetaFilePict,
-      pcfDelphiObject,
-      pcfDelphiComponent,
-
-      // Kylix definitions (only for compatibility)
-      pcfKylixPicture,
-      pcfKylixBitmap,
-      pcfKylixDrawing,
-      pcfKylixComponent
+      pcfCustomData
     );
 
 const
@@ -2721,23 +2733,10 @@ const
      'image/xpm',
      'image/lcl.icon',
      'image/lcl.picture',
+     'image/lcl.metafilepict',
      'application/lcl.object',
      'application/lcl.component',
-     'application/lcl.customdata',
-
-     // Delphi definitions (only for compatibility)
-     'text/plain',
-     'image/delphi.bitmap',
-     'Delphi Picture',
-     'image/delphi.metafilepict',
-     'application/delphi.object',
-     'Delphi Component',
-
-     // Kylix definitons (only for compatibility)
-     'image/delphi.picture',
-     'image/delphi.bitmap',
-     'image/delphi.drawing',
-     'application/delphi.component'
+     'application/lcl.customdata'
   );
 
 
@@ -2837,6 +2836,11 @@ const
   MK_MBUTTON = $10;
   MK_XBUTTON1 = $20;
   MK_XBUTTON2 = $40;
+  // following are "virtual" key states
+  MK_DOUBLECLICK = $80;
+  MK_TRIPLECLICK = $100;
+  MK_QUADCLICK = $200;
+  MK_ALT = $20000000;
 
 //==============================================
 // Constants from commctrl
@@ -2908,17 +2912,29 @@ const
 // Listview
 //-------------
 const
-  LVN_ITEMCHANGING    = LVN_FIRST-0;
-  LVN_ITEMCHANGED     = LVN_FIRST-1;
-  LVN_INSERTITEM      = LVN_FIRST-2;
-  LVN_DELETEITEM      = LVN_FIRST-3;
-  LVN_DELETEALLITEMS  = LVN_FIRST-4;
-  LVN_COLUMNCLICK     = LVN_FIRST-8;
-  LVN_BEGINDRAG       = LVN_FIRST-9;
-  LVN_BEGINRDRAG      = LVN_FIRST-11;
-  LVN_ODCACHEHINT     = LVN_FIRST-13;
-  LVN_ODSTATECHANGED  =  LVN_FIRST-15;
-  LVN_ODFINDITEM      = LVN_FIRST-79;
+  LVN_ITEMCHANGING      = LVN_FIRST - 0;
+  LVN_ITEMCHANGED       = LVN_FIRST - 1;
+  LVN_INSERTITEM        = LVN_FIRST - 2;
+  LVN_DELETEITEM        = LVN_FIRST - 3;
+  LVN_DELETEALLITEMS    = LVN_FIRST - 4;
+  LVN_COLUMNCLICK       = LVN_FIRST - 8;
+  LVN_BEGINDRAG         = LVN_FIRST - 9;
+  LVN_BEGINRDRAG        = LVN_FIRST - 11;
+  LVN_ODCACHEHINT       = LVN_FIRST - 13;
+  LVN_ITEMACTIVATE      = LVN_FIRST - 14;
+  LVN_ODSTATECHANGED    = LVN_FIRST - 15;
+  LVN_HOTTRACK          = LVN_FIRST - 21;
+  LVN_KEYDOWN           = LVN_FIRST - 55;
+  LVN_MARQUEEBEGIN      = LVN_FIRST - 56;
+  LVN_GETINFOTIP        = LVN_FIRST - 58;
+  LVN_INCREMENTALSEARCH = LVN_FIRST - 63;
+  LVN_BEGINLABELEDIT    = LVN_FIRST - 75;
+  LVN_ENDLABELEDIT      = LVN_FIRST - 76;
+  LVN_GETDISPINFO       = LVN_FIRST - 77;
+  LVN_SETDISPINFO       = LVN_FIRST - 78;
+  LVN_ODFINDITEM        = LVN_FIRST - 79;
+  LVN_BEGINSCROLL       = LVN_FIRST - 80;
+  LVN_ENDSCROLL         = LVN_FIRST - 81;
 
 const
   LVIF_TEXT           = $0001;
@@ -3022,17 +3038,16 @@ begin
   if nDenominator = 0 then
     Result := -1
   else
+  if nNumerator = nDenominator then
+    Result := nNumber
+  else
     Result := MathRound(int64(nNumber) * int64(nNumerator) / nDenominator);
 end;
 
 function KeyToShortCut(const Key: Word; const Shift: TShiftState): TShortCut;
 begin
+  if (Key and $FF00) <> 0 then exit(0);
   Result := Key;
-  if (Result and $FF00) <> 0 then begin
-    Result:=0;
-    exit;
-  end;
-
   if ssShift in Shift then Inc(Result,scShift);
   if ssCtrl in Shift then Inc(Result,scCtrl);
   if ssAlt in Shift then Inc(Result,scAlt);

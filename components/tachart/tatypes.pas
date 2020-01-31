@@ -27,6 +27,7 @@ uses
 
 const
   DEF_MARGIN = 4;
+  DEF_MIN_DATA_SPACE = 10;
   DEF_MARKS_DISTANCE = 20;
   DEF_POINTER_SIZE = 4;
   MARKS_YINDEX_ALL = -1;
@@ -34,8 +35,6 @@ const
   DEF_ARROW_WIDTH = 5;
   DEF_SHADOW_OFFSET = 8;
   DEF_SHADOW_TRANSPARENCY = 128;
-
-  // Constants for Chart.Notify commands
   CMD_QUERY_SERIESEXTENT = 0;
 
 
@@ -63,8 +62,12 @@ type
   end;
 
   TClearBrush = class(TBrush)
+  public
+    constructor Create; override;
   published
-    property Style default bsClear;
+   // property Style default bsClear;
+  { wp: Removed because bsClear would no longer work - TBrush.SetColor switches
+        Style to clSolid if Style is bsClear }
   end;
 
   TFPCanvasHelperClass = class of TFPCanvasHelper;
@@ -84,16 +87,15 @@ type
     constructor Create(AOwner: TCustomChart);
   public
     procedure Assign(ASource: TPersistent); override;
-
     procedure SetOwner(AOwner: TCustomChart);
-
     property Visible: Boolean read FVisible write SetVisible;
   end;
 
   TSeriesPointerStyle = (
     psNone, psRectangle, psCircle, psCross, psDiagCross, psStar,
     psLowBracket, psHighBracket, psLeftBracket, psRightBracket, psDiamond,
-    psTriangle, psLeftTriangle, psRightTriangle, psVertBar, psHorBar, psPoint);
+    psTriangle, psLeftTriangle, psRightTriangle, psVertBar, psHorBar, psPoint,
+    psDownTriangle, psHexagon, psFullStar);
 
   { TSeriesPointer }
 
@@ -117,11 +119,10 @@ type
     destructor Destroy; override;
   public
     procedure Assign(Source: TPersistent); override;
-
-    procedure Draw(ADrawer: IChartDrawer; ACenter: TPoint; AColor: TColor);
-    procedure DrawSize(
-      ADrawer: IChartDrawer; ACenter, ASize: TPoint; AColor: TColor;
-      AAngle: Double = 0.0);
+    procedure Draw(ADrawer: IChartDrawer; ACenter: TPoint; AColor: TColor;
+      ABrushAlreadySet: Boolean = false);
+    procedure DrawSize(ADrawer: IChartDrawer; ACenter, ASize: TPoint;
+      AColor: TColor; AAngle: Double = 0.0; ABrushAlreadySet: Boolean = false);
   published
     property Brush: TBrush read FBrush write SetBrush;
     property HorizSize: Integer read FHorizSize write SetHorizSize default DEF_POINTER_SIZE;
@@ -130,7 +131,7 @@ type
     property Pen: TChartPen read FPen write SetPen;
     property Style: TSeriesPointerStyle read FStyle write SetStyle default psRectangle;
     property VertSize: Integer read FVertSize write SetVertSize default DEF_POINTER_SIZE;
-    property Visible default true;
+    property Visible default false;
   end;
 
   EExtentError = class(EChartError);
@@ -263,6 +264,22 @@ type
     property Visible default false;
   end;
 
+  TChartErrorBar = class(TChartElement)
+  private
+    FWidth: Integer;
+    FPen: TPen;
+    procedure SetPen(const AValue: TPen);
+    procedure SetWidth(const AValue: Integer);
+  public
+    constructor Create(AOwner: TCustomChart);
+    destructor Destroy; override;
+    procedure Assign(ASource: TPersistent); override;
+  published
+    property Pen: TPen read FPen write SetPen;
+    property Visible default false;
+    property Width: Integer read FWidth write SetWidth default -1;
+  end;
+
 implementation
 
 uses
@@ -293,6 +310,14 @@ procedure TChartPen.SetVisible(AValue: Boolean);
 begin
   FVisible := AValue;
   if Assigned(OnChange) then OnChange(Self);
+end;
+
+{ TClearBrush }
+
+constructor TClearBrush.Create;
+begin
+  inherited;
+  Style := bsClear;
 end;
 
 { TChartElement }
@@ -366,8 +391,8 @@ begin
 
   FHorizSize := DEF_POINTER_SIZE;
   SetPropDefaults(Self, ['OverrideColor', 'Style']);
-  FVertSize  := DEF_POINTER_SIZE;
-  FVisible := true;
+  FVertSize := DEF_POINTER_SIZE;
+  FVisible := false;
 end;
 
 destructor TSeriesPointer.Destroy;
@@ -377,18 +402,24 @@ begin
   inherited;
 end;
 
-procedure TSeriesPointer.Draw(
-  ADrawer: IChartDrawer; ACenter: TPoint; AColor: TColor);
+{ Draws the pointer.
+  If ABrushAlreadySet is true then the method assumes that the brush already has
+  been set by the calling routine and does not change it any further (needed
+  for applying ChartStyle brush). }
+procedure TSeriesPointer.Draw(ADrawer: IChartDrawer; ACenter: TPoint;
+  AColor: TColor; ABrushAlreadySet: Boolean = false);
 begin
   DrawSize(ADrawer,
     ACenter,
     Point(ADrawer.Scale(HorizSize), ADrawer.Scale(VertSize)),
-    AColor
+    AColor,
+    0,
+    ABrushAlreadySet
   );
 end;
 
 procedure TSeriesPointer.DrawSize(ADrawer: IChartDrawer;
-  ACenter, ASize: TPoint; AColor: TColor; AAngle: Double);
+  ACenter, ASize: TPoint; AColor: TColor; AAngle: Double; ABrushAlreadySet: Boolean);
 
   function PointByIndex(AIndex: Char): TPoint; inline;
   // 7--8--9
@@ -407,11 +438,13 @@ procedure TSeriesPointer.DrawSize(ADrawer: IChartDrawer;
     pts: array of TPoint;
     i: Integer;
     j: Integer = 0;
+    notClosed: Boolean;
   begin
+    notClosed := (AStr[1] <> AStr[Length(AStr) - 1]);
     SetLength(pts, Length(AStr));
     for i := 1 to Length(AStr) do begin
       if AStr[i] = ' ' then begin
-        if Brush.Style = bsClear then
+        if (Brush.Style = bsClear) or notClosed then
           ADrawer.Polyline(pts, 0, j)
         else
           ADrawer.Polygon(pts, 0, j); // Winding?
@@ -424,31 +457,69 @@ procedure TSeriesPointer.DrawSize(ADrawer: IChartDrawer;
     end;
   end;
 
+  procedure DrawPolygon(AStyle: TSeriesPointerStyle);
+  const
+    INNER = 0.5;
+  var
+    p: array of TPoint;
+    pt: TDoublePoint;
+    phi, sinphi, cosphi, dPhi: Math.float;
+    i: Integer;
+  begin
+    case AStyle of
+      psHexagon  : begin dPhi := pi / 3; SetLength(p, 7); end;
+      psFullStar : begin dPhi := pi / 6; SetLength(p, 13); end;
+    end;
+    phi := 0;
+    for i := 0 to High(p) do 
+    begin
+      SinCos(phi, sinphi, cosphi);
+      pt := DoublePoint(ASize.X * cosPhi, ASize.Y * sinPhi);
+      if odd(i) and (AStyle = psFullStar) then
+        pt := pt * INNER;
+      p[i] := ACenter + RoundPoint(RotatePoint(pt, AAngle));
+      phi += dPhi;
+    end;
+    ADrawer.Polygon(p, 0, Length(p));
+  end;
+
+
 const
   DRAW_STRINGS: array [TSeriesPointerStyle] of String = (
     // psNone, psRectangle, psCircle, psCross, psDiagCross, psStar,
     // psLowBracket, psHighBracket, psLeftBracket, psRightBracket, psDiamond,
-    // psTriangle, psLeftTriangle, psRightTriangle, psVertBar, psHorBar, psPoint
-    '', '17931', '', '28 46', '19 73', '28 46 19 73',
+    // psTriangle, psLeftTriangle, psRightTriangle, psVertBar, psHorBar,
+    // psPoint, pwDownTriangle, psHexagon, psFullStar
+    '', '17931', '', '28 46', '19 73', '', //28 46 19 73',
     '41236', '47896', '87412', '89632', '84268',
-    '183', '842', '862', '82', '46', '');
+    '1831', '8428', '8628', '82', '46',
+    '', '7927', '', '');
 begin
-  ADrawer.Brush := Brush;
-  if (ocBrush in OverrideColor) and (AColor <> clTAColor) then
-    ADrawer.BrushColor := AColor;
+  if not ABrushAlreadySet then begin
+    ADrawer.Brush := Brush;
+    if (ocBrush in OverrideColor) and (AColor <> clTAColor) then
+      ADrawer.BrushColor := AColor;
+  end;
+
   ADrawer.Pen := Pen;
   if (ocPen in OverrideColor) and (AColor <> clTAColor) then
     ADrawer.SetPenParams(Pen.Style, AColor);
 
-  if Style = psPoint then
-    ADrawer.PutPixel(ACenter.X, ACenter.Y, Pen.Color)
-  else
-  if Style = psCircle then
-    ADrawer.Ellipse(
-      ACenter.X - ASize.X, ACenter.Y - ASize.Y,
-      ACenter.X + ASize.X + 1, ACenter.Y + ASize.Y + 1)
-  else
-    DrawByString(DRAW_STRINGS[Style] + ' ');
+  case Style of
+    psNone    : ;
+    psPoint   : ADrawer.PutPixel(ACenter.X, ACenter.Y, Pen.Color);
+    psCircle  : ADrawer.Ellipse(
+                  ACenter.X - ASize.X, ACenter.Y - ASize.Y,
+                  ACenter.X + ASize.X + 1, ACenter.Y + ASize.Y + 1);
+    psHexagon : DrawPolygon(psHexagon);
+    psStar    : begin
+                  DrawByString(DRAW_STRINGS[psCross] + ' ');
+                  ASize := Point(ASize.X * 7 div 10, ASize.Y * 7 div 10);
+                  DrawByString(DRAW_STRINGS[psDiagCross] + ' ');
+                end;
+    psFullStar: DrawPolygon(psFullStar);
+    else        DrawByString(DRAW_STRINGS[Style] + ' ');
+  end;
 end;
 
 procedure TSeriesPointer.SetBrush(AValue: TBrush);
@@ -491,6 +562,7 @@ begin
   StyleChanged(Self);
 end;
 
+
 { TChartRange }
 
 procedure TChartRange.Assign(ASource: TPersistent);
@@ -532,7 +604,7 @@ end;
 
 function TChartRange.IsBoundsStored(AIndex: Integer): Boolean;
 begin
-  Result := FBounds[AIndex] <> 0;
+  Result := not SameValue(FBounds[AIndex], 0);
 end;
 
 procedure TChartRange.SetBounds(AIndex: Integer; const AValue: Double);
@@ -592,7 +664,7 @@ end;
 
 function TChartExtent.IsBoundsStored(AIndex: Integer): Boolean;
 begin
-  Result := FExtent.coords[AIndex] <> 0;
+  Result := not SameValue(FExtent.coords[AIndex], 0.0);
 end;
 
 procedure TChartExtent.SetBounds(AIndex: Integer; const AValue: Double);
@@ -762,6 +834,45 @@ begin
   if FTransparency = AValue then exit;
   FTransparency := AValue;
   StyleChanged(Self);
+end;
+
+{ TChartErrorBar }
+
+constructor TChartErrorBar.Create(AOwner: TCustomChart);
+begin
+  inherited Create(AOwner);
+  FWidth := -1;     // -1 = same width as series pointer
+  FPen := TPen.Create;
+  FPen.OnChange := @StyleChanged;
+  FVisible := false;
+end;
+
+destructor TChartErrorBar.Destroy;
+begin
+  FPen.Free;
+  inherited Destroy;
+end;
+
+procedure TChartErrorBar.Assign(ASource: TPersistent);
+begin
+  if ASource is TChartErrorBar then begin
+    FPen.Assign(TChartErrorBar(ASource).Pen);
+    FWidth := TChartErrorBar(ASource).Width;
+  end;
+  inherited;
+end;
+
+procedure TChartErrorBar.SetPen(const AValue: TPen);
+begin
+  FPen.Assign(AValue);
+  StyleChanged(Self);
+end;
+
+procedure TChartErrorBar.SetWidth(const AValue: Integer);
+begin
+  if FWidth = AValue then exit;
+  FWidth := AValue;
+  StyleChanged(self);
 end;
 
 end.

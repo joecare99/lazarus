@@ -2,7 +2,7 @@
   Author: Olivier Guilbaud
 
  *****************************************************************************
-  This file is part of the Lazarus Component Library (LCL)
+  This file is part of the Printer4Lazarus package
 
   See the file COPYING.modifiedLGPL.txt, included in this distribution,
   for details about the license.
@@ -262,6 +262,8 @@ function EndDocPrinter(hprinter: THANDLE): BOOL; stdcall; external LibWinSpool N
 function EndPagePrinter(hprinter: THANDLE): BOOL; stdcall; external LibWinSpool Name 'EndPagePrinter';
 function AbortPrinter(hPrinter: THANDLE): BOOL; stdcall; external LibWinSpool Name 'AbortPrinter';
 function WritePrinter(hPrinter: THANDLE; Buffer: Pointer; Count: DWord; Written: PDWORD): BOOL; stdcall; external LibWinSpool Name 'WritePrinter';
+
+function ResetDCW(DC: HDC; const p2: TDeviceModeW):HDC; stdcall; external 'gdi32.dll' name 'ResetDCW';
 
 implementation
 

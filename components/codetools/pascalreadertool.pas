@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -37,9 +37,12 @@ uses
   {$IFDEF MEM_CHECK}
   MemCheck,
   {$ENDIF}
-  Classes, SysUtils, FileProcs, CodeToolsStrConsts, CodeTree, CodeCache,
-  CodeAtom, CustomCodeTool, PascalParserTool, KeywordFuncLists, BasicCodeTools,
-  LinkScanner, AVL_Tree, LazFileUtils, LazDbgLog;
+  Classes, SysUtils,
+  // LazUtils
+  LazFileUtils, LazDbgLog,
+  // Codetools
+  FileProcs, CodeToolsStrConsts, CodeTree, CodeCache, CodeAtom,
+  PascalParserTool, KeywordFuncLists, BasicCodeTools, LinkScanner;
 
 type
   TPascalHintModifier = (
@@ -59,7 +62,12 @@ type
 
   //the scope groups of pascal methods.
   //please note that Destructor is principally a method and thus is not listed here -> you cannot define "procedure Destroy;" and "destructor Destroy" in one class
-  TPascalMethodGroup = (mgMethod, mgConstructor, mgClassConstructor, mgClassDestructor, mgClassOperator);
+  TPascalMethodGroup = (
+    mgMethod,
+    mgConstructor,
+    mgClassConstructor,
+    mgClassDestructor,
+    mgClassOperator);
 
   TPascalMethodHeader = record
     Name, ResultType: string;
@@ -81,7 +89,7 @@ type
   TPascalReaderTool = class(TPascalParserTool)
   protected
     CachedSourceName: string;
-    procedure RaiseStrConstExpected;
+    procedure RaiseStrConstExpected(id: int64);
   public
     // comments
     function CleanPosIsInComment(CleanPos, CleanCodePosInFront: integer;
@@ -97,6 +105,9 @@ type
         Attr: TProcHeadAttributes): string;
     function ExtractIdentifierWithPoints(StartPos: integer;
         ExceptionOnError: boolean): string;
+    function ExtractNextTypeRef(Add: boolean; const Attr: TProcHeadAttributes): boolean;
+    function ExtractNextSpecializeParams(Add: boolean;
+        const Attr: TProcHeadAttributes): boolean;
     function ExtractIdentCharsFromStringConstant(
         StartPos, MinPos, MaxPos, MaxLen: integer): string;
     function ReadStringConstantValue(StartPos: integer): string;
@@ -139,11 +150,9 @@ type
     function ExtractProcHeadWithGroup(ProcNode: TCodeTreeNode;
         Attr: TProcHeadAttributes): TPascalMethodHeader;
     function ExtractProcedureHeader(CursorPos: TCodeXYPosition;
-      Attributes: TProcHeadAttributes; var ProcHead: string): boolean;
+      Attributes: TProcHeadAttributes; out ProcHead: string): boolean;
     function ExtractClassNameOfProcNode(ProcNode: TCodeTreeNode;
-        AddParentClasses: boolean = true): string;
-    function ProcNodeHasSpecifier(ProcNode: TCodeTreeNode;
-        ProcSpec: TProcedureSpecifier): boolean;
+        AddParentClasses: boolean = true; KeepGeneric: boolean = false): string;
     function GetProcNameIdentifier(ProcNode: TCodeTreeNode): PChar;
     function FindProcNode(StartNode: TCodeTreeNode; const AProcHead: string;
         AProcSpecType: TPascalMethodGroup;
@@ -171,10 +180,13 @@ type
                                 SkipClassName: boolean; CleanPos: integer): boolean;
     function PositionInFuncResultName(ProcNode: TCodeTreeNode;
                                       CleanPos: integer): boolean;
+    function ProcNodeHasSpecifier(ProcNode: TCodeTreeNode;
+        ProcSpec: TProcedureSpecifier): boolean;
     function ProcNodeHasParamList(ProcNode: TCodeTreeNode): boolean;
     function ProcNodeHasOfObject(ProcNode: TCodeTreeNode): boolean;
     function GetProcParamList(ProcNode: TCodeTreeNode;
                               Parse: boolean = true): TCodeTreeNode;
+    function GetProcResultNode(ProcNode: TCodeTreeNode): TCodeTreeNode;
     function NodeIsInAMethod(Node: TCodeTreeNode): boolean;
     function NodeIsMethodBody(ProcNode: TCodeTreeNode): boolean;
     function GetMethodOfBody(Node: TCodeTreeNode): TCodeTreeNode;
@@ -225,6 +237,7 @@ type
     function IsClassNode(Node: TCodeTreeNode): boolean; // class, not object
     function FindInheritanceNode(ClassNode: TCodeTreeNode): TCodeTreeNode;
     function FindHelperForNode(HelperNode: TCodeTreeNode): TCodeTreeNode;
+    function FindClassExternalNode(ClassNode: TCodeTreeNode): TCodeTreeNode;
     function IdentNodeIsInVisibleClassSection(Node: TCodeTreeNode; Visibility: TClassSectionVisibility): Boolean;
 
     // records
@@ -239,6 +252,7 @@ type
     function NodeIsPartOfTypeDefinition(ANode: TCodeTreeNode): boolean;
     function ExtractDefinitionNodeType(DefinitionNode: TCodeTreeNode): string;
     function ExtractDefinitionName(DefinitionNode: TCodeTreeNode): string;
+    function FindDefinitionNameNode(DefinitionNode: TCodeTreeNode): TCodeTreeNode;
     function PositionInDefinitionName(DefinitionNode: TCodeTreeNode;
                                       CleanPos: integer): boolean;
     function MoveCursorToParameterSpecifier(DefinitionNode: TCodeTreeNode
@@ -256,6 +270,8 @@ type
 
     // arrays
     function ExtractArrayRange(ArrayNode: TCodeTreeNode;
+        Attr: TProcHeadAttributes): string;
+    function ExtractArrayRanges(ArrayNode: TCodeTreeNode;
         Attr: TProcHeadAttributes): string;
 
     // module sections
@@ -358,9 +374,9 @@ end;
 
 { TPascalReaderTool }
 
-procedure TPascalReaderTool.RaiseStrConstExpected;
+procedure TPascalReaderTool.RaiseStrConstExpected(id: int64);
 begin
-  RaiseExceptionFmt(ctsStrExpectedButAtomFound,[ctsStringConstant,GetAtom]);
+  RaiseExceptionFmt(id,ctsStrExpectedButAtomFound,[ctsStringConstant,GetAtom]);
 end;
 
 function TPascalReaderTool.CleanPosIsInComment(CleanPos,
@@ -375,16 +391,16 @@ begin
   CommentEnd:=0;
   if CleanPos>SrcLen then exit;
   if CleanCodePosInFront>CleanPos then
-    RaiseException(
+    RaiseException(20170421195949,
       'TPascalReaderTool.CleanPosIsInComment CleanCodePosInFront>CleanPos');
   MoveCursorToCleanPos(CleanCodePosInFront);
   repeat
     ReadNextAtom;
     if CurPos.StartPos>CleanPos then begin
-      //DebugLn(['TPascalReaderTool.CleanPosIsInComment ',GetATom,' StartPos=',CurPos.StartPos,' CleanPos=',CleanPos]);
+      //DebugLn(['TPascalReaderTool.CleanPosIsInComment ',GetAtom,' StartPos=',CurPos.StartPos,' CleanPos=',CleanPos]);
       // CleanPos between two atoms -> parse space between for comments
-      if LastAtoms.Count>0 then
-        CommentStart:=LastAtoms.GetValueAt(0).EndPos
+      if LastAtoms.HasPrior then
+        CommentStart:=LastAtoms.GetPriorAtom.EndPos
       else
         CommentStart:=CleanCodePosInFront;
       CurEnd:=CurPos.StartPos;
@@ -398,7 +414,7 @@ begin
             begin
               inc(CurCommentPos);
               if (CurCommentPos<=SrcLen) and (Src[CurCommentPos]=#3) then begin
-                // codetools skip comment
+                // codetools-skip-comment
                 inc(CurCommentPos);
                 if not OuterCommentBounds then CommentStart:=CurCommentPos;
                 while (CurCommentPos<CurEnd) do begin
@@ -468,13 +484,14 @@ begin
           end;
           if (CurCommentPos>CommentStart) and (CleanPos<CurCommentPos) then
           begin
-            // CleanPos in comment
+            // CleanPos in front of comment-end
             if OuterCommentBounds then
               CommentEnd:=CurCommentPos
             else
               CommentEnd:=CurCommentInnerEnd;
-            exit(true);
+            exit(CleanPos>=CommentStart);
           end;
+          // next
           CommentStart:=CurCommentPos;
         end else if IsSpaceChar[Src[CommentStart]] then begin
           repeat
@@ -518,7 +535,7 @@ begin
   end;
   if CurPos.Flag in [cafSemicolon,cafEND] then exit;
   if not (CurPos.Flag=cafColon) then
-    RaiseExceptionFmt(ctsStrExpectedButAtomFound,[':',GetAtom]);
+    RaiseExceptionFmt(20170421195952,ctsStrExpectedButAtomFound,[':',GetAtom]);
   ReadNextAtom;
   AtomIsIdentifierE;
   if InUpperCase then
@@ -580,13 +597,22 @@ function TPascalReaderTool.ExtractProcHead(ProcNode: TCodeTreeNode;
   Attr: TProcHeadAttributes): string;
 var
   TheClassName, s: string;
-  IsClassName, IsProcType: boolean;
-  IsProcedure: Boolean;
-  IsFunction: Boolean;
-  IsOperator: Boolean;
+  IsClassName, IsProcType, IsProcedure, IsFunction, IsOperator: Boolean;
   EndPos: Integer;
+  ParentNode: TCodeTreeNode;
+  OldPos: TAtomPosition;
 const
   SemiColon : char = ';';
+
+  procedure PrependName(const Prepend: string; var aPath: string);
+  begin
+    if Prepend='' then exit;
+    if aPath<>'' then
+      aPath:=Prepend+'.'+aPath
+    else
+      aPath:=Prepend;
+  end;
+
 begin
   Result:='';
   ExtractProcHeadPos:=phepNone;
@@ -595,14 +621,31 @@ begin
     ProcNode:=ProcNode.Parent;
     if ProcNode=nil then exit;
   end;
-  if (ProcNode.Desc<>ctnProcedure) and (ProcNode.Desc<>ctnProcedureType) then
+  if ProcNode.Desc=ctnReferenceTo then begin
+    ProcNode:=ProcNode.FirstChild;
+    if ProcNode=nil then exit;
+  end;
+  if ProcNode.Desc=ctnProcedure then
+    IsProcType:=false
+  else if ProcNode.Desc=ctnProcedureType then
+    IsProcType:=true
+  else
     exit;
-  IsProcType:=(ProcNode.Desc=ctnProcedureType);
+
+  TheClassName:='';
+
+  if (phpAddParentProcs in Attr) and (ProcNode.Parent.Desc=ctnProcedure) then begin
+    // local proc
+    ParentNode:=ProcNode.Parent;
+    while ParentNode.Desc=ctnProcedure do begin
+      PrependName(ExtractProcName(ParentNode,Attr*[phpInUpperCase]),TheClassName);
+      ParentNode:=ParentNode.Parent;
+    end;
+  end;
 
   // build full class name
-  TheClassName:='';
   if ([phpAddClassname,phpWithoutClassName]*Attr=[phpAddClassName]) then
-    TheClassName:=ExtractClassName(ProcNode,phpInUpperCase in Attr,true);
+    PrependName(ExtractClassName(ProcNode,phpInUpperCase in Attr,true,Scanner.CompilerMode in [cmDELPHI,cmDELPHIUNICODE]),TheClassName);
 
   // reparse the clean source
   InitExtraction;
@@ -610,6 +653,9 @@ begin
   // parse procedure head = start + name + parameterlist + result type ;
   ExtractNextAtom(false,Attr);
   // read procedure start keyword
+  if UpAtomIs('GENERIC') then
+    ExtractNextAtom((phpWithStart in Attr)
+                    and not (phpWithoutClassKeyword in Attr),Attr);
   if (UpAtomIs('CLASS') or UpAtomIs('STATIC')) then
     ExtractNextAtom((phpWithStart in Attr)
                     and not (phpWithoutClassKeyword in Attr),Attr);
@@ -641,13 +687,15 @@ begin
       // read classname and name
       repeat
         ExtractNextAtom(true,Attr);
-        if Scanner.CompilerMode = cmDELPHI then
+        if Scanner.CompilerMode in [cmDELPHI,cmDELPHIUNICODE] then
         begin
           // delphi generics
           if AtomIsChar('<') then
           begin
-            while not AtomIsChar('>') and (CurPos.EndPos < SrcLen) do
-              ExtractNextAtom(not (phpWithoutGenericParams in Attr),Attr);
+            //writeln('TPascalReaderTool.ExtractProcHead B ',GetAtom);
+            if not ExtractNextSpecializeParams(not (phpWithoutGenericParams in Attr),Attr) then
+              exit;
+            //writeln('TPascalReaderTool.ExtractProcHead C ',GetAtom);
             ExtractNextAtom(not (phpWithoutGenericParams in Attr),Attr);
           end;
         end;
@@ -660,18 +708,26 @@ begin
     end else begin
       // read only part of name
       repeat
+        OldPos:=CurPos;
         ReadNextAtom;
-        if (Scanner.CompilerMode = cmDELPHI) and AtomIsChar('<') then
+        if (Scanner.CompilerMode in [cmDELPHI,cmDELPHIUNICODE]) and AtomIsChar('<') then
         begin
-          while not AtomIsChar('>') and (CurPos.EndPos < SrcLen) do
+          repeat
             ReadNextAtom;
+          until AtomIsChar('>') or (CurPos.EndPos > SrcLen);
           ReadNextAtom;
         end;
         IsClassName:=(CurPos.Flag=cafPoint);
-        UndoReadNextAtom;
+        MoveCursorToAtomPos(OldPos);
         if IsClassName then begin
           // read class name
           ExtractNextAtom(not (phpWithoutClassName in Attr),Attr);
+          if (Scanner.CompilerMode in [cmDELPHI,cmDELPHIUNICODE]) and AtomIsChar('<') then
+          begin
+            if not ExtractNextSpecializeParams(false,Attr) then
+              exit;
+            ExtractNextAtom(false,Attr);
+          end;
           // read '.'
           ExtractNextAtom(not (phpWithoutClassName in Attr),Attr);
           if ((not IsOperator)
@@ -680,6 +736,12 @@ begin
         end else begin
           // read name
           ExtractNextAtom(not (phpWithoutName in Attr),Attr);
+          if (Scanner.CompilerMode in [cmDELPHI,cmDELPHIUNICODE]) and AtomIsChar('<') then
+          begin
+            if not ExtractNextSpecializeParams(false,Attr) then
+              exit;
+            ExtractNextAtom(false,Attr);
+          end;
           break;
         end;
       until false;
@@ -697,14 +759,7 @@ begin
   end;
   // read result type
   if (CurPos.Flag=cafColon) then begin
-    ExtractNextAtom(phpWithResultType in Attr,Attr);
-    if not AtomIsIdentifier then exit;
-    ExtractNextAtom(phpWithResultType in Attr,Attr);
-    if CurPos.Flag=cafPoint then begin
-      ExtractNextAtom(phpWithResultType in Attr,Attr);
-      if not AtomIsIdentifier then exit;
-      ExtractNextAtom(phpWithResultType in Attr,Attr);
-    end;
+    ExtractNextTypeRef(phpWithResultType in Attr,Attr);
     ExtractProcHeadPos:=phepResultType;
   end;
   // read 'of object'
@@ -719,29 +774,25 @@ begin
   if CurPos.Flag=cafSemicolon then
     ExtractNextAtom(not (phpWithoutSemicolon in Attr),Attr);
   // read specifiers
-  if [phpWithCallingSpecs,phpWithProcModifiers]*Attr<>[] then begin
+  if [phpWithCallingSpecs,phpWithProcModifiers,phpWithAssembler]*Attr<>[] then begin
     if ProcNode.FirstChild<>nil then
       EndPos:=ProcNode.FirstChild.EndPos
     else
       EndPos:=SrcLen+1;
     while (CurPos.StartPos<EndPos) do begin
-      if CurPos.Flag=cafSemicolon then begin
-        ExtractNextAtom(phpWithProcModifiers in Attr,Attr);
-      end else begin
+      if CurPos.Flag=cafWord then begin
         if IsKeyWordCallingConvention.DoIdentifier(@Src[CurPos.StartPos])
+        or ((phpWithAssembler in Attr) and UpAtomIs('ASSEMBLER'))
         then begin
-          ExtractNextAtom([phpWithCallingSpecs,phpWithProcModifiers]*Attr<>[],
-                          Attr);
+          ExtractNextAtom(true,Attr);
           if not (phpWithProcModifiers in Attr) then
             ExtractMemStream.Write(SemiColon,1);
-        end
-        else if (CurPos.Flag=cafEdgedBracketOpen) then begin
-          ReadTilBracketClose(false);
-          ExtractNextAtom(phpWithProcModifiers in Attr,Attr);
-        end else begin
-          ExtractNextAtom(phpWithProcModifiers in Attr,Attr);
+          continue;
         end;
+      end else if (CurPos.Flag=cafEdgedBracketOpen) then begin
+        ReadTilBracketClose(false);
       end;
+      ExtractNextAtom(phpWithProcModifiers in Attr,Attr);
     end;
   end;
 
@@ -764,7 +815,7 @@ begin
 end;
 
 function TPascalReaderTool.ExtractProcedureHeader(CursorPos: TCodeXYPosition;
-  Attributes: TProcHeadAttributes; var ProcHead: string): boolean;
+  Attributes: TProcHeadAttributes; out ProcHead: string): boolean;
 var
   CleanCursorPos: integer;
   ANode: TCodeTreeNode;
@@ -854,7 +905,7 @@ begin
           Result:=GetIdentifier(@Src[Node.StartPos])+Result
         else if Node.FirstChild<>nil then
         begin
-          if (Scanner.CompilerMode = cmDELPHI) and (Node.Desc = ctnGenericType) then
+          if (Scanner.CompilerMode in [cmDELPHI,cmDELPHIUNICODE]) and (Node.Desc = ctnGenericType) then
             Result := Result + ExtractNode(Node.FirstChild.NextBrother, []);
           Result:=GetIdentifier(@Src[Node.FirstChild.StartPos])+Result;
         end;
@@ -906,7 +957,7 @@ begin
 end;
 
 function TPascalReaderTool.ExtractClassNameOfProcNode(ProcNode: TCodeTreeNode;
-  AddParentClasses: boolean): string;
+  AddParentClasses: boolean; KeepGeneric: boolean): string;
 var
   Part: String;
 begin
@@ -920,12 +971,14 @@ begin
     if not AtomIsIdentifier then break;
     Part:=GetAtom;
     ReadNextAtom;
-    if (Scanner.CompilerMode = cmDELPHI) and AtomIsChar('<') then
+    if (Scanner.CompilerMode in [cmDELPHI,cmDELPHIUNICODE]) and AtomIsChar('<') then
     begin { delphi generics }
-      Part := Part + GetAtom;
+      if KeepGeneric then
+        Part := Part + GetAtom;
       repeat
         ReadNextAtom;
-        Part := Part + GetAtom;
+        if KeepGeneric then
+          Part := Part + GetAtom;
       until (CurPos.StartPos > SrcLen) or AtomIsChar('>');
       ReadNextAtom;
     end;
@@ -1084,6 +1137,19 @@ begin
   end;
 end;
 
+function TPascalReaderTool.FindDefinitionNameNode(DefinitionNode: TCodeTreeNode
+  ): TCodeTreeNode;
+begin
+  if DefinitionNode.Desc=ctnGenericType then
+  begin
+    if DefinitionNode.FirstChild<>nil then
+      Result:=DefinitionNode.FirstChild
+    else
+      Result:=nil;
+  end else
+    Result:=DefinitionNode;
+end;
+
 function TPascalReaderTool.FindProcBody(ProcNode: TCodeTreeNode): TCodeTreeNode;
 begin
   Result:=ProcNode;
@@ -1151,20 +1217,19 @@ begin
   if (ProcNode<>nil) and (ProcNode.Desc in [ctnProcedureType,ctnProcedure]) then
     ProcNode:=ProcNode.FirstChild;
   if (ProcNode=nil) or (ProcNode.Desc<>ctnProcedureHead) then begin
-    RaiseException('Internal Error in'
+    RaiseException(20170421195956,'Internal Error in'
       +' TPascalParserTool.MoveCursorFirstProcSpecifier: '
       +' (ProcNode=nil) or (ProcNode.Desc<>ctnProcedure)');
   end;
+  //DebugLn(['TPascalReaderTool.MoveCursorToFirstProcSpecifier ',ProcNode.DescAsString,' StartPos=',CleanPosToStr(ProcNode.StartPos)]);
   if (ProcNode.LastChild<>nil) and (ProcNode.LastChild.Desc=ctnIdentifier) then
   begin
     // jump behind function result type
     MoveCursorToCleanPos(ProcNode.LastChild.EndPos);
     ReadNextAtom;
-  end else if (ProcNode.FirstChild<>nil)
-    and (ProcNode.FirstChild.Desc=ctnParameterList)
-  then begin
+  end else if GetProcParamList(ProcNode)<>nil then begin
     // jump behind parameter list
-    MoveCursorToCleanPos(ProcNode.FirstChild.EndPos);
+    MoveCursorToCleanPos(GetProcParamList(ProcNode).EndPos);
     ReadNextAtom;
   end else begin
     MoveCursorToNodeStart(ProcNode);
@@ -1188,14 +1253,7 @@ begin
   if (CurPos.Flag=cafColon) then begin
     // read function result type
     ReadNextAtom;
-    if AtomIsIdentifier then begin
-      ReadNextAtom;
-      while CurPos.Flag=cafPoint do begin
-        ReadNextAtom;
-        if not AtomIsIdentifier then break;
-        ReadNextAtom;
-      end;
-    end;
+    SkipTypeReference(false);
   end;
   // CurPos now stands on the first proc specifier or on a semicolon or on the syntax error
 end;
@@ -1422,30 +1480,6 @@ begin
   ReadNextAtom;
 end;
 
-function TPascalReaderTool.ProcNodeHasSpecifier(ProcNode: TCodeTreeNode;
-  ProcSpec: TProcedureSpecifier): boolean;
-begin
-  Result:=false;
-  if ProcNode=nil then exit;
-  if ProcNode.Desc=ctnProcedureHead then
-    ProcNode:=ProcNode.Parent;
-  {$IFDEF CheckNodeTool}
-  if ProcNode.Desc<>ctnProcedure then begin
-    DebugLn(['TPascalReaderTool.ProcNodeHasSpecifier Desc=',ProcNode.DescAsString]);
-    CTDumpStack;
-    RaiseException('[TPascalReaderTool.ProcNodeHasSpecifier] '
-      +'internal error: invalid ProcNode');
-  end;
-  {$ENDIF}
-  if (ProcNode.FirstChild=nil)
-  or ((ProcNode.SubDesc and ctnsNeedJITParsing)>0) then
-    BuildSubTreeForProcHead(ProcNode);
-
-  // ToDo: ppu, dcu
-
-  Result:=MoveCursorToProcSpecifier(ProcNode,ProcSpec);
-end;
-
 function TPascalReaderTool.GetProcNameIdentifier(ProcNode: TCodeTreeNode): PChar;
 begin
 
@@ -1557,6 +1591,59 @@ begin
     if not AtomIsIdentifierE(ExceptionOnError) then exit;
     Result+='.'+GetAtom;
   until false;
+end;
+
+function TPascalReaderTool.ExtractNextTypeRef(Add: boolean;
+  const Attr: TProcHeadAttributes): boolean;
+begin
+  Result:=false;
+  ExtractNextAtom(Add,Attr);
+  if not AtomIsIdentifier then exit;
+  ExtractNextAtom(Add,Attr);
+  repeat
+    if CurPos.Flag=cafPoint then begin
+      ExtractNextAtom(Add,Attr);
+      if not AtomIsIdentifier then exit;
+      ExtractNextAtom(Add,Attr);
+    end else if AtomIsChar('<') then begin
+      if not ExtractNextSpecializeParams(Add,Attr) then
+        exit;
+      ExtractNextAtom(Add,Attr);
+    end else
+      break;
+  until false;
+  Result:=true;
+end;
+
+function TPascalReaderTool.ExtractNextSpecializeParams(Add: boolean;
+  const Attr: TProcHeadAttributes): boolean;
+// at start: CurPos is at <
+// at end: CurPos is at >
+
+  function ExtractNextTil(c: char): boolean;
+  var
+    CurC: Char;
+  begin
+    Result:=false;
+    repeat
+      ExtractNextAtom(Add,Attr);
+      if CurPos.EndPos-CurPos.StartPos=1 then begin
+        CurC:=Src[CurPos.StartPos];
+        if CurC=c then
+          exit(true);
+        case CurC of
+        '<': if not ExtractNextTil('>') then exit;
+        '(': if not ExtractNextTil(')') then exit;
+        '[': if not ExtractNextTil(']') then exit;
+        ')',']': exit;
+        end;
+      end else if CurPos.StartPos>SrcLen then
+        exit(false);
+    until false;
+  end;
+
+begin
+  Result:=ExtractNextTil('>');
 end;
 
 function TPascalReaderTool.ExtractPropName(PropNode: TCodeTreeNode;
@@ -1793,7 +1880,7 @@ begin
   ctnProperty:
      Result:=GetPropertyNameIdentifier(Node);
   ctnTypeDefinition,ctnVarDefinition,ctnConstDefinition,
-  ctnEnumIdentifier,ctnIdentifier:
+  ctnEnumIdentifier,ctnIdentifier,ctnSrcName:
     Result:=@Src[Node.StartPos];
   end;
 end;
@@ -1833,12 +1920,26 @@ begin
       while IsHintModifier do ReadNextAtom;
     end;
 
-  ctnProcedure,ctnProcedureType,ctnProcedureHead:
+  ctnProcedureHead:
     begin
-      if Node.Desc<>ctnProcedureHead then begin
-        Node:=Node.FirstChild;
-        if Node=nil then exit;
-      end;
+      MoveCursorToFirstProcSpecifier(Node);
+      // ToDo:
+    end;
+
+  ctnProcedure,ctnProcedureType:
+    begin
+      Node:=Node.FirstChild;
+      if Node=nil then exit;
+      MoveCursorToFirstProcSpecifier(Node);
+      // ToDo:
+    end;
+
+  ctnReferenceTo:
+    begin
+      Node:=Node.FirstChild;
+      if (Node=nil) or (Node.Desc<>ctnProcedureType) then exit;
+      Node:=Node.FirstChild;
+      if Node=nil then exit;
       MoveCursorToFirstProcSpecifier(Node);
       // ToDo:
     end;
@@ -2376,7 +2477,7 @@ function TPascalReaderTool.FindClassNodeInInterface(
   
   procedure RaiseClassNotFound;
   begin
-    RaiseExceptionFmt(ctsClassSNotFound, [AClassName]);
+    RaiseExceptionFmt(20170421200001,ctsClassSNotFound, [AClassName]);
   end;
   
 begin
@@ -2401,7 +2502,7 @@ function TPascalReaderTool.FindClassNodeInUnit(const AClassName: string;
 
   procedure RaiseClassNotFound;
   begin
-    RaiseExceptionFmt(ctsClassSNotFound, [AClassName]);
+    RaiseExceptionFmt(20170421200003,ctsClassSNotFound, [AClassName]);
   end;
 
 begin
@@ -2575,35 +2676,19 @@ begin
 end;
 
 function TPascalReaderTool.ExtractSourceName: string;
+var
+  NamePos: TAtomPosition;
 begin
   Result:='';
-  if Tree.Root<>nil then begin
-    MoveCursorToNodeStart(Tree.Root);
-    ReadNextAtom; // read source type 'program', 'unit' ...
-    if (Tree.Root.Desc<>ctnProgram) or UpAtomIs('PROGRAM') then begin
-      ReadNextAtom; // read name
-      if AtomIsIdentifier then begin
-        Result:=copy(Src,CurPos.StartPos,CurPos.EndPos-CurPos.StartPos);
-        ReadNextAtom;
-        while CurPos.Flag=cafPoint do begin
-          ReadNextAtom;
-          if not AtomIsIdentifier then exit;
-          Result:=Result+'.'+copy(Src,CurPos.StartPos,CurPos.EndPos-CurPos.StartPos);
-          ReadNextAtom;
-        end;
-        exit;
-      end;
-    end;
-  end;
-  if (Tree.Root<>nil) and (Tree.Root.Desc=ctnProgram) then
+  if Tree.Root=nil then exit;
+  if GetSourceNamePos(NamePos) then
+    Result:=copy(Src, NamePos.StartPos, NamePos.EndPos-NamePos.StartPos)
+  else if Tree.Root.Desc=ctnProgram then
     // a program without the 'program' header uses the file name as name
     Result:=ExtractFileNameOnly(MainFilename)
-  else
-    Result:='';
 end;
 
-function TPascalReaderTool.GetSourceNamePos(out NamePos: TAtomPosition
-  ): boolean;
+function TPascalReaderTool.GetSourceNamePos(out NamePos: TAtomPosition): boolean;
 begin
   Result:=false;
   NamePos.StartPos:=-1;
@@ -2816,14 +2901,11 @@ end;
 function TPascalReaderTool.ExtractDefinitionName(DefinitionNode: TCodeTreeNode
   ): string;
 begin
-  if DefinitionNode.Desc=ctnGenericType then begin
-    if DefinitionNode.FirstChild<>nil then
-      Result:=GetIdentifier(@Src[DefinitionNode.FirstChild.StartPos])
-    else
-      Result:='';
-  end else begin
-    Result:=GetIdentifier(@Src[DefinitionNode.StartPos]);
-  end;
+  DefinitionNode:=FindDefinitionNameNode(DefinitionNode);
+  if DefinitionNode<>nil then
+    Result:=GetIdentifier(@Src[DefinitionNode.StartPos])
+  else
+    Result:='';
 end;
 
 function TPascalReaderTool.PositionInDefinitionName(
@@ -3034,6 +3116,19 @@ begin
     Result:=nil;
 end;
 
+function TPascalReaderTool.FindClassExternalNode(ClassNode: TCodeTreeNode
+  ): TCodeTreeNode;
+begin
+  if ClassNode=nil then exit(nil);
+  Result:=ClassNode.FirstChild;
+  while (Result<>nil) do
+    begin
+    if Result.Desc=ctnClassExternal then exit;
+    if Result.Desc in AllClassBaseSections then exit(nil);
+    Result:=Result.NextBrother;
+    end;
+end;
+
 function TPascalReaderTool.FindTypeOfForwardNode(TypeNode: TCodeTreeNode
   ): TCodeTreeNode;
 
@@ -3106,6 +3201,30 @@ begin
   if not ReadNextUpAtomIs('ARRAY') then exit;
   if not ReadNextAtomIsChar('[') then exit;
   Result:=ExtractBrackets(CurPos.StartPos,Attr);
+end;
+
+function TPascalReaderTool.ExtractArrayRanges(ArrayNode: TCodeTreeNode;
+  Attr: TProcHeadAttributes): string;
+const
+  AllArrays = [ctnRangedArrayType, ctnOpenArrayType];
+begin
+  Result:='';
+  if (ArrayNode=nil) or not (ArrayNode.Desc in AllArrays) then exit;
+  while Assigned(ArrayNode.Parent) and (ArrayNode.Parent.Desc in AllArrays) do
+    ArrayNode:=ArrayNode.Parent;
+  MoveCursorToNodeStart(ArrayNode);
+  if not ReadNextUpAtomIs('ARRAY') then exit;
+  repeat
+    if Result<>'' then Result:=Result+',';
+    if ArrayNode.Desc=ctnRangedArrayType then begin
+      MoveCursorToNodeStart(ArrayNode.FirstChild); // FirstChild=Index type
+      Result:=Result+ExtractNode(ArrayNode.FirstChild,Attr);
+    end else begin
+      Result:=Result+'PtrUInt';
+    end;
+    ArrayNode:=ArrayNode.LastChild;
+  until not (ArrayNode.Desc in AllArrays);
+  Result:='['+Result+']';
 end;
 
 function TPascalReaderTool.PropertyIsDefault(PropertyNode: TCodeTreeNode): boolean;
@@ -3202,6 +3321,30 @@ begin
   end;
 end;
 
+function TPascalReaderTool.ProcNodeHasSpecifier(ProcNode: TCodeTreeNode;
+  ProcSpec: TProcedureSpecifier): boolean;
+begin
+  Result:=false;
+  if ProcNode=nil then exit;
+  if ProcNode.Desc=ctnProcedureHead then
+    ProcNode:=ProcNode.Parent;
+  {$IFDEF CheckNodeTool}
+  if ProcNode.Desc<>ctnProcedure then begin
+    DebugLn(['TPascalReaderTool.ProcNodeHasSpecifier Desc=',ProcNode.DescAsString]);
+    CTDumpStack;
+    RaiseException(20170421195959,'[TPascalReaderTool.ProcNodeHasSpecifier] '
+      +'internal error: invalid ProcNode');
+  end;
+  {$ENDIF}
+  if (ProcNode.FirstChild=nil)
+  or ((ProcNode.SubDesc and ctnsNeedJITParsing)>0) then
+    BuildSubTreeForProcHead(ProcNode);
+
+  // ToDo: ppu, dcu
+
+  Result:=MoveCursorToProcSpecifier(ProcNode,ProcSpec);
+end;
+
 function TPascalReaderTool.ProcNodeHasParamList(ProcNode: TCodeTreeNode): boolean;
 begin
 
@@ -3229,7 +3372,12 @@ begin
   // ToDo: ppu, dcu
 
   Result:=false;
-  if (ProcNode=nil) or (ProcNode.Desc<>ctnProcedureType) then exit;
+  if ProcNode=nil then exit;
+  if ProcNode.Desc=ctnReferenceTo then begin
+    ProcNode:=ProcNode.FirstChild;
+    if ProcNode=nil then exit;
+  end;
+  if ProcNode.Desc<>ctnProcedureType then exit;
   MoveCursorToFirstProcSpecifier(ProcNode);
   Result:=UpAtomIs('OF') and ReadNextUpAtomIs('OBJECT');
 end;
@@ -3247,8 +3395,27 @@ begin
   if Parse then
     BuildSubTreeForProcHead(Result);
   Result:=Result.FirstChild;
-  if Result=nil then exit;
-  if Result.Desc<>ctnParameterList then exit(nil);
+  while Result<>nil do begin
+    if Result.Desc=ctnParameterList then exit;
+    Result:=Result.NextBrother;
+  end;
+end;
+
+function TPascalReaderTool.GetProcResultNode(ProcNode: TCodeTreeNode
+  ): TCodeTreeNode;
+begin
+  Result:=nil;
+  if ProcNode=nil then exit;
+  if ProcNode.Desc in [ctnProcedure,ctnProcedureType] then begin
+    Result:=ProcNode.FirstChild;
+    if Result=nil then exit;
+  end;
+  if (ProcNode=nil) or (ProcNode.Desc<>ctnProcedureHead) then exit;
+  Result:=ProcNode.FirstChild;
+  while Result<>nil do begin
+    if Result.Desc=ctnIdentifier then exit;
+    Result:=Result.NextBrother;
+  end;
 end;
 
 procedure TPascalReaderTool.MoveCursorToUsesStart(UsesNode: TCodeTreeNode);
@@ -3256,13 +3423,13 @@ begin
   if (UsesNode=nil)
   or ((UsesNode.Desc<>ctnUsesSection) and (UsesNode.Desc<>ctnContainsSection))
   then
-    RaiseException('[TPascalParserTool.MoveCursorToUsesStart] '
+    RaiseException(20170421200006,'[TPascalParserTool.MoveCursorToUsesStart] '
       +'internal error: invalid UsesNode');
   // search through the uses section
   MoveCursorToCleanPos(UsesNode.StartPos);
   ReadNextAtom;
   if (not UpAtomIs('USES')) and (not UpAtomIs('CONTAINS')) then
-    RaiseExceptionFmt(ctsStrExpectedButAtomFound,['uses',GetAtom]);
+    RaiseExceptionFmt(20170421200009,ctsStrExpectedButAtomFound,['uses',GetAtom]);
   ReadNextAtom;
 end;
 
@@ -3271,13 +3438,13 @@ begin
   if (UsesNode=nil)
   or ((UsesNode.Desc<>ctnUsesSection) and (UsesNode.Desc<>ctnContainsSection))
   then
-    RaiseException('[TPascalParserTool.MoveCursorToUsesEnd] '
+    RaiseException(20170421200012,'[TPascalParserTool.MoveCursorToUsesEnd] '
       +'internal error: invalid UsesNode');
   // search backwards through the uses section
   MoveCursorToCleanPos(UsesNode.EndPos);
   ReadPriorAtom; // read ';'
   if not AtomIsChar(';') then
-    RaiseExceptionFmt(ctsStrExpectedButAtomFound,[';',GetAtom]);
+    RaiseExceptionFmt(20170421200014,ctsStrExpectedButAtomFound,[';',GetAtom]);
 end;
 
 function TPascalReaderTool.ReadNextUsedUnit(out UnitNameRange,
@@ -3298,7 +3465,7 @@ begin
     ReadNextAtom; // read filename
     if not AtomIsStringConstant then begin
       if not SyntaxExceptions then exit;
-      RaiseStrConstExpected;
+      RaiseStrConstExpected(20170421200017);
     end;
     InAtom:=CurPos;
     ReadNextAtom; // read comma or semicolon
@@ -3315,7 +3482,7 @@ begin
     InAtom:=CurPos;
     ReadPriorAtom; // read 'in'
     if not UpAtomIs('IN') then
-      RaiseExceptionFmt(ctsStrExpectedButAtomFound,[ctsKeywordIn,GetAtom]);
+      RaiseExceptionFmt(20170421200021,ctsStrExpectedButAtomFound,[ctsKeywordIn,GetAtom]);
     ReadPriorAtom; // read unitname
   end else begin
     InAtom:=CleanAtomPosition;
@@ -3391,7 +3558,7 @@ begin
     end;
     // dot
     if (p<>nil) then begin
-      if p='.' then
+      if p^='.' then
         inc(p)
       else
         p:=nil;

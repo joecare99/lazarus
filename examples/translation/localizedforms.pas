@@ -126,12 +126,16 @@ begin
    'fi'   : Result := $040B;    // Finnish
    'fr'   : Result := $040C;    // French
    'he'   : Result := $040D;    // Hebrew
+   'hu'   : Result := $040E;    // Hungarian
    'it'   : Result := $0410;    // Italian
    'jp'   : Result := $0411;    // Japanese
    'pl'   : Result := $0415;    // Polish
    'pt'   : Result := $0816;    // Portuguese (Portugal)
+   'pt_br': Result := $0416;    // Portuguese (Brazil)
    'ru'   : Result := $0419;    // Russian
    'tr'   : Result := $041F;    // Turkish
+   'uk'   : Result := $0422;    // Ukrainian
+   'lt'   : Result := $0427;    // Lithuanian
    'zh_cn', 'zh-cn': Result := $0804;    // Chinese (China)
    'zh_tw', 'zh-tw': Result := $0404;    // Chinese (Taiwan)
    // please complete if necessary. Language code and LCIDs can be found at
@@ -155,9 +159,10 @@ begin
   LCID := GetLCIDFromLangCode(ALang);
 
   // Now we update the format settings to the new language
+ {$PUSH}
  {$WARNINGS OFF}
   GetLocaleFormatSettings(LCID, DefaultFormatSettings);
- {$WARNINGS ON}
+ {$POP}
 
   // We also store the code page that belongs to the new language. We'll need
   // that when converting FCL strings to UTF8.

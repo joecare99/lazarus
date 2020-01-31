@@ -1,64 +1,63 @@
 object ProjectApplicationOptionsFrame: TProjectApplicationOptionsFrame
   Left = 0
-  Height = 477
+  Height = 516
   Top = 0
   Width = 487
-  ClientHeight = 477
+  ClientHeight = 516
   ClientWidth = 487
   TabOrder = 0
-  DesignLeft = 392
-  DesignTop = 251
+  DesignLeft = 437
+  DesignTop = 182
   object AppSettingsGroupBox: TGroupBox
     Left = 0
-    Height = 469
+    Height = 490
     Top = 0
     Width = 487
     Align = alTop
+    Anchors = []
+    AutoSize = True
     Caption = 'AppSettingsGroupBox'
-    ClientHeight = 449
+    ClientHeight = 472
     ClientWidth = 483
     TabOrder = 0
     object TitleLabel: TLabel
-      AnchorSideLeft.Control = AppSettingsGroupBox
       AnchorSideTop.Control = TitleEdit
       AnchorSideTop.Side = asrCenter
       Left = 6
-      Height = 15
+      Height = 13
       Top = 10
-      Width = 51
+      Width = 45
       BorderSpacing.Left = 6
       Caption = 'TitleLabel'
       ParentColor = False
     end
     object IconLabel: TLabel
-      AnchorSideLeft.Control = AppSettingsGroupBox
+      AnchorSideLeft.Control = TitleLabel
       AnchorSideTop.Control = IconPanel
       Left = 6
-      Height = 15
-      Top = 35
-      Width = 51
-      BorderSpacing.Left = 6
+      Height = 13
+      Top = 33
+      Width = 46
       Caption = 'IconLabel'
       ParentColor = False
     end
     object IconTrackLabel: TLabel
-      AnchorSideLeft.Control = IconTrack
-      AnchorSideLeft.Side = asrBottom
-      AnchorSideTop.Control = IconTrack
-      AnchorSideTop.Side = asrCenter
+      AnchorSideLeft.Control = IconBtnsPanel
+      AnchorSideTop.Control = IconBtnsPanel
+      AnchorSideTop.Side = asrBottom
       AnchorSideRight.Control = IconTrack
       Left = 240
-      Height = 15
-      Top = 176
-      Width = 80
-      BorderSpacing.Left = 6
-      BorderSpacing.Right = 6
+      Height = 13
+      Top = 151
+      Width = 72
+      BorderSpacing.Top = 8
       Caption = 'IconTrackLabel'
       ParentColor = False
     end
     object TitleEdit: TEdit
+      AnchorSideRight.Side = asrBottom
       Left = 106
-      Height = 23
+      Height = 21
       Top = 6
       Width = 371
       Align = alTop
@@ -68,31 +67,29 @@ object ProjectApplicationOptionsFrame: TProjectApplicationOptionsFrame
       Text = 'TitleEdit'
     end
     object UseAppBundleCheckBox: TCheckBox
-      AnchorSideLeft.Control = AppSettingsGroupBox
+      AnchorSideLeft.Control = TitleLabel
       AnchorSideTop.Control = DarwinDividerBevel
       AnchorSideTop.Side = asrBottom
       Left = 6
-      Height = 19
-      Top = 337
-      Width = 150
-      BorderSpacing.Left = 6
+      Height = 17
+      Top = 420
+      Width = 134
       BorderSpacing.Top = 3
       Caption = 'UseAppBundleCheckBox'
-      TabOrder = 11
+      TabOrder = 12
     end
     object UseXPManifestCheckBox: TCheckBox
-      AnchorSideLeft.Control = AppSettingsGroupBox
+      AnchorSideLeft.Control = TitleLabel
       AnchorSideTop.Control = WindowsDividerBevel
       AnchorSideTop.Side = asrBottom
       Left = 6
-      Height = 19
-      Top = 224
-      Width = 151
-      BorderSpacing.Left = 6
+      Height = 17
+      Top = 248
+      Width = 136
       BorderSpacing.Top = 3
       Caption = 'UseXPManifestCheckBox'
       OnChange = UseXPManifestCheckBoxChange
-      TabOrder = 7
+      TabOrder = 5
     end
     object IconPanel: TPanel
       AnchorSideLeft.Control = AppSettingsGroupBox
@@ -100,7 +97,7 @@ object ProjectApplicationOptionsFrame: TProjectApplicationOptionsFrame
       AnchorSideTop.Side = asrBottom
       Left = 106
       Height = 128
-      Top = 35
+      Top = 33
       Width = 128
       BorderSpacing.Left = 106
       BorderSpacing.Top = 6
@@ -121,50 +118,6 @@ object ProjectApplicationOptionsFrame: TProjectApplicationOptionsFrame
         OnPictureChanged = IconImagePictureChanged
       end
     end
-    object LoadIconButton: TBitBtn
-      AnchorSideLeft.Control = IconPanel
-      AnchorSideLeft.Side = asrBottom
-      AnchorSideTop.Control = IconPanel
-      AnchorSideBottom.Control = IconPanel
-      AnchorSideBottom.Side = asrBottom
-      Left = 240
-      Height = 25
-      Top = 35
-      Width = 111
-      AutoSize = True
-      BorderSpacing.Left = 6
-      Caption = 'LoadIconButton'
-      OnClick = LoadIconButtonClick
-      TabOrder = 3
-    end
-    object SaveIconButton: TBitBtn
-      AnchorSideLeft.Control = LoadIconButton
-      AnchorSideTop.Control = DefaultIconButton
-      AnchorSideTop.Side = asrBottom
-      Left = 240
-      Height = 25
-      Top = 97
-      Width = 109
-      AutoSize = True
-      BorderSpacing.Top = 6
-      Caption = 'SaveIconButton'
-      OnClick = SaveIconButtonClick
-      TabOrder = 5
-    end
-    object ClearIconButton: TBitBtn
-      AnchorSideLeft.Control = SaveIconButton
-      AnchorSideTop.Control = SaveIconButton
-      AnchorSideTop.Side = asrBottom
-      Left = 240
-      Height = 25
-      Top = 128
-      Width = 112
-      AutoSize = True
-      BorderSpacing.Top = 6
-      Caption = 'ClearIconButton'
-      OnClick = ClearIconButtonClick
-      TabOrder = 6
-    end
     object IconTrack: TTrackBar
       AnchorSideLeft.Control = IconPanel
       AnchorSideTop.Control = IconPanel
@@ -172,7 +125,7 @@ object ProjectApplicationOptionsFrame: TProjectApplicationOptionsFrame
       AnchorSideRight.Control = IconPanel
       AnchorSideRight.Side = asrBottom
       Left = 106
-      Height = 40
+      Height = 46
       Top = 163
       Width = 128
       Max = 0
@@ -180,97 +133,61 @@ object ProjectApplicationOptionsFrame: TProjectApplicationOptionsFrame
       Position = 0
       ShowSelRange = False
       Anchors = [akTop, akLeft, akRight]
+      BorderSpacing.Top = 2
       TabOrder = 2
     end
-    object DpiAwareCheckBox: TCheckBox
-      AnchorSideLeft.Control = UseXPManifestCheckBox
-      AnchorSideTop.Control = UseXPManifestCheckBox
-      AnchorSideTop.Side = asrBottom
-      Left = 27
-      Height = 19
-      Top = 246
-      Width = 123
-      BorderSpacing.Left = 21
-      BorderSpacing.Top = 3
-      Caption = 'DpiAwareCheckBox'
-      TabOrder = 8
-    end
     object UIAccessCheckBox: TCheckBox
-      AnchorSideLeft.Control = DpiAwareCheckBox
+      AnchorSideLeft.Control = DpiAwareLabel
       AnchorSideTop.Control = ExecutionLevelComboBox
       AnchorSideTop.Side = asrBottom
       Left = 27
-      Height = 19
-      Top = 294
-      Width = 119
+      Height = 17
+      Top = 316
+      Width = 109
       BorderSpacing.Top = 3
       Caption = 'UIAccessCheckBox'
-      TabOrder = 10
+      TabOrder = 8
     end
     object ExecutionLevelComboBox: TComboBox
-      AnchorSideLeft.Control = ExecutionLevelLabel
-      AnchorSideLeft.Side = asrBottom
-      AnchorSideTop.Control = DpiAwareCheckBox
+      AnchorSideLeft.Control = DpiAwareComboBox
+      AnchorSideTop.Control = DpiAwareComboBox
       AnchorSideTop.Side = asrBottom
-      Left = 139
-      Height = 23
-      Top = 268
-      Width = 338
+      AnchorSideRight.Control = DpiAwareComboBox
+      AnchorSideRight.Side = asrBottom
+      Left = 154
+      Height = 21
+      Top = 292
+      Width = 323
       Anchors = [akTop, akLeft, akRight]
-      BorderSpacing.Left = 6
       BorderSpacing.Top = 3
-      ItemHeight = 15
+      ItemHeight = 13
       Style = csDropDownList
-      TabOrder = 9
+      TabOrder = 7
     end
     object ExecutionLevelLabel: TLabel
-      AnchorSideLeft.Control = DpiAwareCheckBox
+      AnchorSideLeft.Control = DpiAwareLabel
       AnchorSideTop.Control = ExecutionLevelComboBox
       AnchorSideTop.Side = asrCenter
       Left = 27
-      Height = 15
-      Top = 272
-      Width = 106
+      Height = 13
+      Top = 296
+      Width = 97
       Caption = 'ExecutionLevelLabel'
       ParentColor = False
     end
-    object DefaultIconButton: TButton
-      AnchorSideLeft.Control = LoadIconButton
-      AnchorSideTop.Control = LoadIconButton
-      AnchorSideTop.Side = asrBottom
-      Left = 240
-      Height = 25
-      Top = 66
-      Width = 123
-      AutoSize = True
-      BorderSpacing.Top = 6
-      Caption = 'DefaultIconButton'
-      OnClick = DefaultIconButtonClick
-      TabOrder = 4
-    end
     object WindowsDividerBevel: TDividerBevel
-      AnchorSideTop.Control = IconTrack
+      AnchorSideTop.Control = UseLCLScalingCheckBox
       AnchorSideTop.Side = asrBottom
-      Left = 6
-      Height = 15
-      Top = 206
-      Width = 471
+      AnchorSideRight.Side = asrBottom
+      Left = 3
+      Height = 13
+      Top = 232
+      Width = 477
       Caption = 'For Windows'
       Anchors = [akTop, akLeft, akRight]
-      BorderSpacing.Top = 3
-      Font.Style = [fsBold]
-      ParentFont = False
-    end
-    object DarwinDividerBevel: TDividerBevel
-      AnchorSideTop.Control = UIAccessCheckBox
-      AnchorSideTop.Side = asrBottom
-      Left = 6
-      Height = 15
-      Top = 319
-      Width = 471
-      Caption = 'For Darwin'
-      Anchors = [akTop, akLeft, akRight]
+      BorderSpacing.Left = 3
       BorderSpacing.Top = 6
+      BorderSpacing.Right = 3
       Font.Style = [fsBold]
       ParentFont = False
     end
@@ -279,15 +196,195 @@ object ProjectApplicationOptionsFrame: TProjectApplicationOptionsFrame
       AnchorSideTop.Control = UseAppBundleCheckBox
       AnchorSideTop.Side = asrBottom
       Left = 27
-      Height = 25
-      Top = 362
-      Width = 155
+      Height = 23
+      Top = 443
+      Width = 142
       AutoSize = True
       BorderSpacing.Left = 21
       BorderSpacing.Top = 6
+      BorderSpacing.Bottom = 6
       Caption = 'CreateAppBundleButton'
       OnClick = CreateAppBundleButtonClick
-      TabOrder = 12
+      TabOrder = 13
+    end
+    object DpiAwareLabel: TLabel
+      AnchorSideLeft.Control = UseXPManifestCheckBox
+      AnchorSideTop.Control = DpiAwareComboBox
+      AnchorSideTop.Side = asrCenter
+      Left = 27
+      Height = 13
+      Top = 272
+      Width = 71
+      BorderSpacing.Left = 21
+      BorderSpacing.Top = 3
+      Caption = 'DpiAwareLabel'
+      ParentColor = False
+    end
+    object DpiAwareComboBox: TComboBox
+      AnchorSideLeft.Control = ExecutionLevelLabel
+      AnchorSideLeft.Side = asrBottom
+      AnchorSideTop.Control = UseXPManifestCheckBox
+      AnchorSideTop.Side = asrBottom
+      AnchorSideRight.Control = TitleEdit
+      AnchorSideRight.Side = asrBottom
+      Left = 154
+      Height = 21
+      Top = 268
+      Width = 323
+      Anchors = [akTop, akLeft, akRight]
+      BorderSpacing.Left = 30
+      BorderSpacing.Top = 3
+      ItemHeight = 13
+      Style = csDropDownList
+      TabOrder = 6
+    end
+    object UseLCLScalingCheckBox: TCheckBox
+      AnchorSideLeft.Control = TitleLabel
+      AnchorSideTop.Control = IconTrack
+      AnchorSideTop.Side = asrBottom
+      Left = 6
+      Height = 17
+      Top = 209
+      Width = 133
+      Caption = 'UseLCLScalingCheckBox'
+      TabOrder = 4
+    end
+    object DarwinDividerBevel: TDividerBevel
+      AnchorSideTop.Control = DescriptionEdit
+      AnchorSideTop.Side = asrBottom
+      AnchorSideRight.Side = asrBottom
+      Left = 3
+      Height = 13
+      Top = 404
+      Width = 474
+      Caption = 'For macOS (Darwin)'
+      Anchors = [akTop, akLeft, akRight]
+      BorderSpacing.Left = 3
+      BorderSpacing.Top = 6
+      BorderSpacing.Right = 3
+      Font.Style = [fsBold]
+      ParentFont = False
+    end
+    object NameLabel: TLabel
+      AnchorSideLeft.Control = DpiAwareLabel
+      AnchorSideTop.Control = NameEdit
+      AnchorSideTop.Side = asrCenter
+      Left = 27
+      Height = 13
+      Top = 357
+      Width = 52
+      Caption = 'NameLabel'
+      ParentColor = False
+    end
+    object DescriptionLabel: TLabel
+      AnchorSideLeft.Control = DpiAwareLabel
+      AnchorSideTop.Control = DescriptionEdit
+      AnchorSideTop.Side = asrCenter
+      Left = 27
+      Height = 13
+      Top = 381
+      Width = 78
+      Caption = 'DescriptionLabel'
+      ParentColor = False
+    end
+    object NameEdit: TEdit
+      AnchorSideLeft.Control = DpiAwareComboBox
+      AnchorSideTop.Control = LongPathCheckBox
+      AnchorSideTop.Side = asrBottom
+      AnchorSideRight.Control = DpiAwareComboBox
+      AnchorSideRight.Side = asrBottom
+      Left = 154
+      Height = 21
+      Top = 353
+      Width = 323
+      Anchors = [akTop, akLeft, akRight]
+      BorderSpacing.Top = 3
+      TabOrder = 10
+      Text = 'NameEdit'
+    end
+    object DescriptionEdit: TEdit
+      AnchorSideLeft.Control = DpiAwareComboBox
+      AnchorSideTop.Control = NameEdit
+      AnchorSideTop.Side = asrBottom
+      AnchorSideRight.Control = DpiAwareComboBox
+      AnchorSideRight.Side = asrBottom
+      Left = 154
+      Height = 21
+      Top = 377
+      Width = 323
+      Anchors = [akTop, akLeft, akRight]
+      BorderSpacing.Top = 3
+      TabOrder = 11
+      Text = 'DescriptionEdit'
+    end
+    object LongPathCheckBox: TCheckBox
+      AnchorSideLeft.Control = UIAccessCheckBox
+      AnchorSideTop.Control = UIAccessCheckBox
+      AnchorSideTop.Side = asrBottom
+      Left = 27
+      Height = 17
+      Top = 333
+      Width = 110
+      Caption = 'LongPathCheckBox'
+      TabOrder = 9
+    end
+    object IconBtnsPanel: TPanel
+      AnchorSideLeft.Control = IconPanel
+      AnchorSideLeft.Side = asrBottom
+      AnchorSideTop.Control = IconPanel
+      Left = 240
+      Height = 110
+      Top = 33
+      Width = 114
+      AutoSize = True
+      BorderSpacing.Left = 6
+      BevelOuter = bvNone
+      ChildSizing.VerticalSpacing = 6
+      ChildSizing.Layout = cclLeftToRightThenTopToBottom
+      ChildSizing.ControlsPerLine = 1
+      ClientHeight = 110
+      ClientWidth = 114
+      TabOrder = 3
+      object LoadIconButton: TBitBtn
+        Left = 0
+        Height = 23
+        Top = 0
+        Width = 114
+        AutoSize = True
+        Caption = 'LoadIconButton'
+        OnClick = LoadIconButtonClick
+        TabOrder = 0
+      end
+      object DefaultIconButton: TBitBtn
+        Left = 0
+        Height = 23
+        Top = 29
+        Width = 114
+        AutoSize = True
+        Caption = 'DefaultIconButton'
+        OnClick = DefaultIconButtonClick
+        TabOrder = 1
+      end
+      object SaveIconButton: TBitBtn
+        Left = 0
+        Height = 23
+        Top = 58
+        Width = 114
+        AutoSize = True
+        Caption = 'SaveIconButton'
+        OnClick = SaveIconButtonClick
+        TabOrder = 2
+      end
+      object ClearIconButton: TBitBtn
+        Left = 0
+        Height = 23
+        Top = 87
+        Width = 114
+        AutoSize = True
+        Caption = 'ClearIconButton'
+        OnClick = ClearIconButtonClick
+        TabOrder = 3
+      end
     end
   end
   object OpenPictureDialog1: TOpenPictureDialog

@@ -86,9 +86,9 @@ begin
   MainWidget := GetMainWidget(Widget);
   if MainWidget = nil then
     exit;
-  WidgetInfo := GetWidgetInfo(MainWidget, false);
+  WidgetInfo := GetWidgetInfo(MainWidget);
   if WidgetInfo = nil then
-    WidgetInfo := GetWidgetInfo(cell, false);
+    WidgetInfo := GetWidgetInfo(cell);
   if WidgetInfo = nil then
     exit;
   LCLObject := WidgetInfo^.LCLObject; // the listbox or combobox
@@ -269,7 +269,7 @@ begin
       ItemIndex := 0;
 
   // collect state flags
-    State:=[odPainted];
+    State:=[odBackgroundPainted];
     if (flags and GTK_CELL_RENDERER_SELECTED)>0 then
       Include(State, odSelected);
     if not GTK_WIDGET_SENSITIVE(Widget) then

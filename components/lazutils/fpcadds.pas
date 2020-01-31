@@ -1,12 +1,6 @@
 {
- /***************************************************************************
-                                FPCAdds.pas
-                                -----------
-
- ***************************************************************************/
-
  *****************************************************************************
-  This file is part of the Lazarus Component Library (LCL)
+  This file is part of LazUtils.
 
   See the file COPYING.modifiedLGPL.txt, included in this distribution,
   for details about the license.
@@ -31,24 +25,21 @@ type
 
 function StrToWord(const s: string): word;
 
-function AlignToPtr(const p: Pointer): Pointer;
-function AlignToInt(const p: Pointer): Pointer;
+function AlignToPtr(const p: Pointer): Pointer; inline;
+function AlignToInt(const p: Pointer): Pointer; inline;
 
 implementation
 
 function StrToWord(const s: string): word;
 var
-  p: Integer;
+  i: Integer;
 begin
   Result:=0;
-  p:=1;
-  while (p<=length(s)) do begin
-    Result:=Result*10+ord(s[p])-ord('0');
-    inc(p);
-  end;
+  for i:=1 to Length(s) do
+    Result:=Result*10+ord(s[i])-ord('0');
 end;
 
-function AlignToPtr(const p: Pointer): Pointer;
+function AlignToPtr(const p: Pointer): Pointer; inline;
 begin
 {$IFDEF FPC_REQUIRES_PROPER_ALIGNMENT}
   Result := Align(p, SizeOf(Pointer));
@@ -57,7 +48,7 @@ begin
 {$ENDIF}
 end;
 
-function AlignToInt(const p: Pointer): Pointer;
+function AlignToInt(const p: Pointer): Pointer; inline;
 begin
 {$IFDEF FPC_REQUIRES_PROPER_ALIGNMENT}
   Result := Align(p, SizeOf(integer));

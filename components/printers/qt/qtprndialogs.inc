@@ -3,7 +3,7 @@
 
 { TPageSetupDialog }
 
-function TPageSetupDialog.Execute: Boolean;
+function TPageSetupDialog.DoExecute: Boolean;
 var
   PgDlg: QPageSetupDialogH;
   Str: WideString;
@@ -38,7 +38,7 @@ end;
 
 { TPrinterSetupDialog }
 
-function TPrinterSetupDialog.Execute: Boolean;
+function TPrinterSetupDialog.DoExecute: Boolean;
 var
   PgDlg: QPageSetupDialogH;
   Str: WideString;
@@ -74,7 +74,7 @@ end;
 
 { TPrintDialog }
 
-function TPrintDialog.Execute: Boolean;
+function TPrintDialog.DoExecute: Boolean;
 var
   QtPrnDlg: QPrintDialogH;
   PrnOptions: QAbstractPrintDialogPrintDialogOptions;
@@ -141,7 +141,7 @@ begin
 
     if Result then
     begin
-      S := QtDefaultPrinter.PrinterName;
+      S := UTF16ToUTF8(QtDefaultPrinter.PrinterName);
       if Printer.Printers.IndexOf(S) <> -1 then
         Printer.SetPrinter(S);
       Collate := QtDefaultPrinter.Collate;

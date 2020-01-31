@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
   <ProjectOptions>
-    <Version Value="9"/>
-    <PathDelim Value="\"/>
+    <Version Value="11"/>
     <General>
       <SessionStorage Value="InProjectDir"/>
       <MainUnit Value="0"/>
@@ -13,16 +12,18 @@
     <i18n>
       <EnableI18N Value="True"/>
       <OutDir Value="languages"/>
+      <ExcludedIdentifiers Count="4">
+        <Item1 Value="tform2.lblmoney.caption"/>
+        <Item2 Value="tform2.lblsum.caption"/>
+        <Item3 Value="tform2.lbltodayis.caption"/>
+        <Item4 Value="tlocalizedform.caption"/>
+      </ExcludedIdentifiers>
     </i18n>
-    <VersionInfo>
-      <StringTable ProductVersion=""/>
-    </VersionInfo>
     <BuildModes Count="2">
       <Item1 Name="Debug" Default="True"/>
       <Item2 Name="Release">
         <CompilerOptions>
           <Version Value="11"/>
-          <PathDelim Value="\"/>
           <SearchPaths>
             <IncludeFiles Value="$(ProjOutDir)"/>
           </SearchPaths>
@@ -31,7 +32,7 @@
           </CodeGeneration>
           <Linking>
             <Debugging>
-              <StripSymbols Value="True"/>
+              <GenerateDebugInfo Value="False"/>
             </Debugging>
             <LinkSmart Value="True"/>
             <Options>
@@ -47,9 +48,10 @@
       <Version Value="2"/>
     </PublishOptions>
     <RunParams>
-      <local>
-        <FormatVersion Value="1"/>
-      </local>
+      <FormatVersion Value="2"/>
+      <Modes Count="1">
+        <Mode0 Name="default"/>
+      </Modes>
     </RunParams>
     <RequiredPackages Count="1">
       <Item1>
@@ -75,6 +77,7 @@
         <ComponentName Value="LocalizedForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <UnitName Value="LocalizedForms"/>
       </Unit2>
       <Unit3>
         <Filename Value="unit2.pas"/>
@@ -82,6 +85,7 @@
         <ComponentName Value="Form2"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <UnitName Value="Unit2"/>
       </Unit3>
       <Unit4>
         <Filename Value="stringsunit.pas"/>
@@ -91,16 +95,27 @@
   </ProjectOptions>
   <CompilerOptions>
     <Version Value="11"/>
-    <PathDelim Value="\"/>
     <Target>
       <Filename Value="translation_demo"/>
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <UnitOutputDirectory Value="units\$(TargetCPU)-$(TargetOS)"/>
+      <UnitOutputDirectory Value="units/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
+    <Parsing>
+      <SyntaxOptions>
+        <IncludeAssertionCode Value="True"/>
+      </SyntaxOptions>
+    </Parsing>
     <CodeGeneration>
       <SmartLinkUnit Value="True"/>
+      <Checks>
+        <IOChecks Value="True"/>
+        <RangeChecks Value="True"/>
+        <OverflowChecks Value="True"/>
+        <StackChecks Value="True"/>
+      </Checks>
+      <VerifyObjMethodCallValidity Value="True"/>
     </CodeGeneration>
     <Linking>
       <Options>

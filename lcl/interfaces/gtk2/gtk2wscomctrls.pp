@@ -21,11 +21,13 @@ unit Gtk2WSComCtrls;
 interface
 
 uses
-  // libs
+  // RTL, FCL, libs
   Math, Sysutils, Classes, GLib2, Gtk2, Gdk2, Gdk2pixbuf,
-  // RTL, FCL, LCL
-  ComCtrls, LCLType, LMessages, Controls, Graphics,
-  StdCtrls, Forms, LCLProc, LCLIntf, ImgList, InterfaceBase,
+  // LazUtils
+  LazTracer,
+  // LCL
+  LCLType, LCLIntf, LMessages, Controls, Graphics, ComCtrls, StdCtrls, Forms,
+  ImgList, InterfaceBase,
   // widgetset
   WSComCtrls, WSLCLClasses, WSControls, WSProc,
   // GtkWidgetset
@@ -140,7 +142,7 @@ type
   published
     // columns
     class procedure ColumnDelete(const ALV: TCustomListView; const AIndex: Integer); override;
-    class function  ColumnGetWidth(const ALV: TCustomListView; const {%H-}AIndex: Integer; const AColumn: TListColumn): Integer; override;
+    class function  ColumnGetWidth(const ALV: TCustomListView; const {%H-}AIndex: Integer; const {%H-}AColumn: TListColumn): Integer; override;
     class procedure ColumnInsert(const ALV: TCustomListView; const AIndex: Integer; const AColumn: TListColumn); override;
     class procedure ColumnMove(const ALV: TCustomListView; const AOldIndex, ANewIndex: Integer; const {%H-}AColumn: TListColumn); override;
     class procedure ColumnSetAlignment(const ALV: TCustomListView; const AIndex: Integer; const {%H-}AColumn: TListColumn; const AAlignment: TAlignment); override;
@@ -194,7 +196,7 @@ type
     class procedure SetHotTrackStyles(const ALV: TCustomListView; const {%H-}AValue: TListHotTrackStyles); override;
 //    class procedure SetHoverTime(const ALV: TCustomListView; const {%H-}AValue: Integer); override;
 //    class procedure SetIconOptions(const ALV: TCustomListView; const AValue: TIconOptions); override;
-    class procedure SetImageList(const ALV: TCustomListView; const AList: TListViewImageList; const AValue: TCustomImageList); override;
+    class procedure SetImageList(const ALV: TCustomListView; const AList: TListViewImageList; const AValue: TCustomImageListResolution); override;
     class procedure SetItemsCount(const ALV: TCustomListView; const {%H-}Avalue: Integer); override;
     class procedure SetProperty(const ALV: TCustomListView; const AProp: TListViewProperty; const AIsSet: Boolean); override;
     class procedure SetProperties(const ALV: TCustomListView; const AProps: TListViewProperties); override;
@@ -261,7 +263,9 @@ type
     class procedure ApplyChanges(const ATrackBar: TCustomTrackBar); override;
     class function  GetPosition(const ATrackBar: TCustomTrackBar): integer; override;
     class procedure SetPosition(const ATrackBar: TCustomTrackBar; const NewPosition: integer); override;
-    class procedure SetOrientation(const ATrackBar: TCustomTrackBar; const {%H-}AOrientation: TTrackBarOrientation); override;
+    class procedure GetPreferredSize(const {%H-}AWinControl: TWinControl;
+                        var {%H-}PreferredWidth, PreferredHeight: integer;
+                        {%H-}WithThemeSpace: Boolean); override;
   end;
 
   { TGtk2WSCustomTreeView }
@@ -423,22 +427,33 @@ begin
   Dec(WidgetInfo^.ChangeLock);
 end;
 
-class procedure TGtk2WSTrackBar.SetOrientation(
-  const ATrackBar: TCustomTrackBar; const AOrientation: TTrackBarOrientation);
+
+class procedure TGtk2WSTrackBar.GetPreferredSize(
+  const AWinControl: TWinControl; var PreferredWidth, PreferredHeight: integer;
+  WithThemeSpace: Boolean);
 var
-  B: Boolean;
+  TrackBarWidget: PGtkWidget;
+  Requisition: TGtkRequisition;
 begin
-  if not WSCheckHandleAllocated(ATrackBar, 'SetOrientation') then
-    Exit;
-  B := ATrackBar.Visible;
-  if B then
-    ATrackBar.Hide;
-  try
-    RecreateWnd(ATrackBar);
-  finally
-    if B then
-      ATrackBar.Show;
-  end;
+  TrackBarWidget := {%H-}PGtkWidget(AWinControl.Handle);
+  // if vertical, measure width without ticks
+  if TCustomTrackBar(AWinControl).Orientation = trVertical then
+    gtk_scale_set_draw_value(PGtkScale(TrackBarWidget), False);
+  // set size to default
+  gtk_widget_set_size_request(TrackBarWidget, -1, -1);
+  // ask default size
+  gtk_widget_size_request(TrackBarWidget, @Requisition);
+  if TCustomTrackBar(AWinControl).Orientation = trHorizontal then
+    PreferredHeight := Requisition.Height
+  else
+    begin
+      // gtk_widget_size_request() always returns size of a HScale,
+      // so we use the height for the width
+      PreferredWidth := Requisition.Height;
+      // restore TickStyle
+      gtk_scale_set_draw_value(PGtkScale(TrackBarWidget),
+                               TCustomTrackBar(AWinControl).TickStyle <> tsNone);
+    end;
 end;
 
 { TGtk2WSProgressBar }

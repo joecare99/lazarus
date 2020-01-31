@@ -6,13 +6,14 @@ interface
 
 uses
   Classes, OpenGLContext, SysUtils, FileUtil, Forms, Controls, Graphics,
-  Dialogs, TAGraph, TASeries, TASources, GL, GLU;
+  Dialogs, ExtCtrls, TAGraph, TASeries, TASources, GL, GLU;
 
 type
 
   { TForm1 }
 
   TForm1 = class(TForm)
+    Bevel1: TBevel;
     Chart1: TChart;
     Chart1BarSeries1: TBarSeries;
     Chart1LineSeries1: TLineSeries;
@@ -20,6 +21,7 @@ type
     OpenGLControl1: TOpenGLControl;
     RandomChartSource1: TRandomChartSource;
     procedure Chart1AfterPaint(ASender: TChart);
+    procedure FormCreate(Sender: TObject);
     procedure OpenGLControl1Paint(Sender: TObject);
   end;
 
@@ -31,11 +33,20 @@ implementation
 {$R *.lfm}
 
 uses
-  TADrawUtils, TADrawerOpenGL in '..\..\TADrawerOpenGL.pas', TADrawerCanvas;
+  TADrawUtils, TADrawerOpenGL, TADrawerCanvas;
 
 procedure TForm1.Chart1AfterPaint(ASender: TChart);
 begin
   OpenGLControl1.Invalidate;
+end;
+
+procedure TForm1.FormCreate(Sender: TObject);
+begin
+  // If the text engine does not find the fonts needed for the OpenGL output
+  // copy the fonts to the exe folder and uncomment the next line
+  // Requires TAFonts in "uses"
+
+  //InitFonts(ExtractFilePath(ParamStr(0)));
 end;
 
 procedure TForm1.OpenGLControl1Paint(Sender: TObject);

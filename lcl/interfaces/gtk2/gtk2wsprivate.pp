@@ -232,6 +232,16 @@ type
     class procedure SetCallbacks(const AGtkWidget: PGtkWidget; const AWidgetInfo: PWidgetInfo); override;
   end;
 
+  { TGtk2PrivateMemo }
+  { Private class for gtkmemos }
+
+  TGtk2PrivateMemo = class(TGtkPrivateScrolling)
+  private
+  protected
+  public
+    class procedure UpdateCursor(AInfo: PWidgetInfo); override;
+  end;
+
   { TGtk2PrivateNotebook }
   { Private class for gtknotebooks }
 
@@ -395,7 +405,7 @@ begin
   gdk_window_get_user_data(AWindow, @Data);
   if (Data <> nil) and GTK_IS_WIDGET(Data) then
   begin
-    Info := GetWidgetInfo(PGtkWidget(Data), False);
+    Info := GetWidgetInfo(PGtkWidget(Data));
   end;
   if not Assigned(gdk_window_get_cursor) and (Info = nil)
   then Exit;
@@ -501,7 +511,7 @@ var
     gdk_window_get_user_data(AWindow, @Data);
     if (Data <> nil) and GTK_IS_WIDGET(Data) then
     begin
-      Info := GetWidgetInfo(PGtkWidget(Data), False);
+      Info := GetWidgetInfo(PGtkWidget(Data));
       if Info = AInfo then
         SetWindowCursor(AWindow, Cursor, ASetDefault);
     end;

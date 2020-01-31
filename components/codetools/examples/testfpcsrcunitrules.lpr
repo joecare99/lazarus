@@ -28,8 +28,11 @@ program TestFPCSrcUnitRules;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, SysUtils, CustApp, AVL_Tree, CodeToolManager, DefineTemplates,
-  CodeToolsConfig, FileProcs, CodeToolsStructs, LazFileUtils;
+  Classes, SysUtils, CustApp, Laz_AVL_Tree,
+  // LazUtils
+  LazFileUtils, AvgLvlTree, LazLogger,
+  // CodeTools
+  FileProcs, CodeToolManager, DefineTemplates, CodeToolsConfig;
 
 const
   ConfigFilename = 'codetools.config';
@@ -47,9 +50,9 @@ type
     destructor Destroy; override;
     procedure WriteHelp; virtual;
     procedure Error(Msg: string; DoWriteHelp: Boolean);
-    procedure WriteCompilerInfo(ConfigCache: TFPCTargetConfigCache);
-    procedure WriteNonExistingPPUPaths(ConfigCache: TFPCTargetConfigCache);
-    procedure WriteDuplicatesInPPUPath(ConfigCache: TFPCTargetConfigCache);
+    procedure WriteCompilerInfo(ConfigCache: TPCTargetConfigCache);
+    procedure WriteNonExistingPPUPaths(ConfigCache: TPCTargetConfigCache);
+    procedure WriteDuplicatesInPPUPath(ConfigCache: TPCTargetConfigCache);
     procedure WriteMissingPPUSources(UnitSet: TFPCUnitSetCache);
     procedure WriteDuplicateSources(UnitSet: TFPCUnitSetCache);
     procedure WriteUnitReport(UnitSet: TFPCUnitSetCache; const AnUnitName: string);
@@ -66,11 +69,13 @@ var
   TargetCPU: String;
   FPCSrcDir: String;
   UnitSet: TFPCUnitSetCache;
-  ConfigCache: TFPCTargetConfigCache;
+  ConfigCache: TPCTargetConfigCache;
   Options: TCodeToolsOptions;
+  Rescan: Boolean;
+  SourceCache: TFPCSourceCache;
 begin
   // quick check parameters
-  ErrorMsg:=CheckOptions('hc:T:P:F:u:','help compiler: targetos: targetcpu: fpcsrcdir: checkunit:');
+  ErrorMsg:=CheckOptions('hc:T:P:F:u:','help compiler: targetos: targetcpu: fpcsrcdir: checkunit: rescan');
   if ErrorMsg<>'' then begin
     ShowException(Exception.Create(ErrorMsg));
     Terminate;
@@ -99,6 +104,7 @@ begin
   FPCSrcDir:=GetOptionValue('F','fpcsrcdir');
   FPCSrcDir:=CleanAndExpandDirectory(FPCSrcDir);
   CheckUnitName:=GetOptionValue('u','checkunit');
+  Rescan:=HasOption('rescan');
 
   if not FileExistsUTF8(CompilerFilename) then
     Error('compiler file not found: '+CompilerFilename,false);
@@ -107,8 +113,12 @@ begin
 
   Options:=TCodeToolsOptions.Create;
   Options.InitWithEnvironmentVariables;
-  if FileExistsUTF8(ConfigFilename) then
+  if FileExistsUTF8(ConfigFilename) then begin
+    writeln('loading ',ConfigFilename);
     Options.LoadFromFile(ConfigFilename);
+  end else begin
+    writeln('no config yet: ',ConfigFilename);
+  end;
   Options.FPCPath:=CompilerFilename;
   Options.FPCOptions:='';
   Options.TargetOS:=TargetOS;
@@ -117,15 +127,21 @@ begin
 
   CodeToolBoss.Init(Options);
 
-  UnitSet:=CodeToolBoss.FPCDefinesCache.FindUnitSet(CompilerFilename,
+  UnitSet:=CodeToolBoss.CompilerDefinesCache.FindUnitSet(CompilerFilename,
                                           TargetOS,TargetCPU,'',FPCSrcDir,true);
   UnitSet.Init;
 
+  //writeln('saving ',ConfigFilename);
   Options.SaveToFile(ConfigFilename);
   Options.Free;
 
   ConfigCache:=UnitSet.GetConfigCache(false);
-  writeln('FPCSrcDir=',UnitSet.FPCSourceDirectory);
+  if Rescan then begin
+    ConfigCache.Clear;
+    SourceCache:=UnitSet.GetSourceCache(false);
+    SourceCache.Clear;
+    UnitSet.GetUnitToSourceTree(true);
+  end;
   WriteCompilerInfo(ConfigCache);
   WriteNonExistingPPUPaths(ConfigCache);
   WriteDuplicatesInPPUPath(ConfigCache);
@@ -171,6 +187,8 @@ begin
   writeln;
   writeln('  -u <unit name>, --checkunit=<unit name>');
   writeln('         Write a detailed report about this unit.');
+  writeln;
+  writeln('  --rescan  rescan compiler and FPC sources for this combination');
 end;
 
 procedure TTestFPCSourceUnitRules.Error(Msg: string; DoWriteHelp: Boolean);
@@ -184,10 +202,10 @@ begin
 end;
 
 procedure TTestFPCSourceUnitRules.WriteCompilerInfo(
-  ConfigCache: TFPCTargetConfigCache);
+  ConfigCache: TPCTargetConfigCache);
 var
   i: Integer;
-  CfgFile: TFPCConfigFileState;
+  CfgFile: TPCConfigFileState;
 begin
   writeln('Compiler=',ConfigCache.Compiler);
   writeln('TargetOS=',ConfigCache.TargetOS);
@@ -210,7 +228,7 @@ begin
 end;
 
 procedure TTestFPCSourceUnitRules.WriteNonExistingPPUPaths(
-  ConfigCache: TFPCTargetConfigCache);
+  ConfigCache: TPCTargetConfigCache);
 var
   SearchPaths: TStrings;
   i: Integer;
@@ -227,7 +245,7 @@ begin
 end;
 
 procedure TTestFPCSourceUnitRules.WriteDuplicatesInPPUPath(
-  ConfigCache: TFPCTargetConfigCache);
+  ConfigCache: TPCTargetConfigCache);
 var
   i: Integer;
   Directory: String;
@@ -241,7 +259,7 @@ var
   IsPPU: Boolean;
   SourceFiles: TStringList;
   Units: TStringToStringTree;
-  Item: PStringToStringTreeItem;
+  Item: PStringToStringItem;
   Node: TAVLTreeNode;
 begin
   SearchPaths:=ConfigCache.UnitPaths;
@@ -282,7 +300,7 @@ begin
   Node:=Units.Tree.FindLowest;
   i:=0;
   while Node<>nil do begin
-    Item:=PStringToStringTreeItem(Node.Data);
+    Item:=PStringToStringItem(Node.Data);
     Filename:=Item^.Value;
     if System.Pos(';',Filename)>0 then begin
       // duplicate units
@@ -302,8 +320,8 @@ procedure TTestFPCSourceUnitRules.WriteMissingPPUSources(
 var
   UnitToSrc: TStringToStringTree;
   Node: TAVLTreeNode;
-  Item: PStringToStringTreeItem;
-  ConfigCache: TFPCTargetConfigCache;
+  Item: PStringToStringItem;
+  ConfigCache: TPCTargetConfigCache;
   aUnitName: String;
   Cnt: Integer;
   Filename: String;
@@ -319,7 +337,7 @@ begin
     Cnt:=0;
     Node:=ConfigCache.Units.Tree.FindLowest;
     while Node<>nil do begin
-      Item:=PStringToStringTreeItem(Node.Data);
+      Item:=PStringToStringItem(Node.Data);
       aUnitName:=Item^.Name;
       Filename:=Item^.Value;
       if CompareFileExt(Filename,'ppu',false)=0 then begin
@@ -353,7 +371,7 @@ var
   SrcDuplicates: TStringToStringTree;
   Node: TAVLTreeNode;
   Cnt: Integer;
-  Item: PStringToStringTreeItem;
+  Item: PStringToStringItem;
   aUnitName: String;
   Files: String;
   Units: TStringToStringTree;
@@ -368,7 +386,7 @@ begin
     Cnt:=0;
     Node:=SrcDuplicates.Tree.FindLowest;
     while Node<>nil do begin
-      Item:=PStringToStringTreeItem(Node.Data);
+      Item:=PStringToStringItem(Node.Data);
       aUnitName:=Item^.Name;
       Files:=Item^.Value;
       PPUFile:=Units[aUnitName];
@@ -386,7 +404,7 @@ begin
   Cnt:=0;
   Node:=SrcDuplicates.Tree.FindLowest;
   while Node<>nil do begin
-    Item:=PStringToStringTreeItem(Node.Data);
+    Item:=PStringToStringItem(Node.Data);
     aUnitName:=Item^.Name;
     Files:=Item^.Value;
     if (Units=nil) or (Units[aUnitName]='') then begin
@@ -402,11 +420,12 @@ end;
 procedure TTestFPCSourceUnitRules.WriteUnitReport(UnitSet: TFPCUnitSetCache;
   const AnUnitName: string);
 var
-  ConfigCache: TFPCTargetConfigCache;
+  ConfigCache: TPCTargetConfigCache;
   PPUFile: String;
   SourceCache: TFPCSourceCache;
   aTree: TStringToStringTree;
   SrcRules: TFPCSourceRules;
+  FPM: TPCFPMFileState;
 begin
   writeln;
   writeln('Unit report for ',AnUnitName);
@@ -423,13 +442,28 @@ begin
   else
     writeln('  in PPU search path: ',PPUFile);
 
+  // search in FPC sources
   SourceCache:=UnitSet.GetSourceCache(false);
   SrcRules:=UnitSet.GetSourceRules(false);
   if SourceCache.Files<>nil then begin
     aTree:=GatherUnitsInFPCSources(SourceCache.Files,
       ConfigCache.RealTargetOS,ConfigCache.RealTargetCPU,nil,
       SrcRules,AnUnitName);
+    if (aTree=nil) or (aTree.Count=0) then
+      writeln('  WARNING: no units in FPC sources: ',SourceCache.Directory)
+    else
+      writeln('  in FPC source dir: ',aTree[AnUnitName]);
     aTree.Free;
+  end else
+    writeln('  WARNING: no files in FPC sources: ',SourceCache.Directory);
+
+  // search in FPM
+  if ConfigCache.UnitToFPM<>nil then begin
+    FPM:=TPCFPMFileState(ConfigCache.UnitToFPM[AnUnitName]);
+    if FPM<>nil then begin
+      writeln('  in fpm: ',FPM.Name,' File=',FPM.FPMFilename);
+      writeln('  fpm source: ',FPM.UnitToSrc[AnUnitName]);
+    end;
   end;
 end;
 

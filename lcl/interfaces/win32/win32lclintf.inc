@@ -103,6 +103,59 @@ begin
   Result := True;
 end;
 
+type
+  TFontIsMonoSpaceRec = record
+    Name: string;
+    Result: Boolean;
+  end;
+  PFontIsMonoSpaceRec = ^TFontIsMonoSpaceRec;
+
+function EnumFontsCallBack(
+  var LogFont: TEnumLogFontEx;
+  var Metric: TNewTextMetricEx;
+  FontType: Longint;
+  Data: LParam):LongInt; stdcall;
+var
+  R: PFontIsMonoSpaceRec;
+begin
+  R := PFontIsMonoSpaceRec(Data);
+  if ((logfont.elfLogFont.lfPitchAndFamily and FIXED_PITCH) = FIXED_PITCH)
+  and (CompareStr(R^.Name, LogFont.elfLogFont.lfFaceName) = 0) then
+  begin
+    R^.Result := True;
+    Result := 0 // we found it -> stop enumeration
+  end else
+    Result := 1;
+end;
+
+
+function TWin32WidgetSet.FontIsMonoSpace(Font: HFont): boolean;
+var
+  LF: LogFontA;
+  Res: LongInt;
+  DC: HDC;
+  Rec: TFontIsMonoSpaceRec;
+begin
+  Result := False;
+  FillChar(LF{%H-}, SizeOf(LogFontA), #0);
+  Res := GetObject(Font, SizeOf(LogFontA),@LF);
+  //writeln('TWin32WidgetSet.FontIsMonoSpace: Res = ',Res,' SizeOf(LogFont) = ',SizeOf(LogFontA));
+  //TWin32WidgetSet.GetObject uses LogFontW and converts back to LogFontA, so Res should be SizeOf(LogFontW)
+  if (Res <> SizeOf(LogFontW)) then
+    Exit;
+  LF.lfCharSet := DEFAULT_CHARSET;
+  LF.lfPitchAndFamily := 0;
+  Rec.Name := LF.lfFaceName;
+  Rec.Result := False;
+  DC := GetDC(0);
+  try
+    EnumFontFamiliesEX(DC, @LF, @EnumFontsCallback, LPARAM(@Rec), 0);
+  finally
+    ReleaseDC(0, DC);
+  end;
+  Result := Rec.Result;
+end;
+
 procedure TWin32WidgetSet.HandleProcessEvent(AData: PtrInt; AFlags: dword);
 var
   lProcessEvent: PProcessEvent absolute AData;
@@ -564,7 +617,7 @@ var
   SizeRect: TRect;
   Height, Width: Integer;
   FixedHeight, FixedWidth: boolean;
-  MinWidth, MinHeight, MaxWidth, MaxHeight: Integer;
+  //MinWidth, MinHeight, MaxWidth, MaxHeight: Integer;
 begin
   Result := True;
 
@@ -574,11 +627,10 @@ begin
 
     FixedHeight := false;
     FixedWidth := false;
-
-    MinWidth := 0;
-    MinHeight := 0;
-    MaxWidth := 0;
-    MaxHeight := 0;
+    //MinWidth := 0;
+    //MinHeight := 0;
+    //MaxWidth := 0;
+    //MaxHeight := 0;
 
     if SizeConstraints.Control is TCustomComboBox then
     begin

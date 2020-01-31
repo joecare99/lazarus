@@ -143,7 +143,7 @@ begin
   IntfTop := ATop;
   IntfWidth := AWidth;
   IntfHeight := AHeight;
-  LCLBoundsToWin32Bounds(AWinControl, IntfLeft, IntfTop, IntfWidth, IntfHeight);
+  LCLBoundsToWin32Bounds(AWinControl, IntfLeft, IntfTop);
   {$IFDEF VerboseCDForms}
   DebugLn('[TCDWSCustomForm.WSWinControl_SetBounds] A ', dbgsName(AWinControl),
     ' LCL=',Format('%d, %d, %d, %d', [ALeft,ATop,AWidth,AHeight]),
@@ -176,7 +176,7 @@ var
 begin
   IntfLeft := ALeft; IntfTop := ATop;
   IntfWidth := AWidth; IntfHeight := AHeight;
-  LCLBoundsToWin32Bounds(AWinControl, IntfLeft, IntfTop, IntfWidth, IntfHeight);
+  LCLBoundsToWin32Bounds(AWinControl, IntfLeft, IntfTop);
   {$IFDEF VerboseSizeMsg}
   Debugln('TWinCEWSWinControl.ResizeWindow A ',AWinControl.Name,':',AWinControl.ClassName,
     ' LCL=',dbgs(ALeft),',',dbgs(ATop),',',dbgs(AWidth)+','+dbgs(AHeight),
@@ -258,7 +258,7 @@ begin
   Width := AParams.Width;
   Height := AParams.Height;
 
-  LCLBoundsToWin32Bounds(AWinControl, Left, Top, Width, Height);
+  LCLBoundsToWin32Bounds(AWinControl, Left, Top);
   //    if AWinControl is TCustomControl then
   //      if TCustomControl(AWinControl).BorderStyle = bsSingle then
   //        FlagsEx := FlagsEx or WS_EX_CLIENTEDGE;
@@ -388,7 +388,7 @@ begin
   Width := AParams.Width;
   Height := AParams.Height;
 
-  LCLBoundsToWin32Bounds(AWinControl, Left, Top, Width, Height);
+  LCLBoundsToWin32Bounds(AWinControl, Left, Top);
   //    if AWinControl is TCustomControl then
   //      if TCustomControl(AWinControl).BorderStyle = bsSingle then
   //        FlagsEx := FlagsEx or WS_EX_CLIENTEDGE;
@@ -432,7 +432,8 @@ begin
     Height := lWinBounds.Bottom - lWinBounds.Top;
   end;
   //SubClassWndProc := @CustomFormWndProc;
-  if not (csDesigning in lForm.ComponentState) and lForm.AlphaBlend then
+  if not (csDesigning in lForm.ComponentState) and lForm.AlphaBlend
+  and ((WindowsVersion >= wv8) or (Parent = 0)) then
     FlagsEx := FlagsEx or WS_EX_LAYERED;
 
   //SetStdBiDiModeParams(AWinControl, Params);

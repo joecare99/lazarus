@@ -73,6 +73,8 @@ type
     procedure Add(ADecorator: IDiaDecorator);
   public
     constructor Create(AOwner: TDiaObject);
+    procedure Changed(ASender: TDiaObject); override;
+    procedure Notify(ASender: TDiaObject); override;
     property Owner: TDiaObject read FOwner;
     function GetEnumerator: TDiaDecoratorEnumerator;
   end;
@@ -149,7 +151,7 @@ type
   public
     constructor Init(AOwner: TDiaElement);
     procedure Assign(const ASource: TDiaPosition);
-    class function Equals(const A, B: TDiaPosition): Boolean;
+    class function Equals(const A, B: TDiaPosition): Boolean; static;
     function Calc(const A, B: TDiaPoint): TDiaPoint;
 
     property Owner: TDiaElement read FOwner;
@@ -454,9 +456,21 @@ begin
   FOwner := AOwner;
 end;
 
+procedure TDiaDecoratorList.Changed(ASender: TDiaObject);
+begin
+  // Remove compiler warning of abstract method
+  Unused(ASender);
+end;
+
 function TDiaDecoratorList.GetEnumerator: TDiaDecoratorEnumerator;
 begin
   Result := TDiaDecoratorEnumerator.Create(Self);
+end;
+
+procedure TDiaDecoratorList.Notify(ASender: TDiaObject);
+begin
+  // Remove compiler warning of abstract method
+  Unused(ASender);
 end;
 
 { TDiaDecorator }
@@ -524,7 +538,7 @@ procedure TDiaCenterConnector.Changed(ASender: TDiaObject);
 begin
   inherited;
   if Element is TDiaCenterElement then
-    FActualPos := (Element as TDiaCenterElement).ActualPos;
+    FActualPos := TDiaCenterElement(Element).ActualPos;
 end;
 
 { TDiaBoxConnector }

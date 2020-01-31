@@ -31,13 +31,13 @@ end;
 
 function TWidgetSet.GetAppHandle: THandle;
 begin
-  DebugLn('Warning: AppHandle is not implemented for this widgetset yet');
+  // DebugLn('Warning: AppHandle is not implemented for this widgetset yet');
   Result := 0;
 end;
 
 procedure TWidgetSet.SetAppHandle(const AValue: THandle);
 begin
-  DebugLn('Warning: AppHandle is not implemented for this widgetset yet');
+  // DebugLn('Warning: AppHandle is not implemented for this widgetset yet');
 end;
 
 procedure TWidgetSet.PassCmdLineOptions;
@@ -89,11 +89,9 @@ begin
     lcFormIcon,
     lcModalWindow,
     lcReceivesLMClearCutCopyPasteReliably,
-    lcEmulatedMDI:
-      Result := LCL_CAPABILITY_YES;
-    lcSendsUTF8KeyPress:
-      Result := LCL_CAPABILITY_YES;
-    lcAccessibilitySupport: Result := LCL_CAPABILITY_NO;
+    lcSendsUTF8KeyPress,
+    lcEmulatedMDI,
+    lcNativeTaskDialog: Result := LCL_CAPABILITY_YES;
   else
     Result := LCL_CAPABILITY_NO;
   end;

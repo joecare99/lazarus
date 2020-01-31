@@ -26,7 +26,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -39,9 +39,10 @@ interface
 
 uses
   Classes, Forms, Controls, math, sysutils, LazLoggerBase, Clipbrd,
-  IDEWindowIntf, Menus, ComCtrls, ActnList, ExtCtrls, StdCtrls, LCLType, IDEImagesIntf,
-  LazarusIDEStrConsts, DebuggerStrConst, Debugger, DebuggerDlg,
-  DbgIntfBaseTypes, DbgIntfDebuggerBase, DbgIntfMiscClasses, BaseDebugManager;
+  IDEWindowIntf, Menus, ComCtrls, ActnList, ExtCtrls, StdCtrls, LCLType,
+  IDEImagesIntf, LazarusIDEStrConsts, DebuggerStrConst, Debugger, DebuggerDlg,
+  DbgIntfBaseTypes, DbgIntfDebuggerBase, DbgIntfMiscClasses, SynEdit,
+  BaseDebugManager;
 
 type
 
@@ -121,6 +122,9 @@ type
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
     procedure lvWatchesDblClick(Sender: TObject);
+    procedure lvWatchesDragDrop(Sender, Source: TObject; {%H-}X, {%H-}Y: Integer);
+    procedure lvWatchesDragOver(Sender, Source: TObject; {%H-}X, {%H-}Y: Integer;
+      {%H-}State: TDragState; var Accept: Boolean);
     procedure lvWatchesSelectItem(Sender: TObject; {%H-}AItem: TListItem; {%H-}Selected: Boolean);
     procedure popAddClick(Sender: TObject);
     procedure popPropertiesClick(Sender: TObject);
@@ -213,46 +217,46 @@ begin
   ToolBar1.Images := IDEImages.Images_16;
   mnuPopup.Images := IDEImages.Images_16;
 
-  FPowerImgIdx := IDEImages.LoadImage(16, 'debugger_power');
-  FPowerImgIdxGrey := IDEImages.LoadImage(16, 'debugger_power_grey');
+  FPowerImgIdx := IDEImages.LoadImage('debugger_power');
+  FPowerImgIdxGrey := IDEImages.LoadImage('debugger_power_grey');
   actPower.ImageIndex := FPowerImgIdx;
   actPower.Caption := lisDbgWinPower;
   actPower.Hint := lisDbgWinPowerHint;
 
   actAddWatch.Caption:=lisBtnAdd;
-  actAddWatch.ImageIndex := IDEImages.LoadImage(16, 'laz_add');
+  actAddWatch.ImageIndex := IDEImages.LoadImage('laz_add');
 
   actToggleCurrentEnable.Caption := lisBtnEnabled;
 
   actEnableSelected.Caption := lisDbgItemEnable;
   actEnableSelected.Hint    := lisDbgItemEnableHint;
-  actEnableSelected.ImageIndex := IDEImages.LoadImage(16, 'debugger_enable');
+  actEnableSelected.ImageIndex := IDEImages.LoadImage('debugger_enable');
 
   actDisableSelected.Caption := lisDbgItemDisable;
   actDisableSelected.Hint    := lisDbgItemDisableHint;
-  actDisableSelected.ImageIndex := IDEImages.LoadImage(16, 'debugger_disable');
+  actDisableSelected.ImageIndex := IDEImages.LoadImage('debugger_disable');
 
   actDeleteSelected.Caption := lisBtnDelete;
   actDeleteSelected.Hint    := lisDbgItemDeleteHint;
-  actDeleteSelected.ImageIndex := IDEImages.LoadImage(16, 'laz_delete');
+  actDeleteSelected.ImageIndex := IDEImages.LoadImage('laz_delete');
 
   actEnableAll.Caption := liswlENableAll; //lisDbgAllItemEnable;
   actEnableAll.Hint    := lisDbgAllItemEnableHint;
-  actEnableAll.ImageIndex := IDEImages.LoadImage(16, 'debugger_enable_all');
+  actEnableAll.ImageIndex := IDEImages.LoadImage('debugger_enable_all');
 
   actDisableAll.Caption := liswlDIsableAll; //lisDbgAllItemDisable;
   actDisableAll.Hint    := lisDbgAllItemDisableHint;
-  actDisableAll.ImageIndex := IDEImages.LoadImage(16, 'debugger_disable_all');
+  actDisableAll.ImageIndex := IDEImages.LoadImage('debugger_disable_all');
 
   actDeleteAll.Caption := liswlDeLeteAll; //lisDbgAllItemDelete;
   actDeleteAll.Hint    := lisDbgAllItemDeleteHint;
-  actDeleteAll.ImageIndex := IDEImages.LoadImage(16, 'menu_clean');
+  actDeleteAll.ImageIndex := IDEImages.LoadImage('menu_clean');
 
   actProperties.Caption:= liswlProperties;
-  actProperties.ImageIndex := IDEImages.LoadImage(16, 'menu_environment_options');
+  actProperties.ImageIndex := IDEImages.LoadImage('menu_environment_options');
 
   actToggleInspectSite.Caption:= liswlInspectPane;
-  actToggleInspectSite.ImageIndex := IDEImages.LoadImage(16, 'debugger_inspect');
+  actToggleInspectSite.ImageIndex := IDEImages.LoadImage('debugger_inspect');
 
   actAddWatchPoint.Caption := lisWatchToWatchPoint;
 
@@ -413,6 +417,30 @@ begin
     popAddClick(Sender);
 end;
 
+procedure TWatchesDlg.lvWatchesDragDrop(Sender, Source: TObject; X, Y: Integer);
+var
+  s: String;
+  NewWatch: TCurrentWatch;
+begin
+  s := '';
+  if (Source is TSynEdit) then s := TSynEdit(Source).SelText;
+  if (Source is TCustomEdit) then s := TCustomEdit(Source).SelText;
+
+  if s <> '' then begin
+    NewWatch := DebugBoss.Watches.CurrentWatches.Add(s);
+    NewWatch.DisplayFormat := wdfDefault;
+    NewWatch.EvaluateFlags := [defClassAutoCast];
+    NewWatch.Enabled       := True;
+  end;
+end;
+
+procedure TWatchesDlg.lvWatchesDragOver(Sender, Source: TObject; X, Y: Integer;
+  State: TDragState; var Accept: Boolean);
+begin
+  Accept := ( (Source is TSynEdit) and (TSynEdit(Source).SelAvail) ) or
+            ( (Source is TCustomEdit) and (TCustomEdit(Source).SelText <> '') );
+end;
+
 procedure TWatchesDlg.FormDestroy(Sender: TObject);
 begin
   //DebugLn('TWatchesDlg.FormDestroy ',DbgSName(Self));
@@ -527,9 +555,11 @@ var
 begin
   Watch := GetSelected;
   if Watch = nil then Exit;
-  NewBreakpoint := BreakPoints.Add(Watch.Expression, wpsGlobal, wpkWrite);
+  NewBreakpoint := BreakPoints.Add(Watch.Expression, wpsGlobal, wpkWrite, True);
   if DebugBoss.ShowBreakPointProperties(NewBreakpoint) <> mrOk then
-    ReleaseRefAndNil(NewBreakpoint);
+    ReleaseRefAndNil(NewBreakpoint)
+  else
+    NewBreakpoint.EndUpdate;
 end;
 
 procedure TWatchesDlg.actCopyNameExecute(Sender: TObject);
@@ -772,7 +802,7 @@ begin
               else
                 InspectMemo.Append(t.Fields[i].Name + ': ' + t.Fields[i].DBGType.Value.AsString);
             end;
-          skProcedure, skFunction: ;
+          skProcedure, skFunction, skProcedureRef, skFunctionRef: ;
           else
             InspectMemo.Append(t.Fields[i].Name + ': ' + t.Fields[i].DBGType.Value.AsString);
         end;
@@ -825,6 +855,7 @@ procedure TWatchesDlg.UpdateItem(const AItem: TListItem; const AWatch: TIdeWatch
   end;
 var
   WatchValue: TIdeWatchValue;
+  WatchValueStr: string;
 begin
   DebugBoss.LockCommandProcessing;
   try
@@ -840,11 +871,12 @@ begin
   if (WatchValue <> nil) and
      ( (GetSelectedSnapshot = nil) or not(WatchValue.Validity in [ddsUnknown, ddsEvaluating, ddsRequested]) )
   then begin
+    WatchValueStr := ClearMultiline(DebugBoss.FormatValue(WatchValue.TypeInfo, WatchValue.Value));
     if (WatchValue.TypeInfo <> nil) and
        (WatchValue.TypeInfo.Attributes * [saArray, saDynArray] <> []) and
        (WatchValue.TypeInfo.Len >= 0)
-    then AItem.SubItems[0] := Format(drsLen, [WatchValue.TypeInfo.Len]) + ClearMultiline(WatchValue.Value)
-    else AItem.SubItems[0] := ClearMultiline(WatchValue.Value);
+    then AItem.SubItems[0] := Format(drsLen, [WatchValue.TypeInfo.Len]) + WatchValueStr
+    else AItem.SubItems[0] := WatchValueStr;
   end
   else
     AItem.SubItems[0] := '<not evaluated>';

@@ -126,6 +126,7 @@ resourcestring
   SYNS_AttrSQLPlus              =  'SQL*Plus command';
   SYNS_AttrString               =  'String';
   SYNS_AttrSymbol               =  'Symbol';
+  SYNS_AttrProcedureHeaderName  =  'Procedure header name';
   SYNS_AttrCaseLabel            =  'Case label';
   SYNS_AttrSyntaxError          =  'SyntaxError';
   SYNS_AttrSystem               =  'System functions and variables';
@@ -243,6 +244,7 @@ const
   SYNS_XML_AttrSQLPlus              =  'SQL*Plus command';
   SYNS_XML_AttrString               =  'String';
   SYNS_XML_AttrSymbol               =  'Symbol';
+  SYNS_XML_AttrProcedureHeaderName  =  'Procedure header name';
   SYNS_XML_AttrCaseLabel            =  'Case label';
   SYNS_XML_AttrSyntaxError          =  'SyntaxError';
   SYNS_XML_AttrSystem               =  'System functions and variables';
@@ -395,6 +397,7 @@ const
   SYNS_LangTeX                  =  'TeX';
   SYNS_LangPo                   =  'po language files';
   SYNS_LangPike                 =  'Pike';
+  SYNS_LangSh                   =  'UNIX Shell Script';
 
 resourcestring
 
@@ -433,6 +436,8 @@ resourcestring
   SYNS_emcStartSelectTokens        = 'Selection (tokens) ';
   SYNS_emcStartSelectWords         = 'Selection (words)';
   SYNS_emcStartSelectLines         = 'Selection (lines)';
+  SYNS_emcOverViewGutterGotoMark   = 'Jump to Mark (Overview Gutter)';
+  SYNS_emcOverViewGutterScrollTo   = 'Scroll (Overview Gutter)';
 
   SYNS_emcContextMenuCaretMove_opt = '"Move caret, when selection exists", Never, "Click outside", Always';
   SYNS_emcWheelScroll_opt          = 'Speed,"System settings",Lines,Pages,"Pages (less one line)"';

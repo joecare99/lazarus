@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -32,24 +32,30 @@ unit ComponentList;
 interface
 
 uses
-  Classes, SysUtils, LCLType, Forms, Controls, Graphics, StdCtrls, ExtCtrls,
-  ComCtrls, ButtonPanel, Menus, LazarusIDEStrConsts, ComponentReg, PackageDefs,
-  IDEImagesIntf, TreeFilterEdit, FormEditingIntf, IDEOptionDefs;
+  Classes, SysUtils,
+  // LCL
+  LCLType, Forms, Controls, Graphics, StdCtrls, ExtCtrls, ComCtrls, Menus, Buttons,
+  Dialogs, ImgList,
+  // LazControls
+  TreeFilterEdit,
+  // IdeIntf
+  FormEditingIntf, PropEdits, ComponentReg,
+  // IDE
+  LazarusIDEStrConsts, PackageDefs, IDEOptionDefs, EnvironmentOpts, Designer;
 
 type
 
   { TComponentListForm }
 
   TComponentListForm = class(TForm)
-    imListPalette: TImageList;
-    imInheritance: TImageList;
+    chbKeepOpen: TCheckBox;
     ListTree: TTreeView;
-    ButtonPanel: TButtonPanel;
+    ButtonPanel: TPanel;
     miCollapse: TMenuItem;
     miCollapseAll: TMenuItem;
     miExpand: TMenuItem;
     miExpandAll: TMenuItem;
-    OKButton: TPanelBitBtn;
+    OKButton: TButton;
     LabelSearch: TLabel;
     PageControl: TPageControl;
     FilterPanel: TPanel;
@@ -64,6 +70,8 @@ type
     TabSheetList: TTabSheet;
     tmDeselect: TTimer;
     TreeFilterEd: TTreeFilterEdit;
+    SelectionToolButton: TSpeedButton;
+    procedure chbKeepOpenChange(Sender: TObject);
     procedure FormActivate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure ListTreeSelectionChanged(Sender: TObject);
@@ -73,13 +81,14 @@ type
     procedure miExpandClick(Sender: TObject);
     procedure OKButtonClick(Sender: TObject);
     procedure ComponentsDblClick(Sender: TObject);    
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);    
+    procedure FormClose(Sender: TObject; var {%H-}CloseAction: TCloseAction);    
     procedure pmCollapseExpandPopup(Sender: TObject);
     procedure tmDeselectTimer(Sender: TObject);
     procedure TreeFilterEdAfterFilter(Sender: TObject);
     procedure PageControlChange(Sender: TObject);
     procedure TreeKeyPress(Sender: TObject; var Key: char);
     procedure FormKeyDown(Sender: TObject; var Key: Word; {%H-}Shift: TShiftState);
+    procedure SelectionToolButtonClick(Sender: TObject);
   private
     PrevPageIndex: Integer;
     PrevChangeStamp: Integer;
@@ -90,6 +99,8 @@ type
     FIgnoreSelection: Boolean;
     FPageControlChange: Boolean;
     FActiveTree: TTreeView;
+    FAddCompNewLeft, FAddCompNewTop: Integer;
+    FAddCompNewParent: TComponent;
     procedure ClearSelection;
     procedure SelectionWasChanged;
     procedure ComponentWasAdded({%H-}ALookupRoot, {%H-}AComponent: TComponent;
@@ -97,6 +108,8 @@ type
     procedure DoComponentInheritence(Comp: TRegisteredComponent);
     procedure UpdateComponents;
     procedure UpdateButtonState;
+    function IsDocked: Boolean;
+    procedure AddSelectedComponent;
   protected
     procedure UpdateShowing; override;
   public
@@ -120,22 +133,27 @@ begin
 
   Name:=NonModalIDEWindowNames[nmiwComponentList];
   FActiveTree := ListTree;
+
+  with SelectionToolButton do begin
+    LoadGlyphFromResourceName(hInstance, 'tmouse');
+    ShowHint := EnvironmentOptions.ShowHintsForComponentPalette;
+    Width := ComponentPaletteBtnWidth;
+    BorderSpacing.Around := (FilterPanel.Height - ComponentPaletteImageHeight) div 2;
+  end;
+
   //Translations
   LabelSearch.Caption := lisMenuFind;
   Caption := lisCmpLstComponents;
   TabSheetList.Caption := lisCmpLstList;
   TabSheetPaletteTree.Caption := lisCmpLstPalette;
   TabSheetInheritance.Caption := lisCmpLstInheritance;
-  ButtonPanel.OKButton.Caption := lisUseAndClose;
+  OKButton.Caption := lisUse;
+  chbKeepOpen.Caption := lisKeepOpen;
+  SelectionToolButton.Hint := lisSelectionTool;
 
-  imListPalette.Width  := ComponentPaletteImageWidth;
-  imListPalette.Height := ComponentPaletteImageHeight;
-  imInheritance.Width  := ComponentPaletteImageWidth;
-  imInheritance.Height := ComponentPaletteImageHeight;
-
-  ListTree.Images := imListPalette;
-  PalletteTree.Images := imListPalette;
-  InheritanceTree.Images := imInheritance;
+  ListTree.Images := TPkgComponent.Images;
+  PalletteTree.Images := TPkgComponent.Images;
+  InheritanceTree.Images := TPkgComponent.Images;
   PrevPageIndex := -1;
   PageControl.ActivePage := TabSheetList;
   if Assigned(IDEComponentPalette) then
@@ -145,6 +163,56 @@ begin
     IDEComponentPalette.AddHandlerSelectionChanged(@SelectionWasChanged);
     IDEComponentPalette.AddHandlerComponentAdded(@ComponentWasAdded);
   end;
+
+  chbKeepOpen.Checked := EnvironmentOptions.ComponentListKeepOpen;
+end;
+
+procedure TComponentListForm.AddSelectedComponent;
+var
+  AComponent: TRegisteredComponent;
+  ASelections: TPersistentSelectionList;
+  NewParent: TComponent;
+  CurDesigner: TDesigner;
+begin
+  AComponent := GetSelectedComponent;
+  ASelections := TPersistentSelectionList.Create;
+  try
+    GlobalDesignHook.GetSelection(ASelections);
+    if (ASelections.Count>0) and (ASelections[0] is TComponent) then
+      NewParent := TComponent(ASelections[0])
+    else if GlobalDesignHook.LookupRoot is TComponent then
+      NewParent := TComponent(GlobalDesignHook.LookupRoot)
+    else
+      NewParent := nil;
+  finally
+    ASelections.Free;
+  end;
+
+  if NewParent=nil then
+    Exit;
+
+  CurDesigner:=TDesigner(FindRootDesigner(NewParent));
+  if CurDesigner=nil then
+    Exit;
+
+  CurDesigner.AddComponentCheckParent(NewParent, NewParent, nil, AComponent.ComponentClass);
+  if NewParent=nil then
+    Exit;
+
+  if FAddCompNewParent<>NewParent then
+  begin
+    FAddCompNewLeft := 0;
+    FAddCompNewTop := 0;
+    FAddCompNewParent := NewParent;
+  end;
+  Inc(FAddCompNewLeft, 8);
+  Inc(FAddCompNewTop, 8);
+  CurDesigner.AddComponent(AComponent, AComponent.ComponentClass, NewParent, FAddCompNewLeft, FAddCompNewTop, 0, 0);
+end;
+
+procedure TComponentListForm.chbKeepOpenChange(Sender: TObject);
+begin
+  EnvironmentOptions.ComponentListKeepOpen := chbKeepOpen.Checked;
 end;
 
 destructor TComponentListForm.Destroy;
@@ -158,7 +226,7 @@ end;
 procedure TComponentListForm.FormShow(Sender: TObject);
 begin
   //DebugLn(['*** TComponentListForm.FormShow, Parent=', Parent, ', Parent.Parent=', ParentParent]);
-  ButtonPanel.Visible := (HostDockSite=Nil) or (HostDockSite.Parent=Nil);
+  ButtonPanel.Visible := not IsDocked;
   if ButtonPanel.Visible then
   begin                              // ComponentList is undocked
     PageControl.AnchorSideBottom.Side := asrTop;
@@ -200,6 +268,8 @@ end;
 
 procedure TComponentListForm.SelectionWasChanged;
 begin
+  SelectionToolButton.Down := (IDEComponentPalette.Selected = nil);
+
   // ToDo: Select the component in active treeview.
   if FIgnoreSelection then
     Exit;
@@ -231,6 +301,11 @@ begin
     Result := GetSelectedTreeComp(InheritanceTree)
 end;
 
+function TComponentListForm.IsDocked: Boolean;
+begin
+  Result := (HostDockSite<>Nil) and (HostDockSite.Parent<>Nil);
+end;
+
 procedure TComponentListForm.ComponentWasAdded(ALookupRoot, AComponent: TComponent;
   ARegisteredComponent: TRegisteredComponent);
 begin
@@ -240,7 +315,7 @@ end;
 
 procedure TComponentListForm.UpdateButtonState;
 begin
-  ButtonPanel.OKButton.Enabled := Assigned(GetSelectedComponent);
+  OKButton.Enabled := Assigned(GetSelectedComponent);
 end;
 
 procedure TComponentListForm.UpdateShowing;
@@ -259,7 +334,7 @@ var
   Node: TTreeNode;
   ClssName: string;
   i, Ind: Integer;
-  CurIcon: TCustomBitmap;
+  II: TImageIndex;
 begin
   PalList := TStringList.Create;
   try
@@ -288,12 +363,13 @@ begin
         else
         begin
           Node := InheritanceTree.Items.AddChildObject(Node, ClssName, Comp);
-          CurIcon := nil;
-          if (Comp is TPkgComponent) then
-          CurIcon := TPkgComponent(Comp).Icon;
-          if CurIcon <> nil then
+          if Comp is TPkgComponent then
+            II := TPkgComponent(Comp).ImageIndex
+          else
+            II := -1;
+          if II>=0 then
           begin
-            Node.ImageIndex := imInheritance.Add(CurIcon, nil);
+            Node.ImageIndex := II;
             Node.SelectedIndex := Node.ImageIndex;
           end;
         end;
@@ -315,7 +391,7 @@ var
   AListNode: TTreeNode;
   APaletteNode: TTreeNode;
   i, j: Integer;
-  CurIcon: TCustomBitmap;
+  CurIcon: TImageIndex;
 begin
   if [csDestroying,csLoading]*ComponentState<>[] then exit;
   Screen.Cursor := crHourGlass;
@@ -346,12 +422,13 @@ begin
         AListNode := ListTree.Items.AddChildObject(Nil, Comps[j], Comp);
         // Palette layout item
         APaletteNode := PalletteTree.Items.AddChildObject(ParentNode, Comps[j], Comp);
-        CurIcon := nil;
-        if (Comp is TPkgComponent) then
-          CurIcon := TPkgComponent(Comp).Icon;
-        if CurIcon <> nil then
+        if Comp is TPkgComponent then
+          CurIcon := TPkgComponent(Comp).ImageIndex
+        else
+          CurIcon := -1;
+        if CurIcon>=0 then
         begin
-          AListNode.ImageIndex := imListPalette.Add(CurIcon, nil);
+          AListNode.ImageIndex := CurIcon;
           AListNode.SelectedIndex := AListNode.ImageIndex;
           APaletteNode.ImageIndex := AListNode.ImageIndex;
           APaletteNode.SelectedIndex := AListNode.ImageIndex;
@@ -375,6 +452,8 @@ end;
 
 procedure TComponentListForm.TreeFilterEdAfterFilter(Sender: TObject);
 begin
+  if TreeFilterEd.Filter = '' then
+    IDEComponentPalette.SetSelectedComp(nil, False);
   UpdateButtonState;
 end;
 
@@ -388,6 +467,7 @@ procedure TComponentListForm.ListTreeSelectionChanged(Sender: TObject);
 var
   AComponent: TRegisteredComponent;
 begin
+  UpdateButtonState;
   if FInitialized then
   begin
     if FPageControlChange then
@@ -401,7 +481,6 @@ begin
       IDEComponentPalette.SetSelectedComp(nil, False);
       FIgnoreSelection := False;
     end;
-    UpdateButtonState;
   end
   else begin
     // Only run once when the IDE starts.
@@ -455,26 +534,12 @@ begin
   FPageControlChange := False;
 end;
 
-
 procedure TComponentListForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
-  if Parent=nil then begin
+  if not FKeepSelected then
+  begin
     ClearSelection;
-    if not fKeepSelected then
-      IDEComponentPalette.Selected := Nil;
-  end
-  else begin
-    // Using a dock manager...
-    CloseAction := caNone;
-    //todo: helper function in DockManager or IDEDockMaster for closing forms.
-    // Only close the window if it's floating.
-    // AnchorDocking doesn't seem to initialize 'FloatingDockSiteClass' so we can't just check 'Floating'.
-    // Also, AnchorDocking use nested forms, so the check for HostDockSite.Parent.
-    if Assigned(HostDockSite) and (HostDockSite.DockClientCount <= 1)
-      and (HostDockSite is TCustomForm) and (HostDockSite.Parent = nil) then
-    begin
-      TCustomForm(HostDockSite).Close;
-    end;
+    IDEComponentPalette.Selected := Nil;
   end;
   FKeepSelected := False;
 end;
@@ -483,7 +548,7 @@ procedure TComponentListForm.FormKeyDown(Sender: TObject; var Key: Word; Shift: 
 begin
   if Key=VK_ESCAPE then
   begin
-    if IDEComponentPalette.Selected = nil then //close only if no component is selected
+    if (IDEComponentPalette.Selected = nil) and not IsDocked  then //close only if no component is selected
       Close
     else
       ClearSelection; //unselect if component is selected
@@ -494,15 +559,22 @@ procedure TComponentListForm.OKButtonClick(Sender: TObject);
 // Select component from palette and close this form. User can insert the component.
 var
   AComponent: TRegisteredComponent;
+  OldFocusedControl: TWinControl;
 begin
   AComponent := GetSelectedComponent;
-  if AComponent<>nil then begin
-    FPageControlChange:=True;
-    IDEComponentPalette.Selected := AComponent;
+  if AComponent=nil then
+    Exit;
+
+  if IsDocked or chbKeepOpen.Checked then
+  begin
+    OldFocusedControl := Screen.ActiveControl;
+    AddSelectedComponent;
+    if (OldFocusedControl<>nil) and OldFocusedControl.CanSetFocus then // AddComponent in docked mode steals focus to designer, get it back
+      OldFocusedControl.SetFocus;
+  end else
+  begin
     FKeepSelected := True;
     Close;
-    if Assigned(IDEComponentPalette.OnClassSelected) then
-      IDEComponentPalette.OnClassSelected(Self);
   end;
 end;
 
@@ -555,6 +627,12 @@ begin
     miExpand.Enabled := (Node.HasChildren) and (not Node.Expanded);
     miCollapse.Enabled := (Node.HasChildren) and (Node.Expanded);
   end;
+end;
+
+procedure TComponentListForm.SelectionToolButtonClick(Sender: TObject);
+begin
+  SelectionToolButton.Down := True;
+  IDEComponentPalette.SetSelectedComp(nil, False);
 end;
 
 end.

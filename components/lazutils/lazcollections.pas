@@ -1,3 +1,11 @@
+{
+ *****************************************************************************
+  This file is part of LazUtils.
+
+  See the file COPYING.modifiedLGPL.txt, included in this distribution,
+  for details about the license.
+ *****************************************************************************
+}
 unit lazCollections;
 
 {$mode objfpc}{$H+}
@@ -5,7 +13,9 @@ unit lazCollections;
 interface
 
 uses
-  sysutils, syncobjs, LazUTF8SysUtils;
+  sysutils, syncobjs,
+  // LazUtils
+  LazSysUtils;
 
 type
 

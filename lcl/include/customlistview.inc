@@ -127,6 +127,7 @@ begin
   begin
     FImageChangeLinks[lvil] := TChangeLink.Create;
     FImageChangeLinks[lvil].OnChange := @ImageChanged;
+    FImageChangeLinks[lvil].OnDestroyResolutionHandle := @ImageResolutionHandleDestroyed;
   end;
   FHoverTime := -1;
   TabStop := true;
@@ -300,7 +301,10 @@ begin
     end;
     LVN_ITEMCHANGED:
     begin
-      Item := Items[nm^.iItem];
+      if nm^.iItem < 0 then
+        Item := nil
+      else
+        Item := Items[nm^.iItem];
       //DebugLn('TCustomListView.CNNotify Count=',dbgs(Items.Count),' nm^.iItem=',dbgs(nm^.iItem),' destroying=',dbgs(lifDestroying in Item.FFlags));
       if (Item <> nil) and (not OwnerData) and (lifDestroying in Item.FFlags) then
       begin
@@ -310,8 +314,6 @@ begin
           InvalidateSelected;
       end else
       begin
-        // owner data
-        Change(Item, nm^.uChanged);
         if (nm^.uChanged = LVIF_STATE) then
         begin
           // checkbox
@@ -339,14 +341,13 @@ begin
             // select state changed
             if (nm^.uNewState and LVIS_SELECTED) = 0 then
             begin
-              if not OwnerData and (FSelected = Item) then
-                InvalidateSelected
-              else if OwnerData and (nm^.iItem=FSelectedIdx) then
+              if not OwnerData then
               begin
-                FSelectedIdx:=-1;
-                InvalidateSelected;
-              end;
-              DoSelectItem(Item, False);
+                if FSelected = Item then
+                  InvalidateSelected
+              end else
+                if (nm^.iItem < 0) or (nm^.iItem = FSelectedIdx) then
+                  InvalidateSelected;
             end else
             begin
               FSelected := Item;
@@ -356,10 +357,13 @@ begin
                 FSelectedIdx:=nm^.iItem;
               end;
               //DebugLn('TCustomListView.CNNotify FSelected=',dbgs(FSelected));
-              DoSelectItem(Item, True);
             end;
+            Change(Item, nm^.uChanged);
+            DoSelectItem(Item, (nm^.uNewState and LVIS_SELECTED) <> 0);
           end;
-        end;
+        end
+        else
+          Change(Item, nm^.uChanged);
       end;
     end;
 //    LVN_GETINFOTIP:
@@ -425,6 +429,7 @@ begin
     DoEndEdit(FEditor.Item, S);
   FEditor.Item := nil;
   FEditor.Visible := False;
+  FEditor.SetBounds(0, 0, 0, 0);
 end;
 
 procedure TCustomListView.ShowEditor;
@@ -536,7 +541,7 @@ begin
   for lvil := Low(TListViewImageList) to High(TListViewImageList) do
   begin
     if FImages[lvil] <> nil
-    then LVC.SetImageList(Self, lvil, FImages[lvil]);
+    then LVC.SetImageList(Self, lvil, FImages[lvil].ResolutionForPPI[FImagesWidth[lvil], Font.PixelsPerInch, 1].Resolution); // to-do: support scaling factor
   end;
   LVC.SetScrollBars(Self, FScrollBars);
   LVC.SetViewOrigin(Self, FViewOriginCache) ;
@@ -605,10 +610,36 @@ end;
 {------------------------------------------------------------------------------}
 procedure TCustomListView.DoSelectItem(AItem: TListItem; ASelected: Boolean);
 begin
-  AItem.Selected:=ASelected;
+  if Assigned(AItem) then
+    AItem.Selected:=ASelected;
   if Assigned(FOnSelectItem) and
     ([lffItemsMoving, lffItemsSorting] * FFlags = []) then
       FOnSelectItem(Self, AItem, ASelected);
+end;
+
+procedure TCustomListView.DoAutoAdjustLayout(
+  const AMode: TLayoutAdjustmentPolicy; const AXProportion, AYProportion: Double
+  );
+var
+  i: Integer;
+  C: TListColumn;
+  L: TListViewImageList;
+begin
+  inherited;
+
+  if AMode in [lapAutoAdjustWithoutHorizontalScrolling, lapAutoAdjustForDPI] then
+  begin
+    for i := ColumnCount - 1 downto 0 do
+    begin
+      C := Column[i];
+      C.MaxWidth := Round(C.MaxWidth * AXProportion);
+      C.MinWidth := Round(C.MinWidth * AXProportion);
+      C.Width := Round(C.Width * AXProportion);
+    end;
+
+    for L in TListViewImageList do
+      SetImageListWS(L);
+  end;
 end;
 
 procedure TCustomListView.DoSetBounds(ALeft, ATop, AWidth, AHeight: integer);
@@ -779,8 +810,11 @@ end;
 
 procedure TCustomListView.QueuedShowEditor(Data: PtrInt);
 begin
-  fShowEditorQueued:=false;
-  ShowEditor;
+  if fShowEditorQueued then
+  begin
+    fShowEditorQueued:=false;
+    ShowEditor;
+  end;
 end;
 
 procedure TCustomListView.DblClick;
@@ -868,7 +902,21 @@ begin
   Sort;
 end;
 
-function CompareItems(Item1, Item2: Pointer): Integer;
+function _CompareListViewItems_CustomSort(Item1, Item2: Pointer): Integer;
+var
+  ListView: TCustomListView;
+begin
+  Result := 0;
+  ListView := TListItem(Item1).Owner.Owner;
+
+  if Assigned(ListView.FCustomSort_Func) then
+    Result := ListView.FCustomSort_Func(TListItem(Item1), TListItem(Item2), ListView.FCustomSort_Param)
+  else
+  if Assigned(ListView.FOnCompare) then
+    ListView.FOnCompare(ListView, TListItem(Item1), TListItem(Item2), 0, Result);
+end;
+
+function _CompareListViewItems(Item1, Item2: Pointer): Integer;
 var
   Str1: String;
   Str2: String;
@@ -910,14 +958,30 @@ end;
 {   TCustomListView Sort                                                       }
 {------------------------------------------------------------------------------}
 procedure TCustomListView.Sort;
+begin
+  if FSortType = stNone then exit;
+  if (FSortColumn < 0) or (FSortColumn >= ColumnCount) then exit;
+  SortWithParams(@_CompareListViewItems);
+end;
+
+function TCustomListView.CustomSort(ASortProc: TLVCompare; AOptionalParam: PtrInt): Boolean;
+begin
+  Result := Assigned(ASortProc) or Assigned(FOnCompare);
+  if Result then
+  begin
+    FCustomSort_Func := ASortProc;
+    FCustomSort_Param := AOptionalParam;
+    SortWithParams(@_CompareListViewItems_CustomSort);
+  end;
+end;
+
+procedure TCustomListView.SortWithParams(ACompareFunc: TListSortCompare);
 var
   FSavedSelection: TFPList;
   FSavedFocused: TListItem;
   i: Integer;
   AItemIndex: Integer;
 begin
-  if FSortType = stNone then exit;
-  if (FSortColumn < 0) or (FSortColumn >= ColumnCount) then exit;
   if FListItems.Count < 2 then exit;
   if lffPreparingSorting in FFlags then exit;
 
@@ -942,7 +1006,7 @@ begin
       Items.FCacheIndex := -1;
       Items.FCacheItem := nil;
 
-      FListItems.FItems.Sort(@CompareItems);
+      FListItems.FItems.Sort(ACompareFunc);
       TWSCustomListViewClass(WidgetSetClass).SetSort(Self, FSortType,
         FSortColumn, FSortDirection);
 
@@ -967,7 +1031,7 @@ begin
       Exclude(FFlags, lffItemsSorting);
     end;
   end else
-    FListItems.FItems.Sort(@CompareItems);
+    FListItems.FItems.Sort(ACompareFunc);
 end;
 
 {------------------------------------------------------------------------------}
@@ -977,6 +1041,7 @@ destructor TCustomListView.Destroy;
 var
   lvil: TListViewImageList;
 begin
+  Application.RemoveAsyncCalls(Self);
   // Better destroy the wincontrol (=widget) first. So wo don't have to delete
   // all items/columns and we won't get notifications for each.
   FreeAndNil(FCanvas);
@@ -1057,6 +1122,7 @@ end;
 procedure TCustomListView.BeginUpdate;
 begin
   Inc(FUpdateCount);
+  Include(FFlags, lffPreparingSorting);
   if (FUpdateCount = 1) and HandleAllocated
   then TWSCustomListViewClass(WidgetSetClass).BeginUpdate(Self);
 end;
@@ -1082,6 +1148,7 @@ begin
   then RaiseGDBException('TCustomListView.EndUpdate FUpdateCount=0');
   
   Dec(FUpdateCount);
+  if FUpdateCount=0 then Exclude(FFlags, lffPreparingSorting);
   if (FUpdateCount = 0) and HandleAllocated
   then TWSCustomListViewClass(WidgetSetClass).EndUpdate(Self);
 end;
@@ -1096,18 +1163,19 @@ end;
 
 procedure TCustomListView.FinalizeWnd;
 begin
-  ShowEditorQueued:=false;
+  FShowEditorQueued:=false;
   // store origin
   FViewOriginCache := TWSCustomListViewClass(WidgetSetClass).GetViewOrigin(Self);
   if not OwnerData then
     FListItems.DoFinalizeWnd;
+  Columns.DoFinalizeWnd;
   inherited FinalizeWnd;
 end;
 
 function TCustomListView.FindCaption(StartIndex: Integer; Value: string;
   Partial, Inclusive, Wrap: Boolean; PartStart: Boolean = True): TListItem;
 begin
-  Result := FListItems.FindCaption(StartIndex, Value, Partial, Inclusive, Wrap);
+  Result := FListItems.FindCaption(StartIndex, Value, Partial, Inclusive, Wrap, PartStart);
 end;
 
 function TCustomListView.FindData(StartIndex: Integer; Value: Pointer;
@@ -1153,6 +1221,11 @@ end;
 function TCustomListView.GetImageList(const ALvilOrd: Integer): TCustomImageList;
 begin
   Result := FImages[TListViewImageList(ALvilOrd)];
+end;
+
+function TCustomListView.GetImageListWidth(const ALvilOrd: Integer): Integer;
+begin
+  Result := FImagesWidth[TListViewImageList(ALvilOrd)];
 end;
 
 function TCustomListView.GetHoverTime: Integer;
@@ -1521,7 +1594,38 @@ begin
   end;
 
   if not HandleAllocated then Exit;
-  TWSCustomListViewClass(WidgetSetClass).SetImageList(Self, lvil, AValue);
+  SetImageListWS(lvil);
+end;
+
+procedure TCustomListView.SetImageListAsync(Data: PtrInt);
+begin
+  SetImageListWS(TListViewImageList(Data));
+end;
+
+procedure TCustomListView.SetImageListWidth(const ALvilOrd: Integer;
+  const AValue: Integer);
+var
+  lvil: TListViewImageList;
+begin
+  lvil := TListViewImageList(ALvilOrd);
+
+  if FImagesWidth[lvil] = AValue then Exit;
+
+  FImagesWidth[lvil] := AValue;
+
+  if not HandleAllocated then Exit;
+  SetImageListWS(lvil);
+end;
+
+procedure TCustomListView.SetImageListWS(const ALvil: TListViewImageList);
+var
+  R: TCustomImageListResolution;
+begin
+  if FImages[ALvil]<>nil then
+    R := FImages[ALvil].ResolutionForPPI[FImagesWidth[ALvil], Font.PixelsPerInch, 1].Resolution // to-do: support scaling factor
+  else
+    R := nil;
+  TWSCustomListViewClass(WidgetSetClass).SetImageList(Self, ALvil, R)
 end;
 
 procedure TCustomListView.SetItemIndex(const AValue: Integer);
@@ -1555,7 +1659,7 @@ var
 begin
   if (AValue<>nil) and (AValue.ListView<>Self) then
     raise Exception.Create('Item does not belong to this listview');
-  if FSelected = AValue then Exit;
+  if (not FOwnerData) and (FSelected = AValue) then Exit;
   //DebugLn('TCustomListView.SetSelection FSelected=',dbgs(FSelected));
   if AValue = nil then
   begin
@@ -1571,6 +1675,7 @@ begin
         EndUpdate;
       end;
     end else
+    if FSelected <> nil then
       FSelected.Selected := False;
     FSelected := nil;
     Include(FFlags,lffSelectedValid);
@@ -1587,10 +1692,8 @@ procedure TCustomListView.SetShowEditorQueued(AValue: boolean);
 begin
   if FShowEditorQueued=AValue then Exit;
   FShowEditorQueued:=AValue;
-  if ShowEditorQueued then
-    Application.QueueAsyncCall(@QueuedShowEditor,0)
-  else
-    Application.RemoveAsyncCalls(Self);
+  if FShowEditorQueued then
+    Application.QueueAsyncCall(@QueuedShowEditor,0);
 end;
 
 procedure TCustomListView.SetOwnerData(const AValue: Boolean);
@@ -1605,7 +1708,7 @@ begin
     FListItems := TOwnerDataListItems.Create(Self);
   end
   else
-    CreateListItems;
+    FListItems := CreateListItems;
 
   if HandleAllocated then 
     TWSCustomListViewClass(WidgetSetClass).SetOwnerData(Self, AValue);
@@ -1638,6 +1741,22 @@ begin
 //    //image changed so redraw it all....
 //    UpdateProperties;
 //  end;
+end;
+
+procedure TCustomListView.ImageResolutionHandleDestroyed(
+  Sender: TCustomImageList; AWidth: Integer; AReferenceHandle: TLCLHandle);
+var
+  lvil: TListViewImageList;
+begin
+  if not HandleAllocated then
+    Exit;
+
+  for lvil in TListViewImageList do
+    if Sender = FImages[lvil] then
+    begin
+      TWSCustomListViewClass(WidgetSetClass).SetImageList(Self, lvil, nil);
+      Application.QueueAsyncCall(@SetImageListAsync, Ord(lvil));
+    end;
 end;
 
 procedure TCustomListView.Loaded;

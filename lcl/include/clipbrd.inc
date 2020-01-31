@@ -438,6 +438,7 @@ end;
 
 procedure TClipboard.SetAsText(const Value: string);
 var s: string;
+  i: Integer;
 begin
   //DebugLn('[TClipboard.SetAsText] A ',ClipboardTypeName[ClipboardType],' "',Value,'"');
   if Assigned(FOnRequest) then exit;
@@ -446,7 +447,10 @@ begin
   else
     s:=#0;
   Clear;
-  SetBuffer(PredefinedClipboardFormat(pcfText),s[1],length(Value)+1);
+  i := Length(Value);
+  if ClipboardFormatNeedsNullByte(pcfText) then
+    i := i + 1;
+  SetBuffer(PredefinedClipboardFormat(pcfText),s[1],i);
   //DebugLn('[TClipboard.SetAsText] END ',ClipboardTypeName[ClipboardType],' "',Value,'"');
 end;
 
@@ -619,10 +623,7 @@ begin
       if List<>nil then FreeMem(List);
     end;
     if not Result then begin
-      Result:=
-            ((PredefinedClipboardFormat(pcfPicture)=FormatID)
-        or (PredefinedClipboardFormat(pcfDelphiPicture)=FormatID))
-        and (HasPictureFormat);
+      Result := (PredefinedClipboardFormat(pcfPicture)=FormatID) and (HasPictureFormat);
     end;
   end else
     Result:=false;
@@ -878,7 +879,11 @@ begin
     exit;
 
   {$IFDEF WINDOWS}
+  {$IF FPC_FULLVERSION >= 30101}
+  Stream := TStringStream.Create(InsertClipHeader(Html), DefaultSystemCodePage);
+  {$ELSE}
   Stream := TStringStream.Create(InsertClipHeader(Html));
+  {$ENDIF}
   {$ELSE}
   Stream := TStringStream.Create(Html);
   {$ENDIF}

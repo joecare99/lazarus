@@ -82,6 +82,14 @@ begin
   RegisterCustomMemo;
 end;
 
+function TCustomMemo.CanShowEmulatedTextHint: Boolean;
+begin
+  Result :=
+        Assigned(Lines) // CM_EXIT is sent in destroy -> this function is called in destructor when Lines are already destroyed
+    and (Lines.Count = 0)
+    and inherited CanShowEmulatedTextHint;
+end;
+
 procedure TCustomMemo.CreateParams(var Params: TCreateParams);
 begin
   inherited CreateParams(Params);
@@ -198,16 +206,6 @@ begin
     FLines.Assign(Value);
 end;
 
-procedure TCustomMemo.SetSelText(const Val: string);
-begin
-  Lines.BeginUpdate;
-  try
-    inherited SetSelText(Val);
-  finally
-    Lines.EndUpdate;
-  end;
-end;
-
 procedure TCustomMemo.SetScrollBars(const Value: TScrollStyle);
 begin
   if Value <> FScrollbars then begin
@@ -238,14 +236,27 @@ begin
   end;
 end;
 
-procedure TCustomMemo.WMGetDlgCode(var Message: TLMNoParams);
+procedure TCustomMemo.WMGetDlgCode(var Message: TLMGetDlgCode);
 begin
   inherited;
-  Message.Result := Message.Result and not (DLGC_WANTTAB or DLGC_WANTALLKEYS);
-  if WantTabs then
-    Message.Result := Message.Result or DLGC_WANTTAB;
-  if WantReturns then
-    Message.Result := Message.Result or DLGC_WANTALLKEYS;
+  case Message.CharCode of
+    VK_TAB:
+    begin
+      if WantTabs then
+        Message.Result := Message.Result or (DLGC_WANTTAB or DLGC_WANTALLKEYS)
+      else
+        Message.Result := Message.Result and not (DLGC_WANTTAB or DLGC_WANTALLKEYS);
+    end;
+    VK_RETURN:
+    begin
+      if WantReturns then
+        Message.Result := Message.Result or DLGC_WANTALLKEYS
+      else
+        Message.Result := Message.Result and not DLGC_WANTALLKEYS;
+    end;
+    VK_ESCAPE:
+      Message.Result := Message.Result and not DLGC_WANTALLKEYS;
+  end;
 end;
 
 class function TCustomMemo.GetControlClassDefaultSize: TSize;

@@ -1,3 +1,11 @@
+{
+ **********************************************************************
+  This file is part of LazUtils.
+
+  See the file COPYING.modifiedLGPL.txt, included in this distribution,
+  for details about the license.
+ **********************************************************************
+}
 unit LazFileCache;
 
 {$mode objfpc}{$H+}
@@ -5,7 +13,8 @@ unit LazFileCache;
 interface
 
 uses
-  Classes, SysUtils, LazDbgLog, AVL_Tree, LazFileUtils;
+  Classes, SysUtils, Laz_AVL_Tree,
+  LazDbgLog, LazFileUtils;
 
 type
   TFileStateCacheItemFlag = (

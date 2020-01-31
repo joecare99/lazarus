@@ -8,19 +8,18 @@ uses
   Classes, SysUtils;
 
 Resourcestring
-  lisErrTargetDoesNotExist      = 'Target does not exist. Remove ?';
+  lisErrTargetDoesNotExist      = 'Target does not exist. Remove?';
   lisErrNoSuchFile              = 'Could not find target file'+sLineBreak+
                                   '"%s"'+sLineBreak+
-                                  'What do you want to do ?';
+                                  'What do you want to do?';
   lisRemoveTarget                = 'Remove target';
   lisAbortLoadingProjectGroup    = 'Abort loading project group';
   lisSkipAllTargets              = 'Remove all invalid targets';
-  lisErrOnlyProjectGroupAllowed  = 'Only target type "projectgroup" is allowed for root project group';
-  lisLazarusProjectGroup = 'Lazarus project group';
+  lisErrOnlyProjectGroupAllowed  = 'Only target type "projectgroup" is allowed for root project group.';
   lisAllFiles = 'All files';
   lisProjectGroupModified        = 'Project group modified';
   lisProjectGroupModifiedConfirm = 'Project group "%s" is modified.'+sLineBreak+
-                                   'what do you want to do?';
+                                   'What do you want to do?';
 
   lisSavePG  = 'Save project group';
   lisDiscard = 'Discard changes';
@@ -28,7 +27,11 @@ Resourcestring
 
   lisTargetAdd          = 'Add target';
   lisTargetRemove       = 'Remove target';
+  lisUndo = 'Undo';
+  lisRedo = 'Redo';
+  lisOptions = 'Options';
   lisTargetCompile      = 'Compile';
+  lisProjectGroups = 'Project Groups';
   lisTargetCompileClean = 'Compile clean';
   lisTargetCompileFromHere = 'Compile from here';
   lisTargetInstall      = 'Install';
@@ -40,11 +43,12 @@ Resourcestring
   lisTargetLater        = 'Compile target later';
   lisTargetEarlier      = 'Compile target earlier';
   lisNewProjectGroup    = 'New project group';
-  lisOpenProjectGroup   = 'Open project group';
-  lisOpenRecentProjectGroup = 'Open recent project group';
-  lisSaveProjectGroup   = 'Save project group';
-  lisSaveProjectGroupAs = 'Save project group as';
-  lisTargetCopyFilename = 'Copy file name';
+  lisNewProjectGroupMenuC    = 'New Project group ...';
+  lisOpenProjectGroup   = 'Open Project Group ...';
+  lisOpenRecentProjectGroup = 'Open Recent Project Group';
+  lisSaveProjectGroup   = 'Save Project Group';
+  lisSaveProjectGroupAs = 'Save Project Group As ...';
+  lisTargetCopyFilename = 'Copy Filename';
 
   lisProjectGroup            = 'Project group %s';
   lisNodeTargets             = 'Targets';
@@ -59,10 +63,16 @@ Resourcestring
 
   lisProjectGroupSaveCaption   = 'Save';
   lisProjectGroupSaveHint      = 'Save project group';
-  lisProjectGroupSaveAsCaption = 'Save As';
+  lisProjectGroupSaveAsCaption = 'Save As ...';
   lisProjectGroupSaveAsHint    = 'Save project group with a new name';
-  lisProjectGroupAddExistingCaption = 'Add';
+  lisProjectGroupNewCaption = 'New';
+  lisProjectGroupNewHint    = 'New project group';
+  lisProjectGroupAddCaption = 'Add';
+  lisProjectGroupAddHint    = 'Add targets to project group';
+  lisProjectGroupAddExistingCaption = 'Add from file';
   lisProjectGroupAddExistingHint    = 'Add existing target to project group';
+  lisProjectGroupAddCurrentProjectCaption = 'Add current project';
+  lisProjectGroupAddCurrentProjectHint    = 'Add current project to project group';
   lisProjectGroupDeleteCaption = 'Remove';
   lisProjectGroupDeleteHint    = 'Remove target from project group';
   lisProjectGroupAddNewCaption = 'New';
@@ -87,6 +97,56 @@ Resourcestring
   lisTargetActivateHint        = 'Activate selected target';
   lisTargetOpenCaption         = 'Open';
   lisTargetOpenHint            = 'Open selected target';
+  lisTargetInfoCaption         = 'Info ...';
+  lisInvalidFile = 'Invalid File';
+  lisInvalidXmlFileName = 'Invalid XML file name "%s".';
+  lisReadError = 'Read error';
+  lisUnableToLoadFile = 'Unable to load file "%s"';
+  lisXMLSyntaxErrorInFile = 'XML syntax error in file "%s": %s';
+  lisWriteError = 'Write error';
+  lisUnableToCreateFile = 'Unable to create file "%s": %s';
+  lisInvalidCycleAProjectGroupCannotHaveItselfAsTarget = 'Invalid cycle. A project group cannot have itself as target.';
+  lisErrorReadingProjectGroupFile = 'Error reading project group file "%s"%s%s';
+  lisUnableToWriteProjectGroupFile = 'Unable to write project group file "%s"%s%s';
+  lisLazbuildNotFound = 'lazbuild not found';
+  lisTheLazbuildWasNotFound = 'The lazbuild%s was not found.';
+  lisProjectGroup2 = 'Project Group: %s';
+  lisBePatient = 'Be patient!';
+  lisThereIsStillAnotherBuildInProgress = 'There is still another build in progress.';
+  lisCompileProject = 'Compile Project %s';
+  lisBuildMode = ', build mode "%s"';
+  lisCompilePackage = 'Compile Package %s';
+  lisOtherProject = 'Other Project';
+  lisPackage = 'Package';
+  lisBuildModeNotFound = 'Build mode not found';
+  lisBuildModeNotFound2 = 'Build mode "%s" not found.';
+  lisPackageNotFound = 'Package not found';
+  lisPackageNotFound2 = 'Package "%s" not found.';
+  lisBuildMode2 = 'Build Mode "%s"';
+  lisLazarusSupportedInProjectGroups = 'Lazarus files (*.lpi;*.lpk;*.lpg;*.pas;*.pp;*.p)';
+  lisLazarusProjectsLpi = 'Lazarus projects (*.lpi)';
+  lisLazarusPackagesLpk = 'Lazarus packages (*.lpk)';
+  lisLazarusProjectGroupsLpg = 'Lazarus project groups (*.lpg)';
+  lisPascalFilePasPpP = 'Pascal files (*.pas;*.pp;*.p)';
+  lisNeedSave = 'Need save';
+  lisPleaseSaveYourChangesBeforeReloadingTheProjectGrou = 'Please save your changes before reloading the project group.';
+  lisProjectGroupReload = 'Reload';
+  lisMore = 'More';
+
+  lisOpenLastGroupOnStart = 'Open last group on start';
+  lisOnIDEStartReopenLastOpenGroup = 'On IDE start reopen last open group.';
+  lisShowTargetPaths = 'Show target paths';
+  lisEnableToShowTargetFilenamesWithPaths = 'Enable to show target filenames '
+    +'with paths.';
+  lisCompileAndBuildCompileTarget = '"Compile" and "Build" compile target';
+  lisIDECommandsCompileAndBuildInvokeCompileBuildSelect = 'IDE commands "'
+    +'Compile" and "Build" invoke compile/build selected target in project '
+    +'group editor';
+
+  lisInfo = 'Info';
+  lisSourceDirectoriesOfProjectGroup = 'Source directories of project group:';
+
+  lisProjectGroupsSourcePaths = 'Project group''s source paths';
 
 implementation
 

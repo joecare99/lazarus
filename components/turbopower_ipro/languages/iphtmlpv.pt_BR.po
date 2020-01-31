@@ -4,14 +4,28 @@ msgstr ""
 "Project-Id-Version: \n"
 "POT-Creation-Date: \n"
 "PO-Revision-Date: \n"
-"Last-Translator: Marcelo B Paula\n"
+"Last-Translator: Marcelo B Paula <marcelo.bp@netsite.com.br>\n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Language: pt_BR\n"
+"X-Generator: Poedit 1.8.13\n"
 
 #: iphtmlpv.rsiphtmlpreviewclose
 msgid "Close"
 msgstr "Fechar"
+
+#: iphtmlpv.rsiphtmlpreviewfitall
+msgid "Fit all"
+msgstr "Encaixar tudo"
+
+#: iphtmlpv.rsiphtmlpreviewfitheight
+msgid "Height"
+msgstr "Altura"
+
+#: iphtmlpv.rsiphtmlpreviewfitwidth
+msgid "Width"
+msgstr "Largura"
 
 #: iphtmlpv.rsiphtmlpreviewof
 msgid "of"
@@ -30,7 +44,6 @@ msgid "Print preview"
 msgstr "Visualizar Impressão"
 
 #: iphtmlpv.rsiphtmlpreviewselectprinter
-#| msgid "Select printer..."
 msgid "Select printer ..."
 msgstr "Selecionar impressora ..."
 

@@ -12,7 +12,7 @@
 
   A copy of the GNU General Public License is available on the World Wide Web at
   <http://www.gnu.org/copyleft/gpl.html>. You can also obtain it by writing to the Free Software
-  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+  Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.
 }
 unit MouseInputIntf;
 
@@ -125,7 +125,7 @@ var
   TimeStep: Integer;
   X, Y: Integer;
   Start: TPoint;
-  S: LongWord;
+  S: QWord;
 begin
   Start := Mouse.CursorPos;
   
@@ -133,8 +133,9 @@ begin
   begin
     TimeStep := Min(Interval, Duration);
 
-    S := GetTickCount;
-    while GetTickCount - S < TimeStep do Application.ProcessMessages;
+    S := GetTickCount64;
+    while GetTickCount64 - S < TimeStep do
+      Application.ProcessMessages;
     
     X := Start.X + ((ScreenX - Start.X) * TimeStep) div Duration;
     Y := Start.Y + ((ScreenY - Start.Y) * TimeStep) div Duration;

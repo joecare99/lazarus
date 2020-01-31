@@ -4,6 +4,7 @@
     <PathDelim Value="\"/>
     <Name Value="SynEdit"/>
     <Type Value="RunAndDesignTime"/>
+    <BuildMethod Value="Both"/>
     <Author Value="Lazarus Team, SynEdit"/>
     <CompilerOptions>
       <Version Value="11"/>
@@ -14,9 +15,6 @@
         <VerifyObjMethodCallValidity Value="True"/>
       </CodeGeneration>
       <Other>
-        <Verbosity>
-          <ShowGenInfo Value="False"/>
-        </Verbosity>
         <CompilerMessages>
           <IgnoredMessages idx5024="True" idx4055="True"/>
         </CompilerMessages>
@@ -50,6 +48,12 @@ If you wish to allow use of your version of these files only under the terms of 
         <Filename Value="lazsynimm.pas"/>
         <AddToUsesPkgSection Value="False"/>
         <UnitName Value="LazSynIMM"/>
+        <CustomOptions Items="FPMake" Version="2">
+          <_FPMake Items="AllOSes/TargetOSes">
+            <_AllOSes Value="False"/>
+            <_TargetOSes Value="win32,win64"/>
+          </_FPMake>
+        </CustomOptions>
       </Item3>
       <Item4>
         <Filename Value="synedit.pp"/>
@@ -325,53 +329,53 @@ If you wish to allow use of your version of these files only under the terms of 
         <UnitName Value="LazSynTextArea"/>
       </Item71>
       <Item72>
-        <Filename Value="synregexpr.pas"/>
-        <UnitName Value="SynRegExpr"/>
-      </Item72>
-      <Item73>
         <Filename Value="syntextdrawer.pp"/>
         <UnitName Value="SynTextDrawer"/>
-      </Item73>
-      <Item74>
+      </Item72>
+      <Item73>
         <Filename Value="syneditmarkupguttermark.pp"/>
         <UnitName Value="SynEditMarkupGutterMark"/>
-      </Item74>
-      <Item75>
+      </Item73>
+      <Item74>
         <Filename Value="synhighlighterbat.pas"/>
         <UnitName Value="SynHighlighterBat"/>
-      </Item75>
-      <Item76>
+      </Item74>
+      <Item75>
         <Filename Value="synhighlighterini.pas"/>
         <UnitName Value="SynHighlighterIni"/>
-      </Item76>
-      <Item77>
+      </Item75>
+      <Item76>
         <Filename Value="syneditmarkupspecialchar.pp"/>
         <UnitName Value="SynEditMarkupSpecialChar"/>
-      </Item77>
-      <Item78>
+      </Item76>
+      <Item77>
         <Filename Value="allsynedit.pas"/>
         <Type Value="Main Unit"/>
         <UnitName Value="allsynedit"/>
-      </Item78>
-      <Item79>
+      </Item77>
+      <Item78>
         <Filename Value="synedittextdoublewidthchars.pas"/>
         <UnitName Value="SynEditTextDoubleWidthChars"/>
+      </Item78>
+      <Item79>
+        <Filename Value="synedittextsystemcharwidth.pas"/>
+        <UnitName Value="SynEditTextSystemCharWidth"/>
       </Item79>
       <Item80>
-        <Filename Value="synedittextsystemcharwidth.pas"/>
-        <UnitName Value="synedittextsystemcharwidth"/>
+        <Filename Value="syneditmarkupifdef.pp"/>
+        <UnitName Value="SynEditMarkupIfDef"/>
       </Item80>
       <Item81>
-        <Filename Value="syneditmarkupifdef.pp"/>
-        <UnitName Value="syneditmarkupifdef"/>
-      </Item81>
-      <Item82>
         <Filename Value="synpluginmulticaret.pp"/>
         <UnitName Value="SynPluginMultiCaret"/>
-      </Item82>
-      <Item83>
+      </Item81>
+      <Item82>
         <Filename Value="synhighlighterpike.pas"/>
         <UnitName Value="synhighlighterpike"/>
+      </Item82>
+      <Item83>
+        <Filename Value="syneditmarkupfoldcoloring.pas"/>
+        <UnitName Value="SynEditMarkupFoldColoring"/>
       </Item83>
     </Files>
     <LazDoc Paths="docs\xml"/>
@@ -379,10 +383,18 @@ If you wish to allow use of your version of these files only under the terms of 
       <EnableI18N Value="True"/>
       <OutDir Value="languages"/>
     </i18n>
-    <RequiredPkgs Count="1">
+    <RequiredPkgs Count="3">
       <Item1>
-        <PackageName Value="LCL"/>
+        <PackageName Value="fcl-registry"/>
+        <DependencyType Value="FPMake"/>
       </Item1>
+      <Item2>
+        <PackageName Value="regexpr"/>
+        <DependencyType Value="FPMake"/>
+      </Item2>
+      <Item3>
+        <PackageName Value="LCL"/>
+      </Item3>
     </RequiredPkgs>
     <UsageOptions>
       <UnitPath Value="$(PkgOutDir)"/>

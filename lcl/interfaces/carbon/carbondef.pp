@@ -29,9 +29,13 @@ interface
 uses
   // libs
   MacOSAll,
-  // wdgetset
-  WSLCLClasses, Classes, SysUtils, Controls, LCLType, LCLProc, Graphics, Contnrs,
-  AVL_Tree, LMessages, LCLMessageGlue;
+  Classes, SysUtils, Controls,
+  Laz_AVL_Tree,
+  // lcl
+  LCLType, LCLProc, Graphics, Contnrs, LMessages, LCLMessageGlue,
+  LazLoggerBase,
+  // widgetset
+  WSLCLClasses;
 
 var
   LAZARUS_FOURCC: FourCharCode;    // = 'Laz ';
@@ -74,6 +78,7 @@ type
     function GetContent: ControlRef; virtual; abstract;
     procedure UpdateLCLClientRect; virtual;
   public
+    FPopupWin: WindowRef;
     FNeedFree: Boolean;
     procedure BeginEventProc;
     procedure EndEventProc;
@@ -348,7 +353,11 @@ function RegisterObjectEventHandler(AHandler: TCarbonObjectEventHandlerProc): Ev
 var
   Node: TUPPAVLTreeNode;
 begin
-  if UPPTree = nil then UPPTree := TAVLTree.Create;
+  if UPPTree = nil then
+  begin
+    UPPTree := TAVLTree.Create;
+    UPPTree.NodeClass:=TUPPAVLTreeNode;
+  end;
 
   Node := TUPPAVLTreeNode(UPPTree.Find(AHandler));
   if Node = nil then
@@ -373,7 +382,11 @@ function RegisterEventHandler(AHandler: TCarbonEventHandlerProc): EventHandlerUP
 var
   Node: TUPPAVLTreeNode;
 begin
-  if UPPTree = nil then UPPTree := TAVLTree.Create;
+  if UPPTree = nil then
+  begin
+    UPPTree := TAVLTree.Create;
+    UPPTree.NodeClass:=TUPPAVLTreeNode;
+  end;
 
   Node := TUPPAVLTreeNode(UPPTree.Find(AHandler));
   if Node = nil then

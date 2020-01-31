@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
  
@@ -34,6 +34,10 @@ unit JITForms;
 
 {$I ide.inc}
 
+{$IF FPC_FULLVERSION<30100}
+  {$DEFINE HasVMTParent}
+{$ENDIF}
+
 { $DEFINE VerboseJITForms}
 
 interface
@@ -42,10 +46,17 @@ uses
   {$IFDEF IDE_MEM_CHECK}
   MemCheck,
   {$ENDIF}
-  Classes, SysUtils, AvgLvlTree, BasicCodeTools, TypInfo, LCLProc, LResources,
-  Forms, Controls, LCLMemManager, LCLIntf, Dialogs,
-  PropEditUtils, PropEdits, UnitResources, IDEDialogs,
-  IDEProcs, PackageDefs, BasePkgManager, DesignerProcs;
+  Classes, SysUtils, TypInfo, Laz_AVL_Tree,
+  // LCL
+  Forms, Controls, Dialogs, LResources, LCLMemManager, LCLProc,
+  //LazUtils
+  AvgLvlTree, LazLoggerBase,
+  // CodeTools
+  BasicCodeTools,
+  // IdeIntf
+  PackageDependencyIntf, PropEditUtils, PropEdits, UnitResources, IDEDialogs,
+  // IDE
+  PackageDefs;
 
 type
   //----------------------------------------------------------------------------
@@ -263,7 +274,7 @@ type
   TJITMethods = class
   private
     fClearing: boolean;
-    fMethods: TAvgLvlTree;// sorted with CompareJITMethod
+    fMethods: TAvlTree; // sorted with CompareJITMethod
     procedure InternalAdd(const AMethod: TJITMethod);
     procedure InternalRemove(const AMethod: TJITMethod);
   public
@@ -366,7 +377,7 @@ const
   vmtInstanceSizeNeg = vmtInstanceSize+sizeof(ptrint);
 
 type
-  // these definitions are copied from objpas.inc
+  // these definitions are copied from typinfo.pp
 
   TMethodNameRec = packed record
     Name : PShortString;
@@ -396,7 +407,7 @@ type
   packed
 {$endif FPC_REQUIRES_PROPER_ALIGNMENT}
   record  
-    FieldOffset: LongWord;
+    FieldOffset: PtrUInt;
     ClassTypeIndex: Word;
     Name: ShortString;
   end;
@@ -417,11 +428,11 @@ function GetVMTSize(AClass: TClass): integer;
 var
   p: PPointer;
 begin
-  Result:=10000;
+  Result:=100000;
   if AClass=nil then exit;
-  p:=PPointer(pointer(AClass)+vmtMethodStart);
   Result:=vmtMethodStart;
-  while (p^<>nil) and (Result<10000) do begin
+  p:=PPointer(pointer(AClass)+Result);
+  while (p^<>nil) and (Result<100000) do begin
     inc(p);
     inc(Result,SizeOf(Pointer));
   end;
@@ -645,26 +656,6 @@ begin
   Result := Result+'}';
 end;
 
-function CalculateTypeDataSize(PropInfoCount: integer): integer;
-begin
-  Result := SizeOf(TTypeData) + 2; // TTypeData + one word for new prop count
-  // Actually the size depends on the UnitName. But SizeOf(TTypeData) already
-  // uses the maximum size of the shortstring.
-  {$ifdef FPC_REQUIRES_PROPER_ALIGNMENT}
-  if Result and (SizeOf(Pointer) - 1) <> 0 then
-    Inc(Result, SizeOf(Pointer)); // a few bytes too much, but at least enough
-  {$endif}
-  inc(Result,PropInfoCount*SizeOf(TPropInfo));
-end;
-
-function GetTypeDataPropCountAddr(TypeData: PTypeData): PWord;
-begin
-  Result:=PWord(PByte(@TypeData^.UnitName)+Length(TypeData^.UnitName)+1);
-  {$ifdef FPC_REQUIRES_PROPER_ALIGNMENT}
-  Result := Align(Result, SizeOf(Pointer));
-  {$endif}
-end;
-
 function GetJITMethod(const aMethod: TMethod; out aJITMethod: TJITMethod
   ): boolean;
 begin
@@ -687,15 +678,37 @@ begin
   Result:=CompareText(JITMethod1.TheMethodName,JITMethod2.TheMethodName);
 end;
 
+function CalculateTypeDataSize(PropInfoCount: integer): integer;
+begin
+  Result := SizeOf(TTypeData) + 2; // TTypeData + one word for new prop count
+  // Actually the size depends on the UnitName. But SizeOf(TTypeData) already
+  // uses the maximum size of the shortstring.
+  {$ifdef FPC_REQUIRES_PROPER_ALIGNMENT}
+  if Result and (SizeOf(Pointer) - 1) <> 0 then
+    Inc(Result, SizeOf(Pointer)); // a few bytes too much, but at least enough
+  {$endif}
+  inc(Result,PropInfoCount*SizeOf(TPropInfo));
+end;
+
 function CalculateTypeInfoSize(const AClassName: shortstring;
   PropInfoCount: integer): integer;
 begin
-  Result := SizeOf(TTypeKind) + 1 + length(AClassName)
+  Result := SizeOf(TTypeKind)
+           + 1 + length(AClassName)  // packed shortstring: length byte + chars
            + CalculateTypeDataSize(PropInfoCount);
+  {$push}
   {$warnings off}
   if SizeOf(TTypeKind)<>1 then
     raise Exception.Create('CalculateTypeInfoSize SizeOf(TTypeInfo^.Kind)<>1');
-  {$warnings on}
+  {$pop}
+end;
+
+function GetTypeDataPropCountAddr(TypeData: PTypeData): PWord;
+begin
+  Result:=PWord(PByte(@TypeData^.UnitName)+Length(TypeData^.UnitName)+1);
+  {$ifdef FPC_REQUIRES_PROPER_ALIGNMENT}
+  Result := Align(Result, SizeOf(Pointer));
+  {$endif}
 end;
 
 //------------------------------------------------------------------------------
@@ -745,10 +758,10 @@ procedure TJITComponentList.DestroyJITComponent(JITComponent:TComponent);
 var a:integer;
 begin
   if JITComponent=nil then
-    RaiseException('TJITComponentList.DestroyJITForm JITComponent=nil');
+    RaiseGDBException('TJITComponentList.DestroyJITForm JITComponent=nil');
   a:=IndexOf(JITComponent);
   if a<0 then
-    RaiseException('TJITComponentList.DestroyJITForm JITComponent.ClassName='+
+    RaiseGDBException('TJITComponentList.DestroyJITForm JITComponent.ClassName='+
       JITComponent.ClassName);
   if a>=0 then DestroyJITComponent(a);
 end;
@@ -1222,7 +1235,7 @@ begin
   if IndexOf(JITComponent)<0 then
     raise Exception.Create('TJITComponentList.RemoveMethod JITComponent.ClassName='+
       JITComponent.ClassName);
-  if (AName='') or (not IsValidIdent(AName)) then
+  if not IsValidIdent(AName) then
     raise Exception.Create('TJITComponentList.RemoveMethod invalid name: "'+AName+'"');
 
   // delete TJITMethod
@@ -1248,7 +1261,7 @@ begin
   if IndexOf(JITComponent)<0 then
     raise Exception.Create('TJITComponentList.RenameMethod JITComponent.ClassName='+
       JITComponent.ClassName);
-  if (NewName='') or (not IsValidIdent(NewName)) then
+  if not IsValidIdent(NewName) then
     raise Exception.Create('TJITComponentList.RenameMethod invalid name: "'+NewName+'"');
     
   // rename TJITMethod
@@ -1272,7 +1285,7 @@ begin
   if IndexOf(JITComponent)<0 then
     raise Exception.Create('TJITComponentList.RenameComponentClass JITComponent.ClassName='+
       JITComponent.ClassName);
-  if (NewName='') or (not IsValidIdent(NewName)) then
+  if not IsValidIdent(NewName) then
     raise Exception.Create('TJITComponentList.RenameComponentClass invalid name: "'+NewName+'"');
   DoRenameClass(JITComponent.ClassType,NewName);
 end;
@@ -1303,7 +1316,7 @@ var
   Action: TModalResult;
 begin
   if IndexOf(JITOwnerComponent)<0 then
-    RaiseException('TJITComponentList.AddJITChildComponentFromStream');
+    RaiseGDBException('TJITComponentList.AddJITChildComponentFromStream');
   {$IFDEF VerboseJITForms}
   debugln('[TJITComponentList.AddJITChildComponentFromStream] A');
   {$ENDIF}
@@ -1395,7 +1408,7 @@ begin
   if IndexOf(JITComponent)<0 then
     raise Exception.Create('TJITComponentList.CreateNewMethod JITComponent.ClassName='+
       JITComponent.ClassName);
-  if (AName='') or (not IsValidIdent(AName)) then
+  if not IsValidIdent(AName) then
     raise Exception.Create('TJITComponentList.CreateNewMethod invalid name: "'+AName+'"');
   OldCode:=JITComponent.MethodAddress(AName);
   if OldCode<>nil then begin
@@ -1441,7 +1454,17 @@ function TJITComponentList.CreateNewJITClass(AncestorClass: TClass;
 // that descends from AncestorClass.
 // The new class will have no new variables, no new methods and no new fields.
 var
-  NewVMT: Pointer;
+  AncestorVMT: PVmt;
+
+  procedure WarnUnsupportedVMTEntry(vmtOffset: PtrInt; const EntryName: string);
+  begin
+    if PPointer(Pointer(AncestorVMT)+vmtOffset)^<>nil then
+      debugln(['Warn: (lazarus) TJITComponentList.CreateNewJITClass ',EntryName,' not yet supported. Ancestor=',AncestorClass.ClassName,' Class=',NewClassName]);
+  end;
+
+
+var
+  NewVMT: PVmt;
   ClassNamePShortString: Pointer;
   NewFieldTable: PFieldTable;
   NewClassTable: PFieldClassTable;
@@ -1464,6 +1487,8 @@ begin
     raise Exception.Create('CreateNewClass NewUnitName is not a valid identifier');
   Result:=nil;
 
+  AncestorVMT:=PVmt(AncestorClass);
+
   // create vmt
   vmtSize:=GetVMTSize(AncestorClass);
   vmtTailSize:=vmtSize-vmtMethodStart;
@@ -1471,22 +1496,30 @@ begin
   FillChar(NewVMT^,vmtSize,0);
 
   // set vmtInstanceSize
-  PPtrInt(NewVMT+vmtInstanceSize)^:=AncestorClass.InstanceSize;
-  PPtrInt(NewVMT+vmtInstanceSizeNeg)^:=-AncestorClass.InstanceSize;
+  NewVMT^.vInstanceSize:=AncestorClass.InstanceSize;
+  NewVMT^.vInstanceSize2:=-AncestorClass.InstanceSize;
 
   // set vmtParent
-  TClass(Pointer(NewVMT+vmtParent)^):=AncestorClass;
+  {$IFDEF HasVMTParent}
+  NewVMT^.vParent:=AncestorVMT;
+  {$ELSE}
+  GetMem(NewVMT^.vParentRef,SizeOf(Pointer));
+  NewVMT^.vParentRef^:=AncestorVMT;
+  {$ENDIF}
 
   // set vmtClassName: create pointer to classname (PShortString)
   GetMem(ClassNamePShortString,SizeOf(ShortString));
   System.Move(NewClassName[0],ClassNamePShortString^,SizeOf(ShortString));
-  Pointer(Pointer(NewVMT+vmtClassName)^):=ClassNamePShortString;// don't use
+  NewVMT^.vClassName:=ClassNamePShortString; // don't use
                  // PShortString, so that the compiler does not get silly ideas
+
+  WarnUnsupportedVMTEntry(vmtDynamicTable,'vmtDynamicTable');
+  WarnUnsupportedVMTEntry(vmtMethodTable,'vmtMethodTable');
 
   // set vmtFieldTable
   GetMem(NewFieldTable,SizeOf(TFieldTable));
   FillChar(NewFieldTable^,SizeOf(TFieldTable),0);
-  PFieldTable(Pointer(NewVMT+vmtFieldTable)^):=NewFieldTable;
+  NewVMT^.vFieldTable:=NewFieldTable;
 
   // ClassTable
   GetMem(NewClassTable,SizeOf(Word));
@@ -1497,29 +1530,44 @@ begin
   TypeInfoSize := CalculateTypeInfoSize(NewClassName,0);
   GetMem(NewTypeInfo,TypeInfoSize);
   FillChar(NewTypeInfo^,TypeInfoSize,0);
-  Pointer(Pointer(NewVMT+vmtTypeInfo)^):=NewTypeInfo;
+  NewVMT^.vTypeInfo:=NewTypeInfo;
 
   // set TypeInfo Kind and Name
   NewTypeInfo^.Kind:=tkClass;
   System.Move(NewClassName[0],NewTypeInfo^.Name[0],length(NewClassName)+1);
   NewTypeData:=GetTypeData(NewTypeInfo);
 
+  // copy vmtInitTable
+  NewVMT^.vInitTable:=AncestorVMT^.vInitTable;
+
+  WarnUnsupportedVMTEntry(vmtAutoTable,'vmtAutoTable');
+
+  // copy vmtIntfTable
+  NewVMT^.vIntfTable:=AncestorVMT^.vIntfTable;
+
+  WarnUnsupportedVMTEntry(vmtMsgStrPtr,'vmtMsgStrPtr');
+
   // set TypeData (PropCount is the total number of properties, including ancestors)
   NewTypeData^.ClassType:=TClass(NewVMT);
+  {$IFDEF HasVMTParent}
   NewTypeData^.ParentInfo:=AncestorClass.ClassInfo;
+  {$ELSE}
+  GetMem(NewTypeData^.ParentInfoRef,SizeOf(Pointer));
+  NewTypeData^.ParentInfoRef^:=AncestorClass.ClassInfo;
+  {$ENDIF}
   NewTypeData^.PropCount:=GetTypeData(NewTypeData^.ParentInfo)^.PropCount;
   NewTypeData^.UnitName:=NewUnitName;
   AddedPropCount:=GetTypeDataPropCountAddr(NewTypeData);
   AddedPropCount^:=0;
 
   // copy the standard methods
-  System.Move(Pointer(Pointer(AncestorClass)+vmtMethodStart)^,
-              Pointer(NewVMT+vmtMethodStart)^,
+  System.Move(Pointer(Pointer(AncestorVMT)+vmtMethodStart)^,
+              Pointer(Pointer(NewVMT)+vmtMethodStart)^,
               vmtTailSize);
 
   // override 'ValidateRename' for TComponent descendants
   if AncestorClass.InheritsFrom(TComponent) then begin
-    Pointer(Pointer(NewVMT+TComponentValidateRenameOffset)^):=
+    PPointer(Pointer(NewVMT)+TComponentValidateRenameOffset)^:=
                            @TComponentWithOverrideValidateRename.ValidateRename;
   end;
 
@@ -1547,32 +1595,51 @@ procedure TJITComponentList.FreeJITClass(var AClass: TClass);
   end;
 
 var
-  OldVMT: Pointer;
-  ClassNamePShortString: Pointer;
+  OldVMT: PVmt;
+  ClassNamePShortString: Pointer; // don't use PShortString so that the compiler don't get silly ideas
   OldFieldTable: PFieldTable;
   OldTypeInfo: PTypeInfo;
   OldMethodTable: PMethodNameTable;
+  {$IF FPC_FULLVERSION>=30100}
+  OldTypeData: PTypeData;
+  {$ENDIF}
 begin
   // free TJITMethods
   JITMethods.DeleteAllOfClass(AClass);
 
-  OldVMT:=Pointer(AClass);
+  OldVMT:=PVmt(Pointer(AClass));
+
   // free methodtable
-  OldMethodTable:=PMethodNameTable((OldVMT+vmtMethodTable)^);
+  OldMethodTable:=PMethodNameTable(OldVMT^.vMethodTable);
   if Assigned(OldMethodTable) then begin
     FreeMethodTableEntries(OldMethodTable);
     FreeMem(OldMethodTable);
   end;
+
+  // set vmtParent
+  {$IFNDEF HasVMTParent}
+  FreeMem(OldVMT^.vParentRef);
+  {$ENDIF}
+
   // free classname
-  ClassNamePShortString:=Pointer(Pointer(OldVMT+vmtClassName)^);
+  ClassNamePShortString:=Pointer(OldVMT^.vClassName);
   FreeMem(ClassNamePShortString);
+
   // free field table
-  OldFieldTable:=PFieldTable(Pointer(OldVMT+vmtFieldTable)^);
+  OldFieldTable:=PFieldTable(OldVMT^.vFieldTable);
   ReallocMem(OldFieldTable^.ClassTable,0);
   FreeMem(OldFieldTable);
+
   // free typeinfo
-  OldTypeInfo:=PTypeInfo(Pointer(OldVMT+vmtTypeInfo)^);
+  OldTypeInfo:=PTypeInfo(OldVMT^.vTypeInfo);
+  {$IFNDEF HasVMTParent}
+  // free ParentInfoRef
+  OldTypeData:=GetTypeData(OldTypeInfo);
+  FreeMem(OldTypeData^.ParentInfoRef);
+  OldTypeData^.ParentInfoRef:=nil;
+  {$ENDIF}
   FreeMem(OldTypeInfo);
+
   // free vmt
   FreeMem(OldVMT);
   AClass:=nil;
@@ -1697,7 +1764,7 @@ var
 begin
   TypeInfo:=PTypeInfo(JITClass.ClassInfo);
   if TypeInfo=nil then
-    RaiseException('TJITComponentList.DoRenameUnitNameOfClass');
+    RaiseGDBException('TJITComponentList.DoRenameUnitNameOfClass');
   TypeData:=GetTypeData(TypeInfo);
   //DebugLn(['TJITComponentList.DoRenameUnitNameOfClass Old=',TypeData^.UnitName,' New=',NewUnitName]);
   OldPropCount:=GetTypeDataPropCountAddr(TypeData)^;
@@ -1948,7 +2015,7 @@ end;
 
 constructor TJITMethods.Create;
 begin
-  fMethods:=TAvgLvlTree.Create(@CompareJITMethod);
+  fMethods:=TAvlTree.Create(@CompareJITMethod);
 end;
 
 destructor TJITMethods.Destroy;
@@ -1979,7 +2046,7 @@ function TJITMethods.Find(aClass: TClass;
   const aMethodName: shortstring): TJITMethod;
 var
   CurMethod: TJITMethod;
-  Node: TAvgLvlTreeNode;
+  Node: TAvlTreeNode;
   Comp: LongInt;
 begin
   //DebugLn(['TJITMethods.Find  Class=',dbgsname(aClass),' aMethodName=',aMethodName]);
@@ -2003,9 +2070,8 @@ end;
 function TJITMethods.Delete(aMethod: TJITMethod): boolean;
 begin
   //DebugLn(['TJITMethods.Delete  Class=',dbgsname(AMethod.TheClass),' aMethodName=',aMethod.TheMethodName]);
-  if (aMethod=nil) then
-    Result:=false
-  else if aMethod.Owner<>Self then
+  Result:=false;
+  if (aMethod<>nil) and (aMethod.Owner<>Self) then
     RaiseGDBException('TJITMethods.DeleteJITMethod')
   else begin
     Result:=true;
@@ -2032,9 +2098,9 @@ end;
 procedure TJITMethods.DeleteAllOfClass(aClass: TClass);
 var
   CurMethod: TJITMethod;
-  Node: TAvgLvlTreeNode;
+  Node: TAvlTreeNode;
   Comp: LongInt;
-  NextNode: TAvgLvlTreeNode;
+  NextNode: TAvlTreeNode;
 begin
   Node:=fMethods.Root;
   while (Node<>nil) do begin

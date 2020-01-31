@@ -24,9 +24,12 @@ interface
 
 
 uses
-  Classes, SysUtils, types, LCLStrConsts, LCLType, LCLProc, LMessages, Graphics,
-  ExtendedStrings, LCLIntf, ActnList, Controls, TextStrings, LazUTF8,
-  Forms, Menus, LResources;
+  Classes, SysUtils, types,
+  // LCL
+  LCLStrConsts, LCLType, LCLProc, LCLIntf, LMessages, LResources, Graphics,
+  ActnList, Controls, Forms, Menus, Themes,
+  // LazUtils
+  TextStrings, ExtendedStrings, LazUTF8, LazMethodList, LazLoggerBase, LazUtilities;
 
 type
 
@@ -43,8 +46,8 @@ type
   TScrollCode = (
     // !!! Beware. The position of these enums must correspond to the SB_xxx
     // values in LCLType  (Delphi compatibility, not our decision)
-    // MWE: Don't know it this still is a requirement
-    //      afaik have I remeved all casts from the LCL
+    // MWE: Don't know if this still is a requirement
+    //      afaik have I removed all casts from the LCL
     scLineUp,   // = SB_LINEUP
     scLineDown, // = SB_LINEDOWN
     scPageUp,   // = SB_PAGEUP
@@ -120,6 +123,7 @@ type
     property BidiMode;
     property BorderSpacing;
     property Constraints;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
@@ -130,6 +134,7 @@ type
     property Min;
     property PageSize;
     property ParentBidiMode;
+    property ParentDoubleBuffered;
     property ParentShowHint;
     property PopupMenu;
     property Position;
@@ -182,6 +187,7 @@ type
     property Color;
     property Constraints;
     property DockSite;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
@@ -189,6 +195,7 @@ type
     property Font;
     property ParentBidiMode;
     property ParentColor;
+    property ParentDoubleBuffered;
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
@@ -245,7 +252,9 @@ type
     csSimple,           // like an TEdit plus a TListBox
     csDropDownList,     // like TLabel plus a button to drop down the list
     csOwnerDrawFixed,   // like csDropDownList, but custom drawn
-    csOwnerDrawVariable // like csDropDownList, but custom drawn and with each item can have another height
+    csOwnerDrawVariable,// like csDropDownList, but custom drawn and with each item can have another height
+    csOwnerDrawEditableFixed,// like csOwnerDrawFixed, but with TEdit
+    csOwnerDrawEditableVariable// like csOwnerDrawVariable, but with TEdit
   );
 
   TOwnerDrawState = LCLType.TOwnerDrawState;
@@ -267,6 +276,8 @@ type
     FCanvas: TCanvas;
     FDropDownCount: Integer;
     FDroppedDown: boolean;
+    FDroppingDown: Boolean;
+    FEditingDone: Boolean;
     FItemHeight: integer;
     FItemIndex: integer;
     FItemWidth: integer;
@@ -279,7 +290,6 @@ type
     FOnGetItems: TNotifyEvent;
     FOnMeasureItem: TMeasureItemEvent;
     FOnSelect: TNotifyEvent;
-    FReadOnly: Boolean;
     FSelLength: integer;
     FSelStart: integer;
     FSorted: boolean;
@@ -289,6 +299,7 @@ type
     function GetAutoComplete: boolean;
     function GetDroppedDown: Boolean;
     function GetItemWidth: Integer;
+    function GetReadOnly: Boolean;
     procedure SetAutoComplete(const AValue: boolean);
     procedure SetItemWidth(const AValue: Integer);
     procedure LMDrawListItem(var TheMessage: TLMDrawListItem); message LM_DrawListItem;
@@ -313,6 +324,7 @@ type
     procedure MeasureItem(Index: Integer; var TheHeight: Integer); virtual;
     class function GetControlClassDefaultSize: TSize; override;
     procedure LMChanged(var Msg); message LM_CHANGED;
+    procedure CMWantSpecialKey(var Message: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
     procedure Change; virtual;
     procedure Select; virtual;
     procedure DropDown; virtual;
@@ -320,6 +332,8 @@ type
     procedure SetItems(const Value: TStrings); virtual;
     procedure CloseUp; virtual;
     procedure AdjustDropDown; virtual;
+    procedure DoAutoAdjustLayout(const AMode: TLayoutAdjustmentPolicy;
+      const AXProportion, AYProportion: Double); override;
 
     function GetItemCount: Integer; //override;
     function GetItemHeight: Integer; virtual;
@@ -328,7 +342,6 @@ type
     function GetSelText: string; virtual;
     function GetItemIndex: integer; virtual;
     function GetMaxLength: integer; virtual;
-    function IsReadOnlyStored: boolean;
     procedure SetDropDownCount(const AValue: Integer); virtual;
     procedure SetDroppedDown(const AValue: Boolean); virtual;
     procedure SetItemHeight(const AValue: Integer); virtual;
@@ -345,6 +358,7 @@ type
     procedure UTF8KeyPress(var UTF8Key: TUTF8Char); override;
     procedure MouseUp(Button: TMouseButton; Shift:TShiftState; X, Y: Integer); override;
     function SelectItem(const AnItem: String): Boolean;
+    procedure ShouldAutoAdjust(var AWidth, AHeight: Boolean); override;
 
     property ItemHeight: Integer read GetItemHeight write SetItemHeight;
     property ItemWidth: Integer read GetItemWidth write SetItemWidth default 0;
@@ -372,6 +386,7 @@ type
     procedure ClearSelection; //override;
     property CharCase: TEditCharCase read FCharCase write SetCharCase default ecNormal;
     property DroppedDown: Boolean read GetDroppedDown write SetDroppedDown;
+    property DroppingDown: Boolean read FDroppingDown write FDroppingDown; deprecated 'Will be removed in 2.2';
     procedure SelectAll;
     property AutoComplete: boolean
       read GetAutoComplete write SetAutoComplete default False;
@@ -389,7 +404,7 @@ type
     property DropDownCount: Integer read FDropDownCount write SetDropDownCount default 8;
     property Items: TStrings read FItems write SetItems;
     property ItemIndex: integer read GetItemIndex write SetItemIndex default -1;
-    property ReadOnly: Boolean read FReadOnly write SetReadOnly stored IsReadOnlyStored;
+    property ReadOnly: Boolean read GetReadOnly write SetReadOnly stored False;
     property SelLength: integer read GetSelLength write SetSelLength;// UTF-8 length
     property SelStart: integer read GetSelStart write SetSelStart;// UTF-8 position
     property SelText: String read GetSelText write SetSelText;
@@ -417,6 +432,7 @@ type
     property CharCase;
     property Color;
     property Constraints;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
@@ -460,10 +476,11 @@ type
     property OnUTF8KeyPress;
     property ParentBidiMode;
     property ParentColor;
+    property ParentDoubleBuffered;
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
-    property ReadOnly;
+    property ReadOnly; deprecated 'Will be removed in 2.2 - use extended Style values instead.';
     property ShowHint;
     property Sorted;
     property Style;
@@ -478,10 +495,16 @@ type
 
   TListBoxStyle = (lbStandard, lbOwnerDrawFixed, lbOwnerDrawVariable, lbVirtual);
   TSelectionChangeEvent = procedure(Sender: TObject; User: boolean) of object;
+  TListBoxOption = (
+    lboDrawFocusRect // draw focus rect in case of owner drawing
+    );
+  TListBoxOptions = set of TListBoxOption;
 
   { TCustomListBox }
 
   TCustomListBox = class(TWinControl)
+  private const
+    DefOptions = [lboDrawFocusRect];
   private
     FCacheValid: Boolean;
     FCanvas: TCanvas;
@@ -498,6 +521,7 @@ type
     FOnDrawItem: TDrawItemEvent;
     FOnMeasureItem: TMeasureItemEvent;
     FOnSelectionChange: TSelectionChangeEvent;
+    FOptions: TListBoxOptions;
     FScrollWidth: Integer;
     FSorted: boolean;
     FStyle: TListBoxStyle;
@@ -525,6 +549,7 @@ type
     function CalculateStandardItemHeight: Integer;
     procedure CreateParams(var Params: TCreateParams); override;
     procedure InitializeWnd; override;
+    procedure DestroyWnd; override;
     procedure FinalizeWnd; override;
     class function GetControlClassDefaultSize: TSize; override;
     procedure CheckIndex(const AIndex: Integer);
@@ -543,8 +568,11 @@ type
     procedure SetSorted(Val: boolean); virtual;
     procedure SetStyle(Val: TListBoxStyle); virtual;
     procedure DrawItem(Index: Integer; ARect: TRect; State: TOwnerDrawState); virtual;
+    procedure DoAutoAdjustLayout(const AMode: TLayoutAdjustmentPolicy;
+      const AXProportion, AYProportion: Double); override;
     procedure DoSelectionChange(User: Boolean); virtual;
     procedure SendItemIndex;
+    procedure WMGetDlgCode(var Message: TLMNoParams); message LM_GETDLGCODE;
   public
     constructor Create(TheOwner: TComponent); override;
     destructor Destroy; override;
@@ -563,6 +591,7 @@ type
     procedure MakeCurrentVisible;
     procedure MeasureItem(Index: Integer; var TheHeight: Integer); virtual;
     procedure SelectAll; virtual;
+    procedure DeleteSelected; virtual;
     procedure UnlockSelectionChange;
   public
     property Align;
@@ -603,6 +632,7 @@ type
     property OnSelectionChange: TSelectionChangeEvent read FOnSelectionChange
                                                       write FOnSelectionChange;
     property OnUTF8KeyPress;
+    property Options: TListBoxOptions read FOptions write FOptions default DefOptions;
     property ParentColor default False;
     property ParentFont;
     property ParentShowHint;
@@ -633,6 +663,7 @@ type
     property Color;
     property Columns;
     property Constraints;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
@@ -666,13 +697,18 @@ type
     property OnMouseWheel;
     property OnMouseWheelDown;
     property OnMouseWheelUp;
+    property OnMouseWheelHorz;
+    property OnMouseWheelLeft;
+    property OnMouseWheelRight;
     property OnResize;
     property OnSelectionChange;
     property OnShowHint;
     property OnStartDrag;
     property OnUTF8KeyPress;
+    property Options;
     property ParentBidiMode;
     property ParentColor;
+    property ParentDoubleBuffered;
     property ParentShowHint;
     property ParentFont;
     property PopupMenu;
@@ -700,6 +736,7 @@ type
     FHideSelection: Boolean;
     FMaxLength: Integer;
     FModified: Boolean;
+    FOnChangeHandler: TMethodList;
     FPasswordChar: Char;
     FReadOnly: Boolean;
     FNumbersOnly: Boolean;
@@ -707,17 +744,10 @@ type
     FSelLength: integer;
     FSelStart: integer;
     FTextChangedByRealSetText: Boolean;
+    FTextChangedLock: Boolean;
     FTextHint: TTranslateString;
-    FTextHintShowing: Boolean;
-    FSettingTextHint: Boolean;
-    FTextHintFontColor: TColor;
-    FTextHintFontStyle: TFontStyles;
-    FSavedFontColor: TColor;
-    FSavedFontStyle: TFontStyles;
-    FSavedParentFont: Boolean;
-    procedure SetTextHint(AValue: TTranslateString);
-    procedure ShowTextHint;
-    procedure HideTextHint;
+    procedure ShowEmulatedTextHint(const ForceShow: Boolean = False);
+    procedure HideEmulatedTextHint;
     procedure SetAlignment(const AValue: TAlignment);
     function GetCanUndo: Boolean;
     function GetModified: Boolean;
@@ -726,24 +756,31 @@ type
     procedure SetMaxLength(Value: Integer);
     procedure SetModified(Value: Boolean);
     procedure SetPasswordChar(const AValue: Char);
+  protected type
+    TEmulatedTextHintStatus = (thsHidden, thsShowing, thsChanging);
   protected
+    FEmulatedTextHintStatus: TEmulatedTextHintStatus;
+
     class procedure WSRegisterClass; override;
-    function CanShowTextHint: Boolean; virtual;
+    function CanShowEmulatedTextHint: Boolean; virtual;
+    function CreateEmulatedTextHintFont: TFont; virtual;
     procedure CalculatePreferredSize(var PreferredWidth, PreferredHeight: integer;
                                      WithThemeSpace: Boolean); override;
     procedure CreateParams(var Params: TCreateParams); override;
     procedure InitializeWnd; override;
     procedure TextChanged; override;
+    procedure FontChanged(Sender: TObject); override;
     procedure Change; virtual;
     procedure DoEnter; override;
     procedure DoExit; override;
+    procedure EditingDone; override;
     function GetCaretPos: TPoint; virtual;
     function GetNumbersOnly: Boolean; virtual;
     function GetReadOnly: Boolean; virtual;
     function GetSelLength: integer; virtual;
     function GetSelStart: integer; virtual;
     function GetSelText: string; virtual;
-    procedure Loaded; override;
+    function GetTextHint: TTranslateString; virtual;
     procedure SetCaretPos(const Value: TPoint); virtual;
     procedure SetEchoMode(Val: TEchoMode); virtual;
     procedure SetNumbersOnly(Value: Boolean); virtual;
@@ -751,6 +788,7 @@ type
     procedure SetSelLength(Val: integer); virtual;
     procedure SetSelStart(Val: integer); virtual;
     procedure SetSelText(const Val: string); virtual;
+    procedure SetTextHint(const AValue: TTranslateString); virtual;
     function ChildClassAllowed(ChildClass: TClass): boolean; override;
     class function GetControlClassDefaultSize: TSize; override;
     procedure MouseUp(Button: TMouseButton; Shift:TShiftState; X, Y: Integer); override;
@@ -759,12 +797,17 @@ type
     procedure KeyUpAfterInterface(var Key: Word; Shift: TShiftState); override;
     procedure WMChar(var Message: TLMChar); message LM_CHAR;
     procedure CMWantSpecialKey(var Message: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
+    procedure WndProc(var Message: TLMessage); override;
+    procedure ShouldAutoAdjust(var AWidth, AHeight: Boolean); override;
+    procedure WMSetFocus(var Message: TLMSetFocus); message LM_SETFOCUS;
+    procedure WMKillFocus(var Message: TLMKillFocus); message LM_KILLFOCUS;
 
     property AutoSelect: Boolean read FAutoSelect write FAutoSelect default True;
     property AutoSelected: Boolean read FAutoSelected write FAutoSelected;
     property ParentColor default False;
   public
     constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
     procedure Clear;
     procedure SelectAll;
     procedure ClearSelection; virtual;
@@ -772,6 +815,11 @@ type
     procedure CutToClipboard; virtual;
     procedure PasteFromClipboard; virtual;
     procedure Undo; virtual;
+
+    procedure RemoveAllHandlersOfObject(AnObject: TObject); override;
+    procedure AddHandlerOnChange(const AnOnChangeEvent: TNotifyEvent;
+      AsFirst: Boolean = False);
+    procedure RemoveHandlerOnChange(const AnOnChangeEvent: TNotifyEvent);
   public
     property Alignment: TAlignment read FAlignment write SetAlignment default taLeftJustify;
     property AutoSize default True;
@@ -794,9 +842,7 @@ type
     property TabOrder;
     property TabStop default true;
     property Text;
-    property TextHint: TTranslateString read FTextHint write SetTextHint;
-    property TextHintFontColor: TColor read FTextHintFontColor write FTextHintFontColor default clGrayText;
-    property TextHintFontStyle: TFontStyles read FTextHintFontStyle write FTextHintFontStyle default [fsItalic];
+    property TextHint: TTranslateString read GetTextHint write SetTextHint;
   end;
 
 
@@ -842,16 +888,16 @@ type
     procedure KeyUpAfterInterface(var Key: Word; Shift: TShiftState); override;
     procedure SetCaretPos(const Value: TPoint); override;
     procedure SetLines(const Value: TStrings);
-    procedure SetSelText(const Val: string); override;
     procedure SetWantReturns(const AValue: Boolean);
     procedure SetWantTabs(const NewWantTabs: boolean);
     procedure SetWordWrap(const Value: boolean);
     procedure SetScrollBars(const Value: TScrollStyle);
     procedure Loaded; override;
     procedure CMWantSpecialKey(var Message: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
-    procedure WMGetDlgCode(var Message: TLMNoParams); message LM_GETDLGCODE;
+    procedure WMGetDlgCode(var Message: TLMGetDlgCode); message LM_GETDLGCODE;
     class function GetControlClassDefaultSize: TSize; override;
     procedure UTF8KeyPress(var UTF8Key: TUTF8Char); override;
+    function CanShowEmulatedTextHint: Boolean; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -874,7 +920,6 @@ type
   public
     property AutoSelected;
   published
-    property Action;
     property Align;
     property Alignment;
     property Anchors;
@@ -886,6 +931,7 @@ type
     property CharCase;
     property Color;
     property Constraints;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
@@ -922,6 +968,7 @@ type
     property OnStartDrag;
     property OnUTF8KeyPress;
     property ParentColor;
+    property ParentDoubleBuffered;
     property ParentFont;
     property ParentShowHint;
     property PasswordChar;
@@ -932,8 +979,6 @@ type
     property TabOrder;
     property Text;
     property TextHint;
-    property TextHintFontColor;
-    property TextHintFontStyle;
     property Visible;
   end;
 
@@ -951,6 +996,7 @@ type
     property CharCase;
     property Color;
     property Constraints;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
@@ -980,10 +1026,14 @@ type
     property OnMouseWheel;
     property OnMouseWheelDown;
     property OnMouseWheelUp;
+    property OnMouseWheelHorz;
+    property OnMouseWheelLeft;
+    property OnMouseWheelRight;
     property OnStartDrag;
     property OnUTF8KeyPress;
     property ParentBidiMode;
     property ParentColor;
+    property ParentDoubleBuffered;
     property ParentFont;
     property PopupMenu;
     property ParentShowHint;
@@ -1047,9 +1097,11 @@ type
     property Caption;
     property Color nodefault;
     property Constraints;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
+    property Enabled;
     property FocusControl;
     property Font;
     property OnChangeBounds;
@@ -1067,11 +1119,17 @@ type
     property OnMouseWheel;
     property OnMouseWheelDown;
     property OnMouseWheelUp;
+    property OnMouseWheelHorz;
+    property OnMouseWheelLeft;
+    property OnMouseWheelRight;
     property OnResize;
     property OnStartDrag;
     property ParentBidiMode;
     property ParentFont;
     property ParentColor;
+    property ParentDoubleBuffered;
+    property ParentShowHint;
+    property PopupMenu;
     property ShowAccelChar;
     property ShowHint;
     property TabOrder;
@@ -1186,6 +1244,7 @@ type
     property Color;
     property Constraints;
     property Default;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
@@ -1215,6 +1274,7 @@ type
     property OnResize;
     property OnStartDrag;
     property OnUTF8KeyPress;
+    property ParentDoubleBuffered;
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
@@ -1290,6 +1350,7 @@ type
     property Checked;
     property Color nodefault;
     property Constraints;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
@@ -1321,6 +1382,7 @@ type
     property OnStartDrag;
     property OnUTF8KeyPress;
     property ParentColor;
+    property ParentDoubleBuffered;
     property ParentFont;
     property ParentShowHint;
     property ParentBidiMode;
@@ -1337,6 +1399,7 @@ type
   TToggleBox = class(TCustomCheckBox)
   protected
     class procedure WSRegisterClass; override;
+    class function GetControlClassDefaultSize: TSize; override;
     procedure CreateParams(var Params: TCreateParams); override;
     property ParentColor default false;
   public
@@ -1352,6 +1415,7 @@ type
     property Checked;
     property Color;
     property Constraints;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
@@ -1375,6 +1439,7 @@ type
     property OnMouseWheelUp;
     property OnStartDrag;
     property ParentBidiMode;
+    property ParentDoubleBuffered;
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
@@ -1409,6 +1474,7 @@ type
     property Checked;
     property Color;
     property Constraints;
+    property DoubleBuffered;
     property DragCursor;
     property DragKind;
     property DragMode;
@@ -1439,6 +1505,7 @@ type
     property OnStartDrag;
     property ParentBidiMode;
     property ParentColor;
+    property ParentDoubleBuffered;
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
@@ -1504,8 +1571,8 @@ type
   public
     constructor Create(TheOwner: TComponent); override;
     function CalcFittingFontHeight(const TheText: string;
-                                   MaxWidth, MaxHeight: Integer; var FontHeight,
-                                   NeededWidth, NeededHeight: integer): Boolean;
+      MaxWidth, MaxHeight: Integer;
+      out FontHeight, NeededWidth, NeededHeight: Integer): Boolean;
     function ColorIsStored: boolean; override;
     function AdjustFontForOptimalFill: Boolean;
     procedure Paint; override;
@@ -1560,6 +1627,9 @@ type
     property OnMouseWheel;
     property OnMouseWheelDown;
     property OnMouseWheelUp;
+    property OnMouseWheelHorz;
+    property OnMouseWheelLeft;
+    property OnMouseWheelRight;
     property OnResize;
     property OnStartDrag;
     property OptimalFill;
@@ -1649,4 +1719,7 @@ end;
 
 {$I customstatictext.inc}
 
+initialization
+  RegisterPropertyToSkip(TCustomEdit, 'TextHintFontColor','Used in a previous version of Lazarus','');
+  RegisterPropertyToSkip(TCustomEdit, 'TextHintFontStyle','Used in a previous version of Lazarus','');
 end.

@@ -6,15 +6,16 @@ msgstr ""
 "Project-Id-Version: \n"
 "POT-Creation-Date: \n"
 "PO-Revision-Date: \n"
-"Last-Translator: Marcelo Borges de Paula\n"
+"Last-Translator: Marcelo B Paula <marcelo.bp@netsite.com.br>\n"
 "Language-Team: \n"
+"Language: pt_BR\n"
+"X-Generator: Poedit 1.8.13\n"
 
 #: messagecomposer.rscancel
 msgid "Cancel"
 msgstr "Cancelar"
 
 #: messagecomposer.rsok
-#| msgid "Ok"
 msgid "OK"
 msgstr "OK"
 
@@ -71,23 +72,19 @@ msgid "\"If\" result"
 msgstr "resultado \"If\""
 
 #: messagecomposer.skindofmessage
-#| msgid "KIND OF MESSAGE"
 msgid "Kind of message"
 msgstr "Tipo de mensagem"
 
 #: messagecomposer.smaskinput
-#| msgid "Mask Input"
 msgid "Mask input"
 msgstr "Máscara de entrada"
 
 #: messagecomposer.smessagecomposercaption
-#| msgid "Message Composer ..."
 msgctxt "messagecomposer.smessagecomposercaption"
 msgid "Message Composer"
 msgstr "Compositor Mensagens ..."
 
 #: messagecomposer.smessagecomposermenucaption
-#| msgid "Message Composer ..."
 msgctxt "messagecomposer.smessagecomposermenucaption"
 msgid "Message Composer ..."
 msgstr "Compositor Mensagens ..."
@@ -101,7 +98,6 @@ msgid "The message to be shown"
 msgstr "A mensagem à ser mostrada"
 
 #: messagecomposer.snotimplementedyet
-#| msgid "Not Implemented Yet"
 msgid "Not implemented yet"
 msgstr "Ainda não implementado"
 
@@ -110,10 +106,8 @@ msgid "Text asking the user for input"
 msgstr "Texto solicitando digitação do usuário"
 
 #: messagecomposer.ssourcewrapper
-#, fuzzy
-#| msgid "SOURCE WRAPPER"
 msgid "Source wrapper"
-msgstr "INVÓLUCRO FONTE"
+msgstr "Invólucro do fonte"
 
 #: messagecomposer.svaluevar
 msgid "Value (var)"

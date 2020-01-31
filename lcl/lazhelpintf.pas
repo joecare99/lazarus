@@ -25,8 +25,11 @@ unit LazHelpIntf;
 interface
 
 uses
-  Classes, SysUtils, LCLProc, FileUtil, LCLStrConsts, Dialogs,
-  LazConfigStorage, HelpIntfs, Masks, LazFileUtils, LazUTF8;
+  Classes, SysUtils,
+  // LazUtils
+  FileUtil, LazFileUtils, LazUtilities, LazUTF8, LazConfigStorage, Masks,
+  // LCL
+  LCLProc, LCLStrConsts, Dialogs, HelpIntfs;
 
 type
   { THelpQueryItem }
@@ -640,12 +643,13 @@ var
   i: Integer;
 begin
   Result:=Filename;
+  {$push}
   {$warnings off}
   if PathDelim<>'/' then
     for i:=1 to length(Result) do
       if Result[i]=PathDelim then
         Result[i]:='/';
-  {$warnings on}
+  {$pop}
 end;
 
 function URLPathToFilename(const URLPath: string): string;
@@ -653,12 +657,13 @@ var
   i: Integer;
 begin
   Result:=URLPath;
+  {$push}
   {$warnings off}
   if PathDelim<>'/' then
     for i:=1 to length(Result) do
       if Result[i]='/' then
         Result[i]:=PathDelim;
-  {$warnings on}
+  {$pop}
 end;
 
 procedure SplitURL(const URL: string; out URLScheme, URLPath, URLParams: string);
@@ -1959,7 +1964,7 @@ begin
   for i:=0 to Count-1 do begin
     HelpDB:=Items[i];
     Path:=HelpDB.ID;
-    if (Path='') or (not IsValidIdent(Path)) then continue;
+    if not IsValidIdent(Path) then continue;
     Storage.AppendBasePath(Path);
     try
       HelpDB.Load(Storage);
@@ -1978,7 +1983,7 @@ begin
   for i:=0 to Count-1 do begin
     HelpDB:=Items[i];
     Path:=HelpDB.ID;
-    if (Path='') or (not IsValidIdent(Path)) then continue;
+    if not IsValidIdent(Path) then continue;
     Storage.AppendBasePath(Path);
     try
       HelpDB.Save(Storage);
@@ -2069,7 +2074,7 @@ begin
   for i:=0 to Count-1 do begin
     Viewer:=Items[i];
     Path:=Viewer.StorageName;
-    if (Path='') or (not IsValidIdent(Path)) then continue;
+    if not IsValidIdent(Path) then continue;
     Storage.AppendBasePath(Path);
     try
       Viewer.Load(Storage);
@@ -2088,7 +2093,7 @@ begin
   for i:=0 to Count-1 do begin
     Viewer:=Items[i];
     Path:=Viewer.StorageName;
-    if (Path='') or (not IsValidIdent(Path)) then continue;
+    if not IsValidIdent(Path) then continue;
     Storage.AppendBasePath(Path);
     try
       Viewer.Save(Storage);

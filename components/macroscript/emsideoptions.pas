@@ -1,14 +1,17 @@
 unit EMSIdeOptions;
 
 {$mode objfpc}{$H+}
-
+{$WARN 5024 off : Parameter "$1" not used}
+{$WARN 6018 off : unreachable code}
 interface
 
 uses
-  Classes, SysUtils, FileUtil, Forms, Controls, StdCtrls, IDEOptionsIntf,
-  {$IFnDEF PasScriptNotAvail}
-  SrcEditorIntf,
-  {$ENDIF}
+  SysUtils,
+  // LCL
+  StdCtrls,
+  // IdeIntf
+  IDEOptionsIntf, IDEOptEditorIntf, SrcEditorIntf,
+  // MacroScript
   EMScriptMacro, EMSStrings;
 
 type
@@ -20,12 +23,13 @@ type
     lblStatus: TLabel;
     procedure btnActivateClick(Sender: TObject);
   private
-
+    { private declarations }
   public
+    { public declarations }
     function GetTitle: String; override;
-    procedure Setup({%H-}ADialog: TAbstractOptionsEditorDialog); override;
-    procedure ReadSettings({%H-}AOptions: TAbstractIDEOptions); override;
-    procedure WriteSettings({%H-}AOptions: TAbstractIDEOptions); override;
+    procedure Setup(ADialog: TAbstractOptionsEditorDialog); override;
+    procedure ReadSettings(AOptions: TAbstractIDEOptions); override;
+    procedure WriteSettings(AOptions: TAbstractIDEOptions); override;
     class function SupportedOptionsClass: TAbstractIDEOptionsClass; override;
   end;
 
@@ -57,31 +61,34 @@ begin
 end;
 
 procedure TEMSIdeOptionsFrame.ReadSettings(AOptions: TAbstractIDEOptions);
-{$IFnDEF PasScriptNotAvail}
 var
   cfg: TEMSConfig;
-{$ENDIF}
 begin
-{$IFDEF PasScriptNotAvail}
-  lblStatus.Caption := EMSNotSupported;
-  btnActivate.Enabled := True;
-{$ELSE}
+  if not EMSSupported then begin
+    lblStatus.Caption := EMSNotSupported;
+    btnActivate.Enabled := True;
+    exit;
+  end;
+
   cfg := GetEMSConf;
+
   if cfg.SelfTestFailed >= EMSVersion then begin
     lblStatus.Caption := EMSNotActive;
     btnActivate.Enabled := True;
   end
   else
+
   if EditorMacroPlayerClass = TEMSEditorMacro then begin
     lblStatus.Caption := EMSActive;
     btnActivate.Enabled := False;
   end
+
   else
   begin
     lblStatus.Caption := EMSPending;
     btnActivate.Enabled := False;
   end;
-{$ENDIF}
+
 end;
 
 procedure TEMSIdeOptionsFrame.WriteSettings(AOptions: TAbstractIDEOptions);

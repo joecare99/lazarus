@@ -50,6 +50,13 @@ begin
     FImages.FreeNotification(Self);
     FImages.RegisterChanges(FImageChangeLink);
   end;
+  FItems.UpdateImages(true);
+end;
+
+procedure TMenu.SetImagesWidth(const aImagesWidth: Integer);
+begin
+  if FImagesWidth = aImagesWidth then Exit;
+  FImagesWidth := aImagesWidth;
   FItems.UpdateImages;
 end;
 
@@ -148,6 +155,7 @@ end;
 
 procedure TMenu.DestroyHandle;
 begin
+  //debugln(['TMenu.DestroyHandle ',DbgSName(Self),' ',Items<>nil]);
   Items.DestroyHandle;
 end;
 
@@ -165,8 +173,8 @@ end;
  ------------------------------------------------------------------------------}
 destructor TMenu.Destroy;
 begin
-  FreeThenNil(FItems);
-  FreeThenNil(FImageChangeLink);
+  FreeAndNil(FItems);
+  FreeAndNil(FImageChangeLink);
   inherited Destroy;
 end;
 
@@ -262,9 +270,11 @@ begin
   //DebugLn(['TMenu.IsShortcut ',dbgsName(Self),' Result=',Result,' Message.CharCode=',Message.CharCode,' ShiftState=',dbgs(ShiftState)]);
   if Result then
   begin
+    //DebugLn(['TMenu.IsShortcut ',dbgsName(Self),' Result=',Result,' Message.CharCode=',Message.CharCode,' ShiftState=',dbgs(ShiftState)]);
     FShortcutHandled := True;
     HandleItem(Item);
     Result := FShortcutHandled;
+    //debugln(['TMenu.IsShortcut ',Result]); DumpStack;
   end;
 end;
 
@@ -304,11 +314,26 @@ begin
     DoChange(Source, Rebuild);
 end;
 
+procedure TMenu.AssignTo(Dest: TPersistent);
+begin
+  if Dest is TMenu then
+    Menu_Copy(Self, Dest as TMenu)
+  else
+    inherited AssignTo(Dest);
+end;
+
 procedure TMenu.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited Notification(AComponent, Operation);
-  if (Operation = opRemove) and (AComponent = FImages) then
-    Images := nil;
+  if (Operation = opRemove) then
+  begin
+    if (AComponent = FImages) then
+      Images := nil
+    else if AComponent=FItems then
+    begin
+      raise Exception.Create(''); // someone is stealing my
+    end;
+  end;
 end;
 
 procedure TMenu.SetChildOrder(Child: TComponent; Order: Integer);

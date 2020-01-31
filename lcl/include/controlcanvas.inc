@@ -79,9 +79,11 @@ begin
     inherited CreateHandle
   else
   begin
-    if ControlIsPainting and
+    {$IFDEF VerboseCanvas}
+    if not ControlIsPainting and
       (WidgetSet.GetLCLCapability(lcCanDrawOutsideOnPaint) = LCL_CAPABILITY_NO) then
       debugln(['TControlCanvas.CreateHandle WARNING: accessing the canvas of '+DbgSName(FControl)+' is not supported outside of paint message']);
+    {$ENDIF}
     if (FDeviceContext = 0) then
     begin
       // access to window handle can cause another TControlCanvas.CreateHandle
@@ -92,12 +94,17 @@ begin
       else
         WinControl := FControl.Parent;
       WinControl.HandleNeeded;
-    end;
-    if FDeviceContext = 0 then
-    begin
-      // store the handle locally since  we need it to check (and do not
-      // want to fire creation events)
-      FDeviceContext := FControl.GetDeviceContext(FWindowHandle);
+
+      // important: keep the condition here again because
+      // CreateWnd (called via WinControl.HandleNeeded above) could execute
+      // this function again and thus allocate FDeviceContext twice
+      // resulting in a memory leak
+      if FDeviceContext = 0 then
+      begin
+        // store the handle locally since  we need it to check (and do not
+        // want to fire creation events)
+        FDeviceContext := FControl.GetDeviceContext(FWindowHandle);
+      end;
     end;
     Handle := FDeviceContext;
   end;

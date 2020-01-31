@@ -20,7 +20,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -38,16 +38,17 @@ interface
 
 uses
   // RTL + LCL
-  Classes, SysUtils, resource, reswriter, fgl,
-  Controls, LCLProc, LResources, Dialogs,
+  Classes, SysUtils, resource, reswriter, fgl, Laz_AVL_Tree,
+  // LCL
+  Controls, LCLProc, LResources,
   // LazUtils
-  LazFileUtils, AvgLvlTree, Laz2_XMLCfg,
+  LazFileUtils, Laz2_XMLCfg,
   // Codetools
   KeywordFuncLists, BasicCodeTools, CodeToolManager, CodeCache,
   // IdeIntf
   ProjectIntf, ProjectResourcesIntf, CompOptsIntf,
   // IDE
-  LazarusIDEStrConsts, IDEProcs, DialogProcs,
+  LazarusIDEStrConsts, DialogProcs,
   W32Manifest, W32VersionInfo, ProjectIcon, ProjectUserResources;
 
 type
@@ -68,7 +69,7 @@ type
 
     resFileName: String;
     lrsFileName: String;
-    LastResFilename: String;
+    LastResFileName: String;
     LastLrsFileName: String;
 
     function GetProjectIcon: TProjectIcon;
@@ -100,15 +101,15 @@ type
     procedure Clear;
     function Regenerate(const MainFileName: String;
                         UpdateSource, PerformSave: boolean;
-                        SaveToTestDir: string): Boolean;
+                        const SaveToTestDir: string): Boolean;
     function RenameDirectives(const CurFileName, NewFileName: String): Boolean;
     procedure DeleteResourceBuffers;
 
     function HasSystemResources: Boolean;
     function HasLazarusResources: Boolean;
 
-    procedure WriteToProjectFile(AConfig: TXMLConfig; Path: String);
-    procedure ReadFromProjectFile(AConfig: TXMLConfig; Path: String; ReadAll: Boolean);
+    procedure WriteToProjectFile(AConfig: TXMLConfig; const Path: String);
+    procedure ReadFromProjectFile(AConfig: TXMLConfig; const Path: String; ReadAll: Boolean);
 
     property Modified: Boolean read FModified write SetModified;
     property OnModified: TNotifyEvent read FOnModified write FOnModified;
@@ -237,7 +238,7 @@ type
 
   TResourceTypesCache = class
   public
-    Tree: TAvgLvlTree; //
+    Tree: TAvlTree; //
     constructor Create;
     destructor Destroy; override;
     procedure Parse(Code: TCodeBuffer;
@@ -248,7 +249,7 @@ type
 
 constructor TResourceTypesCache.Create;
 begin
-  Tree:=TAvgLvlTree.Create(@CompareResTypCacheItems);
+  Tree:=TAvlTree.Create(@CompareResTypCacheItems);
 end;
 
 destructor TResourceTypesCache.Destroy;
@@ -261,7 +262,7 @@ end;
 procedure TResourceTypesCache.Parse(Code: TCodeBuffer; out
   HasLRSIncludeDirective, HasRDirective: boolean);
 var
-  Node: TAvgLvlTreeNode;
+  Node: TAvlTreeNode;
   Item: TResourceTypesCacheItem;
 begin
   Node := Tree.FindKey(Code, @CompareCodeWithResTypCacheItem);
@@ -383,10 +384,8 @@ begin
   begin
     FModified := AValue;
     if not FModified then
-    begin
       for i := 0 to FResources.Count - 1 do
         FResources[i].Modified := False;
-    end;
     if Assigned(FOnModified) then
       OnModified(Self);
   end;
@@ -506,10 +505,11 @@ begin
   FMessages.Clear;
 end;
 
-function TProjectResources.Regenerate(const MainFileName: String;
-  UpdateSource, PerformSave: boolean; SaveToTestDir: string): Boolean;
+function TProjectResources.Regenerate(const MainFileName: String; UpdateSource,
+  PerformSave: boolean; const SaveToTestDir: string): Boolean;
 begin
-  //DebugLn(['TProjectResources.Regenerate MainFilename=',MainFilename,' UpdateSource=',UpdateSource,' PerformSave=',PerformSave]);
+  //DebugLn(['TProjectResources.Regenerate MainFilename=',MainFilename,
+  //         ' UpdateSource=',UpdateSource,' PerformSave=',PerformSave]);
   //DumpStack;
   Result := False;
 
@@ -517,7 +517,7 @@ begin
     Exit(true);
 
   // remember old codebuffer filenames
-  LastResFilename := resFileName;
+  LastResFileName := resFileName;
   LastLrsFileName := lrsFileName;
   SetFileNames(MainFileName, SaveToTestDir);
 
@@ -558,7 +558,8 @@ begin
   Result := FLazarusResources.Count > 0;
 end;
 
-procedure TProjectResources.WriteToProjectFile(AConfig: TXMLConfig; Path: String);
+procedure TProjectResources.WriteToProjectFile(AConfig: TXMLConfig;
+  const Path: String);
 var
   i: integer;
 begin
@@ -567,7 +568,8 @@ begin
     FResources[i].WriteToProjectFile(AConfig, Path);
 end;
 
-procedure TProjectResources.ReadFromProjectFile(AConfig: TXMLConfig; Path: String; ReadAll: Boolean);
+procedure TProjectResources.ReadFromProjectFile(AConfig: TXMLConfig;
+  const Path: String; ReadAll: Boolean);
 var
   i: integer;
 begin
@@ -668,8 +670,7 @@ begin
     if FLrsIncludeAllowed and HasLazarusResources then
     begin
       //debugln(['TProjectResources.UpdateMainSourceFile include directive not found: FCanHaveLrsInclude=',FLrsIncludeAllowed,' HasLazarusResources=',HasLazarusResources]);
-      if not CodeToolBoss.AddIncludeDirectiveForInit(CodeBuf,
-        Filename,'') then
+      if not CodeToolBoss.AddIncludeDirectiveForInit(CodeBuf,Filename,'') then
       begin
         Result := False;
         Messages.Add(Format(lisCouldNotAddIToMainSource, [Filename]));
@@ -717,7 +718,7 @@ begin
   if CodeBuf = nil then
     Exit;
 
-  LastResFilename := resFileName;
+  LastResFileName := resFileName;
   LastLrsFileName := lrsFileName;
   try
     SetFileNames(CurFileName, '');
@@ -847,7 +848,7 @@ procedure TProjectResources.DeleteLastCodeBuffers;
   end;
 
 begin
-  CleanCodeBuffer(LastResFilename, resFileName);
+  CleanCodeBuffer(LastResFileName, resFileName);
   CleanCodeBuffer(LastLrsFileName, lrsFileName);
 end;
 

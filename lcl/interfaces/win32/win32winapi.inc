@@ -161,34 +161,24 @@ var
   procedure CallMouseWheelHandler;
   var
     ScrollInfo: Windows.tagScrollInfo;
-    WParam: Windows.WParam;
+    SystemWParam: Windows.WParam;
     ScrollMsg, ScrollBar: dword;
     ScrollOffset: integer;
     Pos: TPoint;
+    MMessage: PLMMouseEvent;
+    SW: TScrollingWinControl;
+    SB: TControlScrollBar;
   begin
     if not TWinControl(Sender).HandleAllocated then
       exit;
 
-    // why coords are client? - they must be screen
-    with TLMMouseEvent(Message) do
-    begin
-      Pos.X := X;
-      Pos.Y := Y;
-    end;
+    // important: LM_MOUSEWHEEL needs client coordinates (windows WM_MOUSEWHEEL are screen coordinates)
+    // do not modify original message
+    MMessage := @TLMMouseEvent(Message);
+    Pos.X := MMessage^.X;
+    Pos.Y := MMessage^.Y;
     ClientToScreen(Handle, Pos);
-    WParam := Windows.WParam(Longint(PointToSmallPoint(Pos)));
-    with TLMMouseEvent(Message) do
-    begin
-      X := Pos.X;
-      Y := Pos.Y;
-    end;
-
-    with TLMessage(Message) do
-    begin
-      Result := CallDefaultWindowProc(Handle, Msg, WParam, LParam);
-      // Windows handled it, so exit here.
-      if Result<>0 then exit;
-    end;
+    SystemWParam := Windows.WParam(Longint(PointToSmallPointNoChecks(Pos)));
 
     // send scroll message
     FillChar(ScrollInfo, sizeof(ScrollInfo), #0);
@@ -196,7 +186,7 @@ var
     ScrollInfo.fMask := SIF_PAGE or SIF_POS or SIF_RANGE;
     // if mouse is over horizontal scrollbar, scroll horizontally
 
-    if Windows.SendMessage(Handle, WM_NCHITTEST, 0, WParam) = HTHSCROLL then
+    if Windows.SendMessage(Handle, WM_NCHITTEST, 0, SystemWParam) = HTHSCROLL then
     begin
       ScrollBar := SB_HORZ;
       ScrollMsg := WM_HSCROLL;
@@ -205,24 +195,48 @@ var
       ScrollBar := SB_VERT;
       ScrollMsg := WM_VSCROLL;
     end;
-    if Windows.GetScrollInfo(Handle, ScrollBar, ScrollInfo) then
+    if Windows.GetScrollInfo(Handle, ScrollBar, ScrollInfo)
+    and (((MMessage^.WheelDelta < 0)
+        and (Int64(ScrollInfo.nPos) <= Int64(ScrollInfo.nMax) - Int64(ScrollInfo.nPage)))
+      or ((MMessage^.WheelDelta > 0)
+        and (Int64(ScrollInfo.nPos) > Int64(ScrollInfo.nMin)))) then
     begin
-      with TLMMouseEvent(Message) do
+      if Mouse.WheelScrollLines < 0 then
+        // -1 means, scroll one page
+        ScrollOffset := (MMessage^.WheelDelta * integer(ScrollInfo.nPage)) div 120
+      else
+      if Sender is TScrollingWinControl then // support scrollbar increment
       begin
-        if Mouse.WheelScrollLines < 0 then
-          // -1 means, scroll one page
-          ScrollOffset := (WheelDelta * integer(ScrollInfo.nPage)) div 120
+        SW := TScrollingWinControl(Sender);
+        if ScrollBar = SB_Horz then
+          SB := SW.HorzScrollBar
         else
-          ScrollOffset := (WheelDelta * Mouse.WheelScrollLines) div 120;
-        WParam := Windows.WParam(ScrollInfo.nPos - ScrollOffset);
-        if WParam > ScrollInfo.nMax - integer(ScrollInfo.nPage) + 1 then
-          WParam := ScrollInfo.nMax - integer(ScrollInfo.nPage) + 1;
-        if WParam < ScrollInfo.nMin then
-          WParam := ScrollInfo.nMin;
-        WParam := SB_THUMBPOSITION or (WParam shl 16);
-      end;
-      Windows.PostMessage(Handle, ScrollMsg, WParam, HWND(nil));
+          SB := SW.VertScrollBar;
+        ScrollOffset :=
+          (Min(High(MMessage^.WheelDelta), Max(Low(MMessage^.WheelDelta),
+            (SB.Increment * MMessage^.WheelDelta))) div 120);
+      end else
+        ScrollOffset := (MMessage^.WheelDelta * Mouse.WheelScrollLines) div 120;
+
+      SystemWParam := Windows.WParam(ScrollInfo.nPos - ScrollOffset);
+      if SystemWParam > ScrollInfo.nMax - integer(ScrollInfo.nPage) + 1 then
+        SystemWParam := ScrollInfo.nMax - integer(ScrollInfo.nPage) + 1;
+      if SystemWParam < ScrollInfo.nMin then
+        SystemWParam := ScrollInfo.nMin;
+      SystemWParam := SB_THUMBPOSITION or (SystemWParam shl 16);
+
+      MMessage^.Result := Windows.SendMessage(Handle, ScrollMsg, SystemWParam, HWND(nil));
     end;
+
+    if (MMessage^.Result = 0)
+    and ((Sender is TCustomListView)
+      or (Sender is TCustomComboBox)
+      or (Sender is TCustomFloatSpinEdit))
+    then // the above 3 controls need windows to handle wheel messages
+      MMessage^.Result := CallDefaultWindowProc(Handle, MMessage^.Msg, TLMessage(Message).WParam, TLMessage(Message).LParam);
+
+    if (MMessage^.Result = 0) and (TControl(Sender).Parent <> nil) then // send unhandled scroll messages to parent
+      TControl(Sender).Parent.WindowProc(TLMessage(Message));
   end;
 
 begin
@@ -230,7 +244,8 @@ begin
   case TLMessage(Message).Msg of
     LM_PAINT:
       CallWin32PaintHandler;
-    LM_MOUSEWHEEL: // provide default wheel scrolling functionality
+    LM_MOUSEWHEEL,
+    LM_MOUSEHWHEEL: // provide default wheel scrolling functionality
       CallMouseWheelHandler;
     LM_ERASEBKGND,
     LM_GETDLGCODE,
@@ -330,7 +345,7 @@ begin
     SetLength(Result,1000);
     FormatLength:= Windows.GetClipboardFormatName(FormatID, PChar(Result), 1000);
     if FormatLength = 0 then
-      raise Exception.CreateFmt('Unknown clipboard format: %d', [FormatID]);
+      exit(''); // do not raise an exception!
     SetLength(Result,FormatLength);
     {$IFDEF VerboseWin32Clipbrd}
     debugln('TWin32WidgetSet.ClipboardFormatToMimeType FormatID=',dbgs(FormatID),' ',Result);
@@ -393,8 +408,6 @@ begin
   until (DbgFormatID=0);
   Windows.CloseClipboard;
   {$ENDIF}
-  if FormatID=PredefinedClipboardFormat(pcfDelphiBitmap)
-    then FormatID := CF_BITMAP;
   if (FormatID=0) or (Stream=nil) or
     not Windows.IsClipboardFormatAvailable(FormatID) then exit;
 
@@ -440,7 +453,7 @@ begin
                 Size := Pos(#0, BufferString);
                 if Size > 0 then
                   SetLength(BufferString, Size - 1);
-                BufferString := AnsiToUtf8(BufferString);
+                BufferString := WinCPToUTF8(BufferString);
               end;
               Stream.Write(BufferString[1], Length(BufferString));
             end;
@@ -602,7 +615,7 @@ function TWin32WidgetSet.ClipboardGetOwnerShip(ClipboardType: TClipboardType;
             end
             else
             begin
-              BufferString := Utf8ToAnsi(BufferString);
+              BufferString := UTF8ToWinCP(BufferString);
               if BufferString<>'' then  // original string may contain invalid UTF8
                 BufferStream.Write(BufferString[1], Length(BufferString));
             end;
@@ -836,7 +849,7 @@ begin
   FontName := LogFont.lfFaceName;
 
   TempLogFont := LogFont;
-  if FontName = DefFontData.Name then
+  if SameText(FontName, DefFontData.Name) then
   begin
     TempLogFontW.lfFaceName := UTF8ToUTF16(FMetrics.lfMessageFont.lfFaceName); // FMetrics must be UTF16
     if TempLogFont.lfHeight = 0 then
@@ -1108,7 +1121,18 @@ begin
   // the length of utf8 vs Wide/Ansi the strings differ, so recalc.
   W := UTF8ToUTF16(s);
   len := Length(W);
+  if (Flags and DT_MODIFYSTRING <> 0) then
+    SetLength(W, len+4);
   Result := Windows.DrawTextW(DC, PWideChar(W), len, @Rect, Flags);
+  if (Flags and DT_MODIFYSTRING <> 0) then
+  begin
+    W := WideString(PWideChar(W)); // trim to first #0
+    s := UTF16ToUTF8(W);
+    if s<>'' then
+      Move(s[1], Str^, Length(s)+1) // the programmer has to make sure there's enough space in Str
+    else
+      Str^ := #0;
+  end;
 
 
   // Theoretically, we need to augment the returned rect by the text overhang
@@ -1188,17 +1212,91 @@ begin
 end;
 
 {------------------------------------------------------------------------------
-  Method:  EnableWindow
-  Params: HWnd    - handle to window
-          BEnable -  whether to enable the window
-  Returns: If the window was previously disabled
+  Method:  EnableWindow                       Response to bug #0033923
+  Params:  HWnd    - handle to window
+           BEnable -  whether to enable the window
+  Returns: If the window was previously disabled.
 
   Enables or disables mouse and keyboard input to the specified window or
-  control.
+  control and updates the graphical appearance of the control
+
+ ------------------------------------------------------------------------------
+  Note June 2018: ~bk
+  In normal lazarus behavior, Enable is called by
+    1° - TWinControl.InitializeWnd (wcfInitializing in TWinControl.FWinControlFlags)
+    2° - When property TWinControl.Enabled changes : TWinControl.CMENABLEDCHANGED
+
+  To satisfy W10 new behaviour, if the aHWND parameter effectively changes the
+  Enabled state of its window, except if it is a TCusomForm descendant,
+  all its direct children will be asked to update their UI state if needed and
+  recusively propagate down the Controls children tree.
  ------------------------------------------------------------------------------}
 function TWin32WidgetSet.EnableWindow(HWnd: HWND; BEnable: Boolean): Boolean;
+
+  procedure EnableChildren(AWinControl: TWinControl; Enable: Boolean);
+  var
+    i: Integer;
+    ChildControl: TControl;
+    ChildWinControl: TWinControl absolute ChildControl;
+    RequestedEnable: Boolean;
+    EnabledOld: Boolean;
+    EnabledNew: Boolean;
+  begin
+    for i := 0 to AWinControl.ControlCount - 1 do begin
+      ChildControl := AWinControl.Controls[i];
+      if ChildControl is TWinControl then begin
+        if not ChildWinControl.HandleAllocated then Continue;
+        RequestedEnable := ChildWinControl.Enabled and Enable;
+        EnabledOld := IsWindowEnabled(ChildWinControl.Handle);
+        Windows.EnableWindow(ChildWinControl.Handle, RequestedEnable);
+        EnabledNew := IsWindowEnabled(ChildWinControl.Handle);
+        if (EnabledOld = EnabledNew) or (ChildWinControl.ControlCount < 1)
+        or (EnabledNew <> RequestedEnable)
+        then
+          Continue;
+        EnableChildren(ChildWinControl, RequestedEnable);
+      end
+      else
+        ChildControl.Invalidate;
+    end;
+  end;
+
+  function GetParentEnabled(AWinControl: TWinControl): Boolean;
+  var
+    ParentHandle: HWND;
+    ParentControl: TWinControl;
+  begin
+    ParentControl := AWinControl.Parent;
+    Result := not Assigned(ParentControl) or ParentControl.InheritsFrom(TCustomForm);
+    if not Result then begin
+      ParentHandle := GetParent(HWND);
+      Result := ParentHandle = 0;
+      if not Result then
+        Result := IsWindowEnabled(ParentHandle);
+    end;
+  end;
+
+var
+  lWinControl: TWinControl;
+  IsForm: Boolean;
+  RequestedEnable: Boolean;
 begin
-  Result := Boolean(Windows.EnableWindow(HWnd, BEnable));
+  lWinControl := GetWin32WindowInfo(HWnd)^.WinControl;
+  if not Assigned(lWinControl) then
+    Exit;
+  IsForm := lWinControl.InheritsFrom(TCustomForm);
+  if IsForm then
+    RequestedEnable := BEnable
+  else
+    RequestedEnable := BEnable and GetParentEnabled(lWinControl);
+
+  Result := Boolean(Windows.EnableWindow(HWnd, RequestedEnable));
+  if (wcfInitializing in TWinControlAccess(lWinControl).FWinControlFlags) or IsForm then
+    Exit;
+  // Result contains WS_DISABLED style. True means disabled
+  if (Result <> RequestedEnable) or (lWinControl.ControlCount < 1) then
+    Exit;
+  EnableChildren(lWinControl, RequestedEnable);
 end;
 
 {------------------------------------------------------------------------------
@@ -1280,8 +1378,13 @@ begin
   Rec.LParam := LParam;
   Rec.CallBack := CallBack;
   LFW.lfFaceName := UTF8ToUTF16(FontName);
+  {$if fpc_fullversion < 30101}
   Result := LongInt(Windows.EnumFontFamiliesExW(DC,
     LFW, windows.FontEnumExProc(@EnumExProcRedirW), Windows.LParam(@Rec), Flags));
+  {$else}
+  Result := LongInt(Windows.EnumFontFamiliesExW(DC,
+     LFW, windows.FontEnumExProcW(@EnumExProcRedirW), Windows.LParam(@Rec), Flags));
+  {$ifend}
 end;
 
 {------------------------------------------------------------------------------
@@ -1327,6 +1430,67 @@ begin
   LB.lbColor := ColorToRGB(TColor(lplb.lbColor));
   LB.lbHatch := lplb.lbHatch;
   Result := Windows.ExtCreatePen(dwPenStyle, dwWidth, LB, dwStyleCount, lpStyle);
+
+  // Note Michl: When style PS_USERSTYLE is used, lpStyle can't be nil, there
+  //             must be dwSytleCount >= 1, see issue #30661
+  if Result = 0 then
+    DebugLn('TWin32WidgetSet.ExtCreatePen returns 0. Reason = ' + GetLastErrorText(Windows.GetLastError));
+end;
+
+function IsCharSurrogateHigh(ch: WideChar): Boolean; inline;
+begin
+  Result := (ch>=#$D800) and (ch<=#$DBFF);
+end;
+
+function IsCharSurrogateLow(ch: WideChar): Boolean; inline;
+begin
+  Result := (ch>=#$DC00) and (ch<=#$DFFF);
+end;
+
+function SFindFirstCharSurrogate(const S: WideString): Integer; inline;
+var
+  i: Integer;
+begin
+  for i := 1 to Length(S) do
+    if IsCharSurrogateHigh(S[i]) then Exit(i);
+  Result := 0;
+end;
+
+type
+  _TIntArray = array of LongInt;
+
+procedure SConvertDxArrayFromUTF8ToWide(const S: WideString;
+  Dx: PInteger; DxCount: integer; var Res: _TIntArray; nFirstIndex: Integer);
+var
+  iSrc, iDest: Integer;
+begin
+  SetLength(Res, Length(S));
+
+  if nFirstIndex > DxCount then
+    nFirstIndex := DxCount;
+
+  for iDest := 0 to Length(S)-1 do
+    if iDest < nFirstIndex-1 then
+      Res[iDest] := (Dx+iDest)^
+    else
+      Res[iDest] := 0;
+
+  iSrc := nFirstIndex-1;
+  for iDest := nFirstIndex-1 to Length(S)-1 do
+  begin
+    if iSrc>=DxCount then Break;
+    if IsCharSurrogateLow(S[iDest+1]) then
+    begin
+      // 2nd char of surrogate pair: skip it, ie set size=0
+      Res[iDest] := 0;
+    end
+    else
+    begin
+      // normal char or 1st char of surrogate pair: use its size
+      Res[iDest] := (Dx+iSrc)^;
+      Inc(iSrc);
+    end;
+  end;
 end;
 
 {------------------------------------------------------------------------------
@@ -1348,18 +1512,32 @@ function TWin32WidgetSet.ExtTextOut(DC: HDC; X, Y: Integer; Options: LongInt;
 var
   s: AnsiString;
   w: WideString;
+  DxWide: _TIntArray;
+  nIndex: Integer;
 begin
   // use temp buffer, if count is set, there might be no null terminator
   if count = -1 then
-   s := str
+    s := Str
   else
   begin
     SetLength(s, count);
     move(str^, PChar(s)^, count);
   end;
-  // the length of utf8 vs Wide/Ansi the strings differ, so recalc.
-  // TODO: use the real number of chars (and not the lenght)
+
   W := UTF8ToUTF16(S);
+
+  // support surrogate chars in WideString
+  if Dx<>nil then
+  begin
+    nIndex := SFindFirstCharSurrogate(W);
+    if nIndex > 0 then
+    begin
+      SConvertDxArrayFromUTF8ToWide(W, Dx, Count, DxWide, nIndex);
+      Result := Windows.ExtTextOutW(DC, X, Y, Options, LPRECT(Rect), PWideChar(W), Length(W), @DxWide[0]);
+      Exit;
+    end;
+  end;
+
   Result := Windows.ExtTextOutW(DC, X, Y, Options, LPRECT(Rect), PWideChar(W), Length(W), Dx);
 end;
 
@@ -1853,6 +2031,13 @@ begin
     Result := MultiMon.GetMonitorInfo(hMonitor, LPMonitorInfo(lpmi));
 end;
 
+function TWin32WidgetSet.GetDpiForMonitor(hmonitor: HMONITOR; dpiType: TMonitorDpiType; out dpiX: UINT; out dpiY: UINT): HRESULT;
+begin
+  if WindowsVersion >= wv8_1 then
+    Result := Win32Int.GetDpiForMonitor(hmonitor, dpiType, dpiX, dpiY)
+  else
+    Result := S_FALSE;
+end;
 {------------------------------------------------------------------------------
   Method:  GetObject
   Params:  GDIObj  - handle to graphics object of interest
@@ -2218,7 +2403,7 @@ var
   begin
     UpDownWP.length := SizeOf(UpDownWP);
     if Windows.GetWindowPlacement(WindowInfo^.UpDown, UpDownWP) then
-      Width := UpDownWP.rcNormalPosition.Right - WP.rcNormalPosition.Left;
+      Width := Max(Width, UpDownWP.rcNormalPosition.Right - WP.rcNormalPosition.Left);
   end;
 
   procedure ExcludeCaption; inline;
@@ -2257,9 +2442,11 @@ begin
         SetWidthHeightFromRect(WP.rcNormalPosition)
       else
         SetWidthHeightFromRect(Info.rcWindow);
+      {$IFNDEF LCLRealFormBounds}
       Width := Width - 2 * Integer(Info.cxWindowBorders);
       Height := Height - 2 * Integer(Info.cyWindowBorders);
       ExcludeCaption;
+      {$ENDIF}
       //WriteLn('W = ', Width, ' H = ', Height);
       Exit;
     end;
@@ -2981,10 +3168,29 @@ end;
 
 function TWin32WidgetSet.SetComboMinDropDownSize(Handle: HWND; MinItemsWidth,
   MinItemsHeight, MinItemCount: integer): boolean;
+var
+  LR: LRESULT;
 begin
-  Result:= ThemeServices.ThemesEnabled and
-    boolean(Windows.SendMessage(Handle, CB_SETMINVISIBLE, MinItemCount, 0));
-  Result := Result and boolean(Windows.SendMessage(Handle, CB_SETDROPPEDWIDTH, MinItemsWidth, 0));
+  //CB_SETMINVISIBLE is only supported with the correct ComCtlVersion, it does not depend
+  //on the value of ThemeServices.ThemesEnabled
+  // https://msdn.microsoft.com/en-us/library/windows/desktop/bb775915(v=vs.85).aspx
+  Result:= (ComCtlVersion > ComCtlVersionIE6) and
+    (Windows.SendMessage(Handle, CB_SETMINVISIBLE, MinItemCount, 0) <> 0);
+  //Even if the above fails, then still we need to send the next message,  (Issue #0030526)
+  //but we return True only if everything succeeds
+  LR := Windows.SendMessage(Handle, CB_SETDROPPEDWIDTH, MinItemsWidth, 0);
+  //debugln(['TWin32WidgetSet.SetComboMinDropDownSize: LR = ',LR]);
+  {
+   It seems there is no certain way to determine if the last SendMessage was actually successful:
+   According to https://msdn.microsoft.com/en-us/library/windows/desktop/bb775901(v=vs.85).aspx upon failure
+   LR should be CB_ERR (-1), but if the Handle is wrong, the result will be 0.
+   To complicate matters, if Handle is correct and MinItemsWidth = 0, then upon success
+   the result will also be 0.
+   This means that inside this function, a result value of 0 can be valid or invalid, and when
+   MinItemsWidht = 0, there is no way of telling (only end-user will see the result on screen).
+   For now we assume that a zero result is valid if MinItemsWidth = 0.
+  }
+  Result := Result and ((LR <> CB_ERR) and ((LR <> 0)) xor (MinItemsWidth = 0));
 end;
 
 {------------------------------------------------------------------------------

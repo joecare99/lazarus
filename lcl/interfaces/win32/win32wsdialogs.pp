@@ -29,10 +29,14 @@ uses
 // uncomment only when needed for registration
 ////////////////////////////////////////////////////
 // rtl
-  Windows, shlobj, ShellApi, ActiveX, SysUtils, Classes,
-  CommDlg,
+  Windows, shlobj, ShellApi, ActiveX, SysUtils, Classes, CommDlg,
 // lcl
-  LCLProc, LCLType, LazUTF8, Dialogs, Controls, Graphics, Forms, LazFileUtils, Masks,
+  LCLProc, LCLType, Dialogs, Controls, Graphics, Forms, Masks,
+  // LazUtils
+  {$ifdef DebugCommonDialogEvents}
+  UITypes,
+  {$endif}
+  LazFileUtils, LazUTF8,
 // ws
   WSDialogs, WSLCLClasses, Win32Extra, Win32Int, InterfaceBase,
   Win32Proc;
@@ -71,6 +75,8 @@ type
 
   TWin32WSOpenDialog = class(TWSOpenDialog)
   public
+    class function GetVistaOptions(Options: TOpenOptions; SelectFolder: Boolean): FileOpenDialogOptions;
+
     class procedure SetupVistaFileDialog(ADialog: IFileDialog; const AOpenDialog: TOpenDialog);
     class function ProcessVistaDialogResult(ADialog: IFileDialog; const AOpenDialog: TOpenDialog): HResult;
     class procedure VistaDialogShowModal(ADialog: IFileDialog; const AOpenDialog: TOpenDialog);
@@ -80,6 +86,7 @@ type
     class function CreateHandle(const ACommonDialog: TCommonDialog): THandle; override;
     class procedure DestroyHandle(const ACommonDialog: TCommonDialog); override;
     class procedure ShowModal(const ACommonDialog: TCommonDialog); override;
+    class function QueryWSEventCapabilities(const ACommonDialog: TCommonDialog): TCDWSEventCapabilities; override;
   end;
 
   { TWin32WSSaveDialog }
@@ -89,13 +96,17 @@ type
     class function CreateHandle(const ACommonDialog: TCommonDialog): THandle; override;
     class procedure DestroyHandle(const ACommonDialog: TCommonDialog); override;
     class procedure ShowModal(const ACommonDialog: TCommonDialog); override;
+    class function QueryWSEventCapabilities(const ACommonDialog: TCommonDialog): TCDWSEventCapabilities; override;
   end;
 
   { TWin32WSSelectDirectoryDialog }
 
   TWin32WSSelectDirectoryDialog = class(TWSSelectDirectoryDialog)
+  public
+    class function CreateOldHandle(const ACommonDialog: TCommonDialog): THandle;
   published
     class function CreateHandle(const ACommonDialog: TCommonDialog): THandle; override;
+    class function QueryWSEventCapabilities(const ACommonDialog: TCommonDialog): TCDWSEventCapabilities; override;
   end;
 
   { TWin32WSColorDialog }
@@ -105,6 +116,7 @@ type
     class function CreateHandle(const ACommonDialog: TCommonDialog): THandle; override;
     class procedure ShowModal(const ACommonDialog: TCommonDialog); override;
     class procedure DestroyHandle(const ACommonDialog: TCommonDialog); override;
+    class function QueryWSEventCapabilities(const ACommonDialog: TCommonDialog): TCDWSEventCapabilities; override;
   end;
 
   { TWin32WSColorButton }
@@ -118,6 +130,7 @@ type
   TWin32WSFontDialog = class(TWSFontDialog)
   published
     class function CreateHandle(const ACommonDialog: TCommonDialog): THandle; override;
+    class function QueryWSEventCapabilities(const ACommonDialog: TCommonDialog): TCDWSEventCapabilities; override;
   end;
 
 
@@ -129,22 +142,22 @@ type
   protected
     // IFileDialogEvents
     function OnFileOk(pfd: IFileDialog): HResult; stdcall;
-    function OnFolderChanging(pfd: IFileDialog; psifolder: IShellItem): HResult; stdcall;
-    function OnFolderChange(pfd: IFileDialog): HResult; stdcall;
+    function OnFolderChanging({%H-}pfd: IFileDialog; {%H-}psifolder: IShellItem): HResult; stdcall;
+    function OnFolderChange({%H-}pfd: IFileDialog): HResult; stdcall;
     function OnSelectionChange(pfd: IFileDialog): HResult; stdcall;
-    function OnShareViolation(pfd: IFileDialog; psi: IShellItem; pResponse: pFDE_SHAREVIOLATION_RESPONSE): HResult; stdcall;
+    function OnShareViolation({%H-}pfd: IFileDialog; {%H-}psi: IShellItem; {%H-}pResponse: pFDE_SHAREVIOLATION_RESPONSE): HResult; stdcall;
     function OnTypeChange(pfd: IFileDialog): HResult; stdcall;
-    function OnOverwrite(pfd: IFileDialog; psi: IShellItem; pResponse: pFDE_OVERWRITE_RESPONSE): HResult; stdcall;
+    function OnOverwrite({%H-}pfd: IFileDialog; {%H-}psi: IShellItem; {%H-}pResponse: pFDE_OVERWRITE_RESPONSE): HResult; stdcall;
     // IFileDialogControlEvents
-    function OnItemSelected(pfdc: IFileDialogCustomize; dwIDCtl: DWORD; dwIDItem: DWORD): HResult; stdcall;
-    function OnButtonClicked(pfdc: IFileDialogCustomize; dwIDCtl: DWORD): HResult; stdcall;
-    function OnCheckButtonToggled(pfdc: IFileDialogCustomize; dwIDCtl: DWORD; bChecked: BOOL): HResult; stdcall;
-    function OnControlActivating(pfdc: IFileDialogCustomize; dwIDCtl: DWORD): HResult; stdcall;
+    function OnItemSelected({%H-}pfdc: IFileDialogCustomize; {%H-}dwIDCtl: DWORD; {%H-}dwIDItem: DWORD): HResult; stdcall;
+    function OnButtonClicked({%H-}pfdc: IFileDialogCustomize; {%H-}dwIDCtl: DWORD): HResult; stdcall;
+    function OnCheckButtonToggled({%H-}pfdc: IFileDialogCustomize; {%H-}dwIDCtl: DWORD; {%H-}bChecked: BOOL): HResult; stdcall;
+    function OnControlActivating({%H-}pfdc: IFileDialogCustomize; {%H-}dwIDCtl: DWORD): HResult; stdcall;
   public
     constructor Create(ADialog: TOpenDialog);
   end;
 
-function OpenFileDialogCallBack(Wnd: HWND; uMsg: UINT; wParam: WPARAM;
+function OpenFileDialogCallBack(Wnd: HWND; uMsg: UINT; {%H-}wParam: WPARAM;
   lParam: LPARAM): UINT_PTR; stdcall;
 
 function SaveApplicationState: TApplicationState;
@@ -165,6 +178,7 @@ begin
   Result.ActiveWindow := Windows.GetActiveWindow;
   Result.FocusedWindow := Windows.GetFocus;
   Result.DisabledWindows := Screen.DisableForms(nil);
+  Application.ModalStarted;
 end;
 
 procedure RestoreApplicationState(AState: TApplicationState);
@@ -172,6 +186,7 @@ begin
   Screen.EnableForms(AState.DisabledWindows);
   Windows.SetActiveWindow(AState.ActiveWindow);
   Windows.SetFocus(AState.FocusedWindow);
+  Application.ModalFinished;
 end;
 
 // The size of the OPENFILENAME record depends on the windows version
@@ -303,13 +318,10 @@ end;
  ------------------------------------------------------------------------------}
 function GetOwnerHandle(ADialog : TCommonDialog): HWND;
 begin
-  with ADialog do
-  begin
-    if Owner is TWinControl then
-      Result := TWinControl(Owner).Handle
-    else
-      Result := TWin32WidgetSet(WidgetSet).AppHandle;
-  end;
+  if (Screen.ActiveForm<>nil) and Screen.ActiveForm.HandleAllocated then
+    Result := Screen.ActiveForm.Handle
+  else
+    Result := Application.MainFormHandle;
 end;
 
 procedure SetDialogResult(const ACommonDialog: TCommonDialog; Ret: WINBOOL);
@@ -322,8 +334,14 @@ end;
 
 function CanUseVistaDialogs(const AOpenDialog: TOpenDialog): Boolean;
 begin
+  {$IFnDEF DisableVistaDialogs}
   Result := (WindowsVersion >= wvVista) and not (ofOldStyleDialog in AOpenDialog.Options);
+
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
 end;
+
 
 { TWin32WSColorDialog }
 
@@ -402,6 +420,12 @@ begin
   end;
 end;
 
+class function TWin32WSColorDialog.QueryWSEventCapabilities(
+  const ACommonDialog: TCommonDialog): TCDWSEventCapabilities;
+begin
+  Result := [cdecWSNoCanCloseSupport];
+end;
+
 procedure UpdateStorage(Wnd: HWND; OpenFile: LPOPENFILENAME);
 var
   FilesSize: SizeInt;
@@ -457,6 +481,7 @@ var
   OpenFileNotify: LPOFNOTIFY;
   OpenFileName: Windows.POPENFILENAME;
   DlgRec: POpenFileDialogRec;
+  CanClose: Boolean;
 
   procedure Reposition(ADialogWnd: Handle);
   var
@@ -511,6 +536,9 @@ begin
       CDN_INITDONE:
       begin
         ExtractDataFromNotify;
+        {$ifdef DebugCommonDialogEvents}
+        debugln(['OpenFileDialogCallBack calling DoShow']);
+        {$endif}
         TOpenDialog(DlgRec^.Dialog).DoShow;
       end;
       CDN_SELCHANGE:
@@ -524,7 +552,25 @@ begin
         TOpenDialog(DlgRec^.Dialog).DoFolderChange;
       end;
       CDN_FILEOK:
+      begin
         ExtractDataFromNotify;
+        CanClose := True;
+        TOpenDialog(DlgRec^.Dialog).UserChoice := mrOK;
+        {$ifdef DebugCommonDialogEvents}
+        debugln(['OpenFileDialogCallBack calling DoCanClose']);
+        {$endif}
+        TOpenDialog(DlgRec^.Dialog).DoCanClose(CanClose);
+        {$ifdef DebugCommonDialogEvents}
+        debugln(['OpenFileDialogCallBack CanClose=',CanClose]);
+        {$endif}
+        if not CanClose then
+        begin
+          //the dialog window will not process the click on OK button
+          //as a result the dialog will not close
+          SetWindowLong(Wnd, DWL_MSGRESULT, 1);
+          Result := 1;
+        end;
+      end;
       CDN_TYPECHANGE:
       begin
         ExtractDataFromNotify;
@@ -559,6 +605,7 @@ function CreateFileDialogHandle(AOpenDialog: TOpenDialog): THandle;
     if ofShareAware in Options then Result := Result or OFN_SHAREAWARE;
     if ofShowHelp in Options then Result := Result or OFN_SHOWHELP;
     if ofDontAddToRecent in Options then Result := Result or OFN_DONTADDTORECENT;
+    if ofForceShowHidden in Options then Result := Result or OFN_FORCESHOWHIDDEN;
   end;
 
   procedure ReplacePipe(var AFilter:string);
@@ -587,6 +634,9 @@ var
   FileNameWideBuffer: PWideChar;
   FileNameBufferSize: Integer;
 begin
+  {$ifdef DebugCommonDialogEvents}
+  debugln(['CreateFileDialogHandle A']);
+  {$endif}
   FileName := AOpenDialog.FileName;
   InitialDir := AOpenDialog.InitialDir;
   if (FileName <> '') and (FileName[length(FileName)] = PathDelim) then
@@ -642,6 +692,9 @@ begin
     lCustData := LParam(DialogRec);
   end;
   Result := THandle(OpenFile);
+  {$ifdef DebugCommonDialogEvents}
+  debugln(['CreateFileDialogHandle End']);
+  {$endif}
 end;
 
 procedure DestroyFileDialogHandle(AHandle: THandle);
@@ -686,41 +739,6 @@ end;
 
 
 class procedure TWin32WSOpenDialog.SetupVistaFileDialog(ADialog: IFileDialog; const AOpenDialog: TOpenDialog);
-{ non-used flags
-FOS_PICKFOLDERS
-FOS_FORCEFILESYSTEM
-FOS_ALLNONSTORAGEITEMS
-FOS_HIDEMRUPLACES
-FOS_HIDEPINNEDPLACES
-FOS_DONTADDTORECENT
-FOS_DEFAULTNOMINIMODE
-FOS_FORCEPREVIEWPANEON}
-
-  function GetOptions(Options: TOpenOptions): FileOpenDialogOptions;
-  begin
-    Result := 0;
-    if ofAllowMultiSelect in Options then Result := Result or FOS_ALLOWMULTISELECT;
-    if ofCreatePrompt in Options then Result := Result or FOS_CREATEPROMPT;
-    if ofExtensionDifferent in Options then Result := Result or FOS_STRICTFILETYPES;
-    if ofFileMustExist in Options then Result := Result or FOS_FILEMUSTEXIST;
-    if ofNoChangeDir in Options then Result := Result or FOS_NOCHANGEDIR;
-    if ofNoDereferenceLinks in Options then Result := Result or FOS_NODEREFERENCELINKS;
-    if ofNoReadOnlyReturn in  Options then Result := Result or FOS_NOREADONLYRETURN;
-    if ofNoTestFileCreate in Options then Result := Result or FOS_NOTESTFILECREATE;
-    if ofNoValidate in Options then Result := Result or FOS_NOVALIDATE;
-    if ofOverwritePrompt in Options then Result := Result or FOS_OVERWRITEPROMPT;
-    if ofPathMustExist in Options then Result := Result or FOS_PATHMUSTEXIST;
-    if ofShareAware in Options then Result := Result or FOS_SHAREAWARE;
-    if ofDontAddToRecent in Options then Result := Result or FOS_DONTADDTORECENT;
-    { unavailable options:
-      ofHideReadOnly
-      ofEnableSizing
-      ofNoLongNames
-      ofNoNetworkButton
-      ofReadOnly
-      ofShowHelp
-    }
-  end;
 
   function GetDefaultExt: String;
   begin
@@ -780,7 +798,7 @@ begin
     ParsedFilter.Free;
   end;
 
-  ADialog.SetOptions(GetOptions(AOpenDialog.Options));
+  ADialog.SetOptions(GetVistaOptions(AOpenDialog.Options, AOpenDialog is TSelectDirectoryDialog));
 end;
 
 class function TWin32WSOpenDialog.GetFileName(ShellItem: IShellItem): String;
@@ -796,6 +814,43 @@ begin
     Result := '';
 end;
 
+class function TWin32WSOpenDialog.GetVistaOptions(Options: TOpenOptions;
+  SelectFolder: Boolean): FileOpenDialogOptions;
+{ non-used flags
+FOS_FORCEFILESYSTEM
+FOS_ALLNONSTORAGEITEMS
+FOS_HIDEMRUPLACES
+FOS_HIDEPINNEDPLACES
+FOS_DEFAULTNOMINIMODE
+FOS_FORCEPREVIEWPANEON}
+
+begin
+  Result := 0;
+  if ofAllowMultiSelect in Options then Result := Result or FOS_ALLOWMULTISELECT;
+  if ofCreatePrompt in Options then Result := Result or FOS_CREATEPROMPT;
+  if ofExtensionDifferent in Options then Result := Result or FOS_STRICTFILETYPES;
+  if ofFileMustExist in Options then Result := Result or FOS_FILEMUSTEXIST;
+  if ofNoChangeDir in Options then Result := Result or FOS_NOCHANGEDIR;
+  if ofNoDereferenceLinks in Options then Result := Result or FOS_NODEREFERENCELINKS;
+  if ofNoReadOnlyReturn in  Options then Result := Result or FOS_NOREADONLYRETURN;
+  if ofNoTestFileCreate in Options then Result := Result or FOS_NOTESTFILECREATE;
+  if ofNoValidate in Options then Result := Result or FOS_NOVALIDATE;
+  if ofOverwritePrompt in Options then Result := Result or FOS_OVERWRITEPROMPT;
+  if ofPathMustExist in Options then Result := Result or FOS_PATHMUSTEXIST;
+  if ofShareAware in Options then Result := Result or FOS_SHAREAWARE;
+  if ofDontAddToRecent in Options then Result := Result or FOS_DONTADDTORECENT;
+  if SelectFolder then Result := Result or FOS_PICKFOLDERS;
+  if ofForceShowHidden in Options then Result := Result or FOS_FORCESHOWHIDDEN;
+  { unavailable options:
+    ofHideReadOnly
+    ofEnableSizing
+    ofNoLongNames
+    ofNoNetworkButton
+    ofReadOnly
+    ofShowHelp
+  }
+end;
+
 class function TWin32WSOpenDialog.ProcessVistaDialogResult(ADialog: IFileDialog; const AOpenDialog: TOpenDialog): HResult;
 var
   ShellItems: IShellItemArray;
@@ -806,8 +861,8 @@ begin
   if not Supports(ADialog, IFileOpenDialog) then
     Result := E_FAIL
   else
-    Result := (ADialog as IFileOpenDialog).GetResults(ShellItems);
-  if Succeeded(Result) and Succeeded(ShellItems.GetCount(Count)) then
+    Result := (ADialog as IFileOpenDialog).GetResults(ShellItems{%H-});
+  if Succeeded(Result) and Succeeded(ShellItems.GetCount(Count{%H-})) then
   begin
     AOpenDialog.Files.Clear;
     I := 0;
@@ -843,27 +898,37 @@ class procedure TWin32WSOpenDialog.VistaDialogShowModal(ADialog: IFileDialog; co
 var
   FileDialogEvents: IFileDialogEvents;
   Cookie: DWord;
-  CanClose: Boolean;
+  //CanClose: Boolean;
 begin
+  {$ifdef DebugCommonDialogEvents}
+  debugln('TWin32WSOpenDialog.VistaDialogShowModal A');
+  {$endif}
   FileDialogEvents := TFileDialogEvents.Create(AOpenDialog);
   ADialog.Advise(FileDialogEvents, @Cookie);
   try
+    {$ifdef DebugCommonDialogEvents}
+    debugln('TWin32WSOpenDialog.VistaDialogShowModal calling DoShow');
+    {$endif}
     AOpenDialog.DoShow;
-    repeat
-      ADialog.Show(GetParentWnd);
-      if (AOpenDialog.UserChoice <> mrOk) then
-      begin
-        CanClose := True;
-        AOpenDialog.DoCanClose(CanClose);
-        AOpenDialog.UserChoice := mrCancel;
-      end
-      else
-        CanClose := True;
-    until CanClose;
+    ADialog.Show(GetParentWnd);
+    {$ifdef DebugCommonDialogEvents}
+    debugln(['TWin32WSOpenDialog.VistaDialogShowModal: AOpenDialog.UserChoice = ',ModalResultStr[AOpenDialog.UserChoice]]);
+    {$endif}
+    //DoOnClose is called from TFileDialogEvents.OnFileOk if user pressed OK
+    //Do NOT call DoCanClose if user cancels the dialog
+    //see http://docwiki.embarcadero.com/Libraries/Berlin/en/Vcl.Dialogs.TOpenDialog_Events
+    //so no need to call it here anymore
+    if (AOpenDialog.UserChoice <> mrOk) then
+    begin
+      AOpenDialog.UserChoice := mrCancel;
+    end;
   finally
     ADialog.unadvise(Cookie);
     FileDialogEvents := nil;
   end;
+  {$ifdef DebugCommonDialogEvents}
+  debugln('TWin32WSOpenDialog.VistaDialogShowModal End');
+  {$endif}
 end;
 
 class function TWin32WSOpenDialog.GetParentWnd: HWND;
@@ -882,7 +947,6 @@ var
   Dialog: IFileOpenDialog;
 begin
   if CanUseVistaDialogs(TOpenDialog(ACommonDialog)) then
-  //if (WindowsVersion >= wvVista) and ThemeServices.ThemesEnabled then
   begin
     if Succeeded(CoCreateInstance(CLSID_FileOpenDialog, nil, CLSCTX_INPROC_SERVER, IFileOpenDialog, Dialog)) and Assigned(Dialog) then
     begin
@@ -903,7 +967,6 @@ var
 begin
   if ACommonDialog.Handle <> 0 then
     if CanUseVistaDialogs(TOpenDialog(ACommonDialog)) then
-    //if (WindowsVersion >= wvVista) and ThemeServices.ThemesEnabled then
     begin
       Dialog := IFileDialog(ACommonDialog.Handle);
       Dialog._Release;
@@ -925,23 +988,35 @@ begin
     lOldWorkingDir := GetCurrentDirUTF8;
     try
       lInitialDir := TOpenDialog(ACommonDialog).InitialDir;
-      if lInitialDir <> '' then SetCurrentDirUTF8(lInitialDir);
+      if lInitialDir <> '' then
+        SetCurrentDirUTF8(lInitialDir);
       if CanUseVistaDialogs(TOpenDialog(ACommonDialog)) then
-      //if (WindowsVersion >= wvVista) and ThemeServices.ThemesEnabled then
       begin
         Dialog := IFileOpenDialog(ACommonDialog.Handle);
         VistaDialogShowModal(Dialog, TOpenDialog(ACommonDialog));
       end
       else
       begin
+        {$ifdef DebugCommonDialogEvents}
+        debugln(['TWin32WSOpenDialog.ShowModal before ProcessFileDialogResults']);
+        {$endif}
         ProcessFileDialogResult(TOpenDialog(ACommonDialog),
           GetOpenFileNameW(LPOPENFILENAME(ACommonDialog.Handle)));
+        {$ifdef DebugCommonDialogEvents}
+        debugln(['TWin32WSOpenDialog.ShowModal after ProcessFileDialogResults, UserChoice=',ModalResultStr[TOpenDialog(ACommonDialog).UserChoice]]);
+        {$endif}
       end;
     finally
       SetCurrentDirUTF8(lOldWorkingDir);
       RestoreApplicationState(State);
     end;
   end;
+end;
+
+class function TWin32WSOpenDialog.QueryWSEventCapabilities(
+  const ACommonDialog: TCommonDialog): TCDWSEventCapabilities;
+begin
+  Result := [cdecWSPerformsDoShow,cdecWSPerformsDoCanClose];
 end;
 
 { TWin32WSSaveDialog }
@@ -951,7 +1026,6 @@ var
   Dialog: IFileSaveDialog;
 begin
   if CanUseVistaDialogs(TOpenDialog(ACommonDialog)) then
-  //if (WindowsVersion >= wvVista) and ThemeServices.ThemesEnabled then
   begin
     if Succeeded(CoCreateInstance(CLSID_FileSaveDialog, nil, CLSCTX_INPROC_SERVER, IFileSaveDialog, Dialog))
     and Assigned(Dialog) then
@@ -973,7 +1047,6 @@ var
 begin
   if ACommonDialog.Handle <> 0 then
     if CanUseVistaDialogs(TOpenDialog(ACommonDialog)) then
-    //if (WindowsVersion >= wvVista) and ThemeServices.ThemesEnabled then
     begin
       Dialog := IFileDialog(ACommonDialog.Handle);
       Dialog._Release;
@@ -995,9 +1068,9 @@ begin
     lOldWorkingDir := GetCurrentDirUTF8;
     try
       lInitialDir := TSaveDialog(ACommonDialog).InitialDir;
-      if lInitialDir <> '' then SetCurrentDirUTF8(lInitialDir);
+      if lInitialDir <> '' then
+        SetCurrentDirUTF8(lInitialDir);
       if CanUseVistaDialogs(TOpenDialog(ACommonDialog)) then
-      //if (WindowsVersion >= wvVista) and ThemeServices.ThemesEnabled then
       begin
         Dialog := IFileSaveDialog(ACommonDialog.Handle);
         TWin32WSOpenDialog.VistaDialogShowModal(Dialog, TOpenDialog(ACommonDialog));
@@ -1014,7 +1087,77 @@ begin
   end;
 end;
 
+class function TWin32WSSaveDialog.QueryWSEventCapabilities(
+  const ACommonDialog: TCommonDialog): TCDWSEventCapabilities;
+begin
+  Result := [cdecWSPerformsDoShow,cdecWSPerformsDoCanClose];
+end;
+
 { TWin32WSFontDialog }
+
+function FontDialogCallBack(Wnd: HWND; uMsg: UINT; wParam: WPARAM;
+  lParam: LPARAM): UINT_PTR; stdcall;
+const
+  //These ID's can be seen as LoWord(wParam), when uMsg = WM_COMMAND
+  ApplyBtnControlID = 1026;
+  ColorComboBoxControlID = 1139; //see also: https://www.experts-exchange.com/questions/27267157/Font-Common-Dialog.html
+  //don't use initialize "var", since that will be reset to nil at every callback
+  Dlg: ^TFontDialog = nil;
+var
+  LFW: LogFontW;
+  LFA: LogFontA absolute LFW;
+  Res: LONG;
+  AColor: TColor;
+begin
+  Result := 0;
+  case uMsg of
+    WM_INITDIALOG:
+    begin
+      //debugln(['FontDialogCallBack: WM_INITDIALOG']);
+      //debugln(['  PChooseFontW(LParam)^.lCustData=',IntToHex(PChooseFontW(LParam)^.lCustData,8)]);
+      PtrInt(Dlg) := PChooseFontW(LParam)^.lCustData;
+    end;
+    WM_COMMAND:
+    begin
+      //debugln(['FontDialogCallBack:']);
+      //debugln(['  wParam=',wParam,' lParam=',lParam]);
+      //debugln(['  HiWord(wParam)=',HiWord(wParam),' LoWord(wParam)',LoWord(wParam)]);
+      //debugln(['  HiWord(lParam)=',HiWord(lParam),' LoWord(lParam)',LoWord(lParam)]);
+      // LoWord(wParam) must be ApplyBtnControlID,
+      // since HiWord(wParam) = 0 when button is clicked, wParam = LoWord(wParam) in this case
+      if (wParam = ApplyBtnControlID) then
+      begin
+        //debugln(['FontDialogCallback calling OnApplyClicked']);
+        if Assigned(Dlg) and Assigned(Dlg^) then
+        begin
+          if Assigned(Dlg^.OnApplyClicked) then
+          begin
+            //Query the dialog (Wnd) return a LogFont structure
+            //https://msdn.microsoft.com/en-us/library/windows/desktop/ms646880(v=vs.85).aspx
+            ZeroMemory(@LFW, SizeOf(LogFontW));
+            SendMessage(Wnd, WM_CHOOSEFONT_GETLOGFONT, 0, PtrInt(@LFW));
+            //Unfortunately this did NOT retrieve the Color information, so yet another query is necessary
+            AColor := Dlg^.Font.Color;
+            Res := SendDlgItemMessage(Wnd, ColorComboBoxControlID, CB_GETCURSEL, 0, 0);
+            //debugln(['FontDialogCallBack SendDlgItemMessage = ',Res]);
+            //if (Res=CB_ERR) then debugln('  = CB_ERR');
+            if (Res <> CB_ERR) then
+            begin
+              AColor := TColor(SendDlgItemMessage(Wnd, ColorComboBoxControlID, CB_GETITEMDATA, Res, 0));
+              //debugln(['FontDialogCallback SendDlgItemMessage =',AColor]);
+            end;
+            //Now finally update Dlg^.Font structure
+            LFA.lfFaceName := Utf16ToUtf8(LFW.lfFaceName);
+            Dlg^.Font.Assign(LFA);
+            Dlg^.Font.Color := AColor;
+            Dlg^.OnApplyClicked(Dlg^);
+            Result := 1;
+          end;
+        end;
+      end;
+    end;
+  end;
+end;
 
 class function TWin32WSFontDialog.CreateHandle(const ACommonDialog: TCommonDialog): THandle;
 
@@ -1060,6 +1203,13 @@ begin
       LFUnderline := byte(fsUnderline in Font.Style);
       LFCharSet := Font.CharSet;
     end;
+    // Duplicate logic in CreateFontIndirect
+    if not Win32WidgetSet.MetricsFailed and IsFontNameDefault(Font.Name) then
+    begin
+      LFW.lfFaceName := UTF8ToUTF16(Win32WidgetSet.Metrics.lfMessageFont.lfFaceName);
+      if LFW.lfHeight = 0 then
+        LFW.lfHeight := Win32WidgetSet.Metrics.lfMessageFont.lfHeight;
+    end;
     with CFW do
     begin
       LStructSize := sizeof(TChooseFont);
@@ -1067,8 +1217,27 @@ begin
       LPLogFont := commdlg.PLOGFONTW(@LFW);
       Flags := GetFlagsFromOptions(Options);
       Flags := Flags or CF_INITTOLOGFONTSTRUCT or CF_BOTH;
-      RGBColors := DWORD(Font.Color);
+      //setting CF_ENABLEHOOK shows an oldstyle dialog, unless lpTemplateName is set
+      //and a template is linked in as a resource,
+      //this also requires additional flas set:
+      //https://msdn.microsoft.com/en-us/library/windows/desktop/ms646832(v=vs.85).aspx
+      if (fdApplyButton in Options) then
+      begin
+        Flags := Flags or CF_ENABLEHOOK;
+        lpfnHook := @FontDialogCallBack;
+        lCustData := PtrInt(@ACommonDialog);
+      end;
+      RGBColors := ColorToRGB(Font.Color);
+      if fdLimitSize in Options then
+      begin
+        nSizeMin := MinFontSize;
+        nSizeMax := MaxFontSize;
+      end;
     end;
+    {$ifdef DebugCommonDialogEvents}
+    debugln(['TWin32WSFontDialog.CreateHandle calling DoShow']);
+    {$endif}
+    TFontDialog(ACommonDialog).DoShow;
     UserResult := ChooseFontW(@CFW);
     // we need to update LF now
     LF.lfFaceName := UTF16ToUTF8(LFW.lfFaceName);
@@ -1083,15 +1252,23 @@ begin
       Color := CF.RGBColors;
     end;
   end;
-
+  {$ifdef DebugCommonDialogEvents}
+  debugln(['TWin32WSFontDialog.CreateHandle calling DoClose']);
+  {$endif}
+  TFontDialog(ACommonDialog).DoClose;
   Result := 0;
+end;
+
+class function TWin32WSFontDialog.QueryWSEventCapabilities(
+  const ACommonDialog: TCommonDialog): TCDWSEventCapabilities;
+begin
+  Result := [cdecWSPerformsDoShow, cdecWSPerformsDoClose, cdecWSNoCanCloseSupport];
 end;
 
 { TWin32WSCommonDialog }
 
 class function TWin32WSCommonDialog.CreateHandle(const ACommonDialog: TCommonDialog): THandle;
 begin
-  DebugLn('TWin32WSCommonDialog.CreateHandle: unhandled dialog!');
   Result := 0;
 end;
 
@@ -1113,7 +1290,7 @@ end;
   Handles the messages sent to the toolbar button by Windows
  ------------------------------------------------------------------------------}
 function BrowseForFolderCallback(hwnd : Handle; uMsg : UINT;
-  lParam, lpData : LPARAM) : Integer; stdcall;
+  {%H-}lParam, lpData : LPARAM) : Integer; stdcall;
 begin
   case uMsg of
     BFFM_INITIALIZED:
@@ -1129,6 +1306,35 @@ end;
 
 class function TWin32WSSelectDirectoryDialog.CreateHandle(const ACommonDialog: TCommonDialog): THandle;
 var
+  Dialog: IFileOpenDialog;
+begin
+  if CanUseVistaDialogs(TOpenDialog(ACommonDialog)) then
+  begin
+    if Succeeded(CoCreateInstance(CLSID_FileOpenDialog, nil, CLSCTX_INPROC_SERVER, IFileOpenDialog, Dialog)) and Assigned(Dialog) then
+    begin
+      Dialog._AddRef;
+      TWin32WSOpenDialog.SetupVistaFileDialog(Dialog, TOpenDialog(ACommonDialog));
+      Result := THandle(Dialog);
+    end
+    else
+      Result := INVALID_HANDLE_VALUE;
+  end
+  else
+    Result := CreateOldHandle(ACommonDialog);
+end;
+
+class function TWin32WSSelectDirectoryDialog.QueryWSEventCapabilities(
+  const ACommonDialog: TCommonDialog): TCDWSEventCapabilities;
+begin
+  if CanUseVistaDialogs(TSelectDirectoryDialog(ACommonDialog)) then
+    Result := [cdecWSPerformsDoShow,cdecWSPerformsDoCanClose]
+  else
+    Result := [cdecWSPerformsDoShow, cdecWSPerformsDoClose, cdecWSNoCanCloseSupport];
+end;
+
+class function TWin32WSSelectDirectoryDialog.CreateOldHandle(
+  const ACommonDialog: TCommonDialog): THandle;
+var
   Options : TOpenOptions;
   InitialDir : string;
   Buffer : PChar;
@@ -1139,6 +1345,9 @@ var
   Title: widestring;
   DirName: string;
 begin
+  {$ifdef DebugCommonDialogEvents}
+  debugln(['TWin32WSSelectDirectoryDialog.CreateOldHandle A']);
+  {$endif}
   DirName := '';
   InitialDir := TSelectDirectoryDialog(ACommonDialog).FileName;
   Options := TSelectDirectoryDialog(ACommonDialog).Options;
@@ -1163,14 +1372,26 @@ begin
     Title :=  UTF8ToUTF16(ACommonDialog.Title);
     lpszTitle := PWideChar(Title);
     ulFlags := BIF_RETURNONLYFSDIRS;
-    if not (ofOldStyleDialog in Options) then
-       ulFlags := ulFlags + BIF_USENEWUI;
+    if not (ofCreatePrompt in Options) then
+      ulFlags := ulFlags + BIF_NONEWFOLDERBUTTON;
+    if (ofEnableSizing in Options) then
+      // better than flag BIF_USENEWUI, to hide editbox, it's not handy
+      ulFlags := ulFlags + BIF_NEWDIALOGSTYLE;
     lpfn := @BrowseForFolderCallback;
     // this value will be passed to callback proc as lpData
     lParam := Windows.LParam(PWideChar(InitialDirW));
   end;
-
+  {$ifdef DebugCommonDialogEvents}
+  debugln(['TWin32WSSelectDirectoryDialog.CreateOldHandle calling DoShow']);
+  {$endif}
+  TSelectDirectoryDialog(ACommonDialog).DoShow;
+  {$ifdef DebugCommonDialogEvents}
+  debugln(['TWin32WSSelectDirectoryDialog.CreateOldHandle before SHBrowseForFolder']);
+  {$endif}
   iidl := SHBrowseForFolderW(@biw);
+  {$ifdef DebugCommonDialogEvents}
+  debugln(['TWin32WSSelectDirectoryDialog.CreateOldHandle after SHBrowseForFolder']);
+  {$endif}
 
   if Assigned(iidl) then
   begin
@@ -1188,28 +1409,45 @@ begin
 
   CoTaskMemFree(Buffer);
 
+  {$ifdef DebugCommonDialogEvents}
+  debugln(['TWin32WSSelectDirectoryDialog.CreateOldHandle calling DoClose']);
+  {$endif}
+  TSelectDirectoryDialog(ACommonDialog).DoClose;
   Result := 0;
+  {$ifdef DebugCommonDialogEvents}
+  debugln(['TWin32WSSelectDirectoryDialog.CreateOldHandle End']);
+  {$endif}
 end;
 
 { TFileDialogEvents }
 
+// Only gets called when user clicks OK in IFileDialog
 function TFileDialogEvents.OnFileOk(pfd: IFileDialog): HResult; stdcall;
 var
   CanClose: Boolean;
 begin
+  {$ifdef DebugCommonDialogEvents}
+  debugln('TFileDialogEvents.OnFileOk A');
+  {$endif}
   Result := TWin32WSOpenDialog.ProcessVistaDialogResult(pfd, FDialog);
   if Succeeded(Result) then
   begin
+    FDialog.UserChoice := mrOK; //DoCanClose needs this
     CanClose := True;
+    {$ifdef DebugCommonDialogEvents}
+    debugln('TFileDialogEvents.OnFileOk: calling DoCanClose');
+    {$endif}
     FDialog.DoCanClose(CanClose);
     if CanClose then
     begin
-      FDialog.UserChoice := mrOK;
       Result := S_OK;
     end
     else
       Result := S_FALSE;
   end;
+  {$ifdef DebugCommonDialogEvents}
+  debugln('TFileDialogEvents.OnFileOk End');
+  {$endif}
 end;
 
 function TFileDialogEvents.OnFolderChanging(pfd: IFileDialog; psifolder: IShellItem): HResult; stdcall;

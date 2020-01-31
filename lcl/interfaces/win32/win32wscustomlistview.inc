@@ -10,8 +10,6 @@
 }
 
 { TWin32WSCustomListView }
-const
-  AutoSizeWidth = LVSCW_AUTOSIZE_USEHEADER;
 
 type
   TLVStyleType = (lsStyle, lsInvert, lsExStyle);
@@ -81,7 +79,7 @@ var
       P.X:=0;
       P.Y:=0;
     end;
-    Result := PointToSmallPoint(P);
+    Result := Windows.PointToSmallPoint(P);
   end;
 
   procedure HandleListViewOwnerData(ALV: TCustomListViewAccess);
@@ -94,42 +92,60 @@ var
   begin
     LVInfo:= GetWin32WindowInfo(ALV.Handle);
     DataInfo := PNMLVOwnerData(NMHdr);
-    if not Assigned(DataInfo) or (not ALV.OwnerData) then Exit;
-
+    if not Assigned(DataInfo) or (not ALV.OwnerData) then
+      Exit;
     listitem := ALV.Items[DataInfo^.item.iItem];
-    if not Assigned(listitem) then Exit;
-
-    if DataInfo^.item.iSubItem = 0 then
+    if not Assigned(listitem) then
+      Exit;
+    if (DataInfo^.item.mask and LVIF_TEXT) <> 0 then
     begin
-      txt := listitem.Caption;
-      DataInfo^.item.mask := DataInfo^.item.mask or LVIF_IMAGE;
-      DataInfo^.item.iImage := listitem.ImageIndex;
-    end
-    else
-    begin
-      idx := DataInfo^.item.iSubItem - 1;
-      if idx < listitem.SubItems.Count then
-        txt := listitem.SubItems[idx]
+      if DataInfo^.item.iSubItem = 0 then
+        txt := listitem.Caption
       else
-        txt := '';
-    end;
-
-    if txt <> '' then
-    begin
-      if DataInfo^.hdr.code = UInt(LVN_GETDISPINFOA) then
       begin
-        LVInfo^.DispInfoTextA[LVInfo^.DispInfoIndex]:=Utf8ToAnsi(txt);
-        DataInfo^.item.pszText := @(LVInfo^.DispInfoTextA[LVInfo^.DispInfoIndex][1]);
+        idx := DataInfo^.item.iSubItem - 1;
+        if idx < listitem.SubItems.Count then
+          txt := listitem.SubItems[idx]
+        else
+          txt := '';
+      end;
+      if txt <> '' then
+      begin
+        if DataInfo^.hdr.code = UInt(LVN_GETDISPINFOA) then
+        begin
+          LVInfo^.DispInfoTextA[LVInfo^.DispInfoIndex]:=Utf8ToAnsi(txt);
+          DataInfo^.item.pszText := @(LVInfo^.DispInfoTextA[LVInfo^.DispInfoIndex][1]);
+        end
+        else
+        begin
+          LVInfo^.DispInfoTextW[LVInfo^.DispInfoIndex]:=UTF8Decode(txt);
+          DataInfo^.item.pszText := @(LVInfo^.DispInfoTextW[LVInfo^.DispInfoIndex][1]);
+        end;
+        inc(LVInfo^.DispInfoIndex);
+        if LVInfo^.DispInfoIndex=LV_DISP_INFO_COUNT then LVInfo^.DispInfoIndex:=0;
       end
       else
+        DataInfo^.item.pszText := nil;
+    end;
+    if (DataInfo^.item.mask and LVIF_IMAGE) <> 0 then
+    begin
+      if DataInfo^.item.iSubItem = 0 then
+        DataInfo^.item.iImage := listitem.ImageIndex
+      else
       begin
-        LVInfo^.DispInfoTextW[LVInfo^.DispInfoIndex]:=UTF8Decode(txt);
-        DataInfo^.item.pszText := @(LVInfo^.DispInfoTextW[LVInfo^.DispInfoIndex][1]);
+        idx := DataInfo^.item.iSubItem - 1;
+        if idx < listitem.SubItems.Count then
+          DataInfo^.item.iImage := listitem.SubItemImages[idx]
+        else
+          DataInfo^.item.iImage := -1;
       end;
-      inc(LVInfo^.DispInfoIndex);
-      if LVInfo^.DispInfoIndex=LV_DISP_INFO_COUNT then LVInfo^.DispInfoIndex:=0;
-    end else
-      DataInfo^.item.pszText := nil;
+      if Assigned(ALV.StateImages) then
+      begin
+        DataInfo^.item.state := IndexToStateImageMask(listitem.StateIndex + 1);
+        DataInfo^.item.stateMask := $F000; // States start from 12 bit
+        DataInfo^.item.mask := DataInfo^.item.mask or LVIF_STATE;
+      end;
+    end;
   end;
 
   procedure HandleListViewCustomDraw(ALV: TCustomListViewAccess);
@@ -215,43 +231,12 @@ var
     end;
   end;
 
-  function OwnMouseUpNeeded(ALV: TCustomListViewAccess): Boolean;
-  var
-    LVInfo: PWin32WindowInfo;
-    ListItem: TListItem;
-  begin
-    LVInfo:= GetWin32WindowInfo(ALV.Handle);
-    ListItem := ALV.GetItemAt(LVInfo^.MouseX, LVInfo^.MouseY);
-    Result := Assigned(ListItem);
-  end;
-
-var
-  Pos: TSmallPoint;
 begin
   Result := False;
   case Msg of
     WM_NOTIFY:
     begin
       case PNMHdr(LParam)^.code of
-        NM_CLICK, NM_RCLICK:
-          if OwnMouseUpNeeded(TCustomListViewAccess(AWinControl)) then
-          begin
-            // A listview doesn't get a WM_LBUTTONUP, WM_RBUTTONUP message,
-            // because it keeps the message in its own event loop,
-            // see msdn article about "Default List-View Message Processing"
-            // therefore we take this notification and create a
-            // LM_LBUTTONUP, LM_RBUTTONUP message out of it
-            WinProcess := False;
-            if PNMHdr(LParam)^.code = NM_CLICK then
-              Msg := LM_LBUTTONUP
-            else
-              Msg := LM_RBUTTONUP;
-            Pos := GetClientCursorPos(PNMHdr(LParam)^.hwndFrom);
-            // to make correct event sequence in LCL we should postpone this message
-            // since we are here after call of CallDefaultWindowProc
-            PostMessage(PNMHdr(LParam)^.hwndFrom, Msg, 0, MakeLParam(Pos.x, Pos.y));
-            Result := True;
-          end;
         LVN_GETDISPINFOA, LVN_GETDISPINFOW:
           HandleListViewOwnerData(TCustomListViewAccess(AWinControl));
         NM_CUSTOMDRAW:
@@ -268,6 +253,33 @@ end;
 ////////////////////////////////////////////////////////////////////////////////
 // Column code
 ////////////////////////////////////////////////////////////////////////////////
+
+class procedure TWin32WSCustomListView.ColumnDoAutosize(const ALV: TCustomListView; const AIndex: Integer);
+var
+  CaptionSize: TSize;
+begin
+  if (ALV.Items.Count > 0) then
+    ListView_SetColumnWidth(ALV.Handle, AIndex, LVSCW_AUTOSIZE)
+  else
+  begin
+    // normally, we have to use ListView_GetStringWidth, but it doesn't work with
+    // Unicode, so we take a universal function to get the width of the caption
+    if GetTextExtentPoint32W(ALV.Canvas.Handle,
+                             PWideChar(UTF8ToUTF16(ALV.Column[AIndex].Caption)),
+                             UTF8Length(ALV.Column[AIndex].Caption),
+                             CaptionSize) then
+    begin
+      // to retrieve the column width that can contain the string without
+      // truncating it, you must add padding to the returned string width
+      // see msdn: ListView_GetStringWidth
+      // there is no way to get the needed padding size for a list view caption
+      // so we take the height of the current caption text, to be DPI aware
+      ListView_SetColumnWidth(ALV.Handle, AIndex, CaptionSize.cx + CaptionSize.cy);
+    end
+    else
+      ListView_SetColumnWidth(ALV.Handle, AIndex, TListColumnAccess(ALV.Column[AIndex]).GetStoredWidth);
+  end;
+end;
 
 class procedure TWin32WSCustomListView.ColumnDelete(const ALV: TCustomListView; const AIndex: Integer);
 var
@@ -388,7 +400,7 @@ begin
   then Exit;
 
   if AAutoSize
-  then ListView_SetColumnWidth(ALV.Handle, AIndex, AutoSizeWidth)
+  then ColumnDoAutosize(ALV, AIndex)
   else ListView_SetColumnWidth(ALV.Handle, AIndex, TListColumnAccess(AColumn).GetStoredWidth);
 end;
 
@@ -454,7 +466,7 @@ begin
   then Exit;
 
   if AColumn.AutoSize
-  then ListView_SetColumnWidth(ALV.Handle, AIndex, AutoSizeWidth)
+  then ColumnDoAutosize(ALV, AIndex)
   else ListView_SetColumnWidth(ALV.Handle, AIndex, AWidth)
 end;
 
@@ -467,7 +479,7 @@ begin
 
   if AVisible
   then if AColumn.AutoSize
-    then ListView_SetColumnWidth(ALV.Handle, AIndex, AutoSizeWidth)
+    then ColumnDoAutosize(ALV, AIndex)
     else ListView_SetColumnWidth(ALV.Handle, AIndex, TListColumnAccess(AColumn).GetStoredWidth)
   else ListView_SetColumnWidth(ALV.Handle, AIndex, 0);
 end;
@@ -516,21 +528,23 @@ begin
     B := AItem.Checked
   else
     B := False;
+
+  // apply texts
   ItemSetText(ALV, AIndex, AItem, 0, AItem.Caption);
   for i := 0 to AItem.SubItems.Count - 1 do
     ItemSetText(ALV, AIndex, AItem, i + 1, AItem.SubItems[i]);
+  // make sure no texts are left over
+  for i := AItem.SubItems.Count to ALV.ColumnCount-1 do
+    ItemSetText(ALV, AIndex, AItem, i + 1, '');
 
-  // set state images
-  if Assigned(TListView(ALV).StateImages) then
-    ItemSetStateImage(ALV, AIndex,AItem,0, AItem.StateIndex);
+  // set state image
+  ItemSetStateImage(ALV, AIndex,AItem,0, AItem.StateIndex);
 
-  // set images
-  if AItem.ImageIndex >= 0 then
-    ItemSetImage(ALV, AIndex, AItem, 0, AItem.ImageIndex);
+  // set image
+  ItemSetImage(ALV, AIndex, AItem, 0, AItem.ImageIndex);
 
-  // apply checkbox states
-  if ALV.Checkboxes then
-    ItemSetChecked(ALV, AIndex, AItem, B);
+  // apply checkbox state
+  ItemSetChecked(ALV, AIndex, AItem, B);
 end;
 
 class procedure TWin32WSCustomListView.ItemExchange(const ALV: TCustomListView;
@@ -688,21 +702,14 @@ begin
   _gnu_lvi.iSubItem := ASubIndex;
   _gnu_lvi.pszText := PChar(PWideChar(UTF8ToUTF16(AText)));
 
-  if (TListView(ALV).ViewStyle in [vsList, vsReport]) and Assigned(TListView(ALV).SmallImages) then
-  begin
-    _gnu_lvi.Mask := LVIF_TEXT or LVIF_IMAGE;
-    _gnu_lvi.iItem := AIndex;
-    _gnu_lvi.iImage := AItem.ImageIndex;
-    SendMessage(ALV.Handle, LVM_SETITEMW{TEXTW}, WPARAM(AIndex), LPARAM(@_gnu_lvi));
-  end else
-    SendMessage(ALV.Handle, LVM_SETITEMTEXTW, WPARAM(AIndex), LPARAM(@_gnu_lvi));
+  SendMessage(ALV.Handle, LVM_SETITEMTEXTW, WPARAM(AIndex), LPARAM(@_gnu_lvi));
   // autosize is an *extreme* performance bottleneck, even if WM_SETREDRAW
   // was set to false it will ignore this and still redraw all columns.
   // We will therefore postpone all autosizing until EndUpdate where we do
   // it only once per column.
 
   if (ASubIndex >= 0) and (ASubIndex < ALV.ColumnCount) and ALV.Column[ASubIndex].AutoSize and (TCustomListViewAccess(ALV).GetUpdateCount = 0) then
-    ListView_SetColumnWidth(ALV.Handle, ASubIndex, AutoSizeWidth);
+    ColumnDoAutosize(ALV, ASubIndex);
 end;
 
 class procedure TWin32WSCustomListView.ItemShow(const ALV: TCustomListView; const AIndex: Integer; const AItem: TListItem; const PartialOK: Boolean);
@@ -728,6 +735,48 @@ begin
   ItemMsg := CN_DRAWITEM;
 end;
 
+function ListViewProc(Window: HWnd; Msg: UInt; WParam: Windows.WParam;
+    LParam: Windows.LParam): LResult; stdcall;
+var
+  WindowInfo: PWin32WindowInfo;
+  ListItem: TListItem;
+  ListView: TCustomListView;
+  AMsg: UINT;
+begin
+  case Msg of
+    WM_LBUTTONDOWN, WM_RBUTTONDOWN:
+      begin
+        // A ListView doesn't get a WM_LBUTTONUP, WM_RBUTTONUP message,
+        // because it keeps the message in its own event loop,
+        // see msdn article about "Default List-View Message Processing"
+        // therefore we take this notification and create a
+        // LM_LBUTTONUP, LM_RBUTTONUP message out of it
+
+        WindowInfo := GetWin32WindowInfo(Window);
+        ListView := TListView(WindowInfo^.WinControl);
+        ListItem := ListView.GetItemAt(WindowInfo^.MouseX, WindowInfo^.MouseY);
+
+        if Msg = WM_LBUTTONDOWN
+        then AMsg := LM_LBUTTONUP
+        else AMsg := LM_RBUTTONUP;
+
+        // for multiselected listbox the message has to be send after current
+        // message or the list item selecting does not work, also see issue #33330
+        if not Assigned(ListItem) and ListView.MultiSelect then
+        begin
+          Result := WindowProc(Window, Msg, WParam, LParam);
+          if not (Msg = WM_LBUTTONDBLCLK) and ((Msg = WM_LBUTTONDOWN) or not Assigned(ListView.PopupMenu)) then
+            PostMessage(Window, AMsg, 0, MakeLParam(WindowInfo^.MouseX, WindowInfo^.MouseY));
+          Exit;
+        end;
+
+        if Assigned(ListItem) then
+          PostMessage(Window, AMsg, 0, MakeLParam(WindowInfo^.MouseX, WindowInfo^.MouseY));
+      end;
+  end;
+  Result := WindowProc(Window, Msg, WParam, LParam);
+end;
+
 class function TWin32WSCustomListView.CreateHandle(const AWinControl: TWinControl;
   const AParams: TCreateParams): HWND;
 const
@@ -742,6 +791,7 @@ begin
   with Params do
   begin
     pClassName := WC_LISTVIEW;
+    SubClassWndProc := @ListViewProc;
     WindowTitle := StrCaption;
     Flags := Flags or LISTVIEWSTYLES[TListView(AWinControl).ViewStyle] or
       LVS_SINGLESEL or LVS_SHAREIMAGELISTS or
@@ -790,8 +840,8 @@ begin
   // so it won't flicker at all.
   ShowWindow(ALV.Handle, SW_HIDE);
   for ColIndex := 0 to TCustomListViewAccess(ALV).Columns.Count - 1 do
-    if ALV.Column[ColIndex].AutoSize then
-      ListView_SetColumnWidth(ALV.Handle, ColIndex, AutoSizeWidth);
+    if ALV.Column[ColIndex].AutoSize
+    then ColumnDoAutosize(ALV, ColIndex);
 
   SendMessage(ALV.Handle,WM_SETREDRAW,WPARAM(True),0);
   if ALV.Visible then
@@ -1115,7 +1165,8 @@ begin
   UpdateStyle(ALV.Handle, LVS_ALIGNMASK, ArrangementMap[AValue]);
 end;
 
-class procedure TWin32WSCustomListView.SetImageList(const ALV: TCustomListView; const AList: TListViewImageList; const AValue: TCustomImageList);
+class procedure TWin32WSCustomListView.SetImageList(const ALV: TCustomListView;
+  const AList: TListViewImageList; const AValue: TCustomImageListResolution);
 const
   LIST_MAP: array[TListViewImageList] of WPARAM = (
    {lvilSmall} LVSIL_SMALL,

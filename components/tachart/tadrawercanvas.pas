@@ -35,7 +35,7 @@ type
   strict protected
     FCanvas: TCanvas;
     FBuffer: TBitmap;
-    function GetFontAngle: Double; override;
+//    function GetFontAngle: Double; override;
     function SimpleTextExtent(const AText: String): TPoint; override;
     procedure SimpleTextOut(AX, AY: Integer; const AText: String); override;
   public
@@ -49,6 +49,12 @@ type
     procedure FillRect(AX1, AY1, AX2, AY2: Integer);
     function GetBrushColor: TChartColor;
     function GetCanvas: TCanvas; virtual;
+    function GetFontAngle: Double; override;
+    function GetFontColor: TFPColor; override;
+    function GetFontName: String; override;
+    function GetFontSize: Integer; override;
+    function GetFontStyle: TChartFontStyles; override;
+    function GetPenColor: TChartColor;
     procedure Line(AX1, AY1, AX2, AY2: Integer);
     procedure Line(const AP1, AP2: TPoint);
     procedure LineTo(AX, AY: Integer); override;
@@ -69,12 +75,22 @@ type
     procedure SetAntialiasingMode(AValue: TChartAntialiasingMode);
     procedure SetBrushColor(AColor: TChartColor);
     procedure SetBrushParams(AStyle: TFPBrushStyle; AColor: TChartColor);
+    procedure SetPenColor(AColor: TChartColor);
     procedure SetPenParams(AStyle: TFPPenStyle; AColor: TChartColor);
     procedure SetTransparency(ATransparency: TChartTransparency);
   end;
 
+  TScaledCanvasDrawer = class(TCanvasDrawer)
+  protected
+    FCoeff: Double;
+  public
+    constructor Create(ACanvas: TCanvas; ACoeff: Double; AScaleItems: TScaleItems);
+    function Scale(ADistance: Integer): Integer; override;
+  end;
+
   function CanvasGetFontOrientationFunc(AFont: TFPCustomFont): Integer;
   function ChartColorSysToFPColor(AChartColor: TChartColor): TFPColor;
+
 
 implementation
 
@@ -85,9 +101,9 @@ uses
 function CanvasGetFontOrientationFunc(AFont: TFPCustomFont): Integer;
 begin
   if AFont is TFont then
-    Result := (AFont as TFont).Orientation
+    Result := TFont(AFont).Orientation
   else
-    Result := 0;
+    Result := AFont.Orientation; //0;
 end;
 
 function ChartColorSysToFPColor(AChartColor: TChartColor): TFPColor;
@@ -165,6 +181,37 @@ begin
   Result := OrientToRad(GetCanvas.Font.Orientation);
 end;
 
+function TCanvasDrawer.GetFontColor: TFPColor;
+begin
+  Result := TColorToFPColor(GetCanvas.Font.Color);
+end;
+
+function TCanvasDrawer.GetFontName: String;
+begin
+  Result := GetCanvas.Font.Name;
+end;
+
+function TCanvasDrawer.GetFontSize: Integer;
+var
+  h: Integer;
+begin
+  Result := GetCanvas.Font.Size;
+  if Result = 0 then begin
+    h := GetFontData(GetCanvas.Font.Reference.Handle).Height;
+    Result := round(abs(h) * 72 / ScreenInfo.PixelsPerInchY);
+  end;
+end;
+
+function TCanvasDrawer.GetFontStyle: TChartFontStyles;
+begin
+  Result := TChartFontStyles(GetCanvas.Font.Style);
+end;
+
+function TCanvasDrawer.GetPenColor: TChartColor;
+begin
+  Result := GetCanvas.Pen.Color;
+end;
+
 procedure TCanvasDrawer.Line(AX1, AY1, AX2, AY2: Integer);
 begin
   GetCanvas.Line(AX1, AY1, AX2, AY2);
@@ -213,7 +260,9 @@ begin
       Mode := pmXor
     else
       Mode := pmCopy;
-    Width := 1;
+    if (scalePen in FScaleItems) then
+      Width := Scale(1) else
+      Width := 1;
   end;
 end;
 
@@ -334,12 +383,16 @@ begin
     end;
     if FMonochromeColor <> clTAColor then
       Color := FMonochromeColor;
+    if scaleFont in FScaleItems then
+      Size := Scale(GetFontSize)
+    else
+      Size := GetFontSize;
   end;
 end;
 
 procedure TCanvasDrawer.SetPen(APen: TFPCustomPen);
 begin
-  with GetCanvas do
+  with GetCanvas do begin
     if FXor then begin
       Brush.Style := bsClear;
       if APen = nil then
@@ -366,6 +419,15 @@ begin
       if FMonochromeColor <> clTAColor then
         Pen.Color := FMonochromeColor;
     end;
+    if scalePen in FScaleItems then
+      Pen.Width := Scale(Pen.Width);
+  end;
+end;
+
+procedure TCanvasDrawer.SetPenColor(AColor: TChartColor);
+begin
+  if not FXor then
+    GetCanvas.Pen.Color := ColorOrMono(AColor);
 end;
 
 procedure TCanvasDrawer.SetPenParams(AStyle: TFPPenStyle; AColor: TChartColor);
@@ -442,6 +504,7 @@ procedure TCanvasDrawer.SimpleTextOut(AX, AY: Integer; const AText: String);
   begin
     ts := ACanvas.TextStyle;
     ts.RightToLeft := FRightToLeft;
+    ts.WordBreak := false;   // added to disable erroneous workbreaks in Linux printing
     ts.Clipping := false;
     r := Bounds(x, y, 1, 1);
     ACanvas.TextRect(r, x, y, txt, ts);
@@ -479,6 +542,22 @@ begin
     DrawXorText
   else
     DrawSimpleText(GetCanvas, AX, AY, AText);
+end;
+
+
+{ TScaledCanvasDrawer }
+
+constructor TScaledCanvasDrawer.Create(ACanvas: TCanvas; ACoeff: Double;
+  AScaleItems: TScaleItems);
+begin
+  inherited Create(ACanvas);
+  FCoeff := ACoeff;
+  FScaleItems := AScaleItems;
+end;
+
+function TScaledCanvasDrawer.Scale(ADistance: Integer): Integer;
+begin
+  Result := Round(FCoeff * ADistance);
 end;
 
 initialization

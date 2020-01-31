@@ -14,8 +14,13 @@ unit SrcEditorIntf;
 interface
 
 uses
-  Classes, SysUtils, LCLProc, FileUtil, Laz2_XMLCfg, LCLType, Forms, Controls,
-  Graphics, ProjectIntf, IDECommands;
+  Classes, SysUtils,
+  // LCL
+  LCLType, Forms, Controls, Graphics,
+  // LazUtils
+  FileUtil, Laz2_XMLCfg, LazStringUtils,
+  // IdeIntf
+  ProjectIntf, IDECommands;
   
 type
   TSourceMarklingType = (
@@ -71,6 +76,9 @@ type
 
   TSrcEditReplaceAction = (seraCancel, seraSkip, seraReplace, seraReplaceAll);
 
+  TSrcEditProjectUpdateNeeded = (sepuNewShared, sepuChangedHighlighter);
+  TSrcEditProjectUpdatesNeeded = set of TSrcEditProjectUpdateNeeded;
+
   { TSourceEditorInterface }
 
   TSourceEditorInterface = class
@@ -84,6 +92,7 @@ type
     function GetFileName: string; virtual; abstract;
     function GetLines: TStrings; virtual; abstract;
     function GetLineText: string; virtual; abstract;
+    function GetLinesInWindow: Integer; virtual; abstract;
     function GetModified: Boolean; virtual; abstract;
     function GetPageCaption: string; virtual; abstract;
     function GetPageName: string; virtual; abstract;
@@ -120,6 +129,8 @@ type
                         out Action: TSrcEditReplaceAction); virtual; abstract;
     procedure CopyToClipboard; virtual; abstract;
     procedure CutToClipboard; virtual; abstract;
+    function GetBookMark(BookMark: Integer; out X, Y: Integer): Boolean; virtual; abstract;
+    procedure SetBookMark(BookMark: Integer; X, Y: Integer); virtual; abstract;
 
     // screen and text position mapping
     function LineCount: Integer; virtual; abstract;
@@ -152,7 +163,7 @@ type
 
     // context
     function GetProjectFile: TLazProjectFile; virtual; abstract;
-    procedure UpdateProjectFile; virtual; abstract;
+    procedure UpdateProjectFile(AnUpdates: TSrcEditProjectUpdatesNeeded = []); virtual; abstract;
     function GetDesigner(LoadForm: boolean): TIDesigner; virtual; abstract;
 
     // editor commands
@@ -179,6 +190,7 @@ type
     property SelStart: Integer read GetSelStart write SetSelStart;
     property SourceText: string read GetSourceText write SetSourceText;// the whole file
     property TopLine: Integer read GetTopLine write SetTopLine;// first visible line
+    property LinesInWindow: Integer read GetLinesInWindow;
     property Modified: Boolean read GetModified write SetModified;
   end;
 
@@ -313,14 +325,20 @@ type
     function Beautify(const Src: string): string; virtual; abstract;
   protected
     // Completion Plugins
-    function GetActiveCompletionPlugin: TSourceEditorCompletionPlugin; virtual; abstract;
-    function GetCompletionBoxPosition: integer; virtual; abstract;
-    function GetCompletionPlugins(Index: integer): TSourceEditorCompletionPlugin; virtual; abstract;
+    function  GetActiveCompletionPlugin: TSourceEditorCompletionPlugin; virtual; abstract;
+    function  GetCompletionBoxPosition: integer; virtual; abstract;
+    function  GetCompletionPlugins(Index: integer): TSourceEditorCompletionPlugin; virtual; abstract;
+    function  GetDefaultSynCompletionForm: TCustomForm; virtual; abstract;
+    function  GetSynCompletionLinesInWindow: integer; virtual; abstract;
+    procedure SetSynCompletionLinesInWindow(LineCnt: integer); virtual; abstract;
   public
     // Completion Plugins
     function CompletionPluginCount: integer; virtual; abstract;
     property CompletionPlugins[Index: integer]: TSourceEditorCompletionPlugin
                  read GetCompletionPlugins;
+    property DefaultSynCompletionForm: TCustomForm read GetDefaultSynCompletionForm;
+    property SynCompletionLinesInWindow: integer read GetSynCompletionLinesInWindow
+                                                write SetSynCompletionLinesInWindow;
     procedure DeactivateCompletionForm; virtual; abstract;
     property ActiveCompletionPlugin: TSourceEditorCompletionPlugin read GetActiveCompletionPlugin;
     property CompletionBoxPosition: integer read GetCompletionBoxPosition;
@@ -344,7 +362,7 @@ type
 
 
 var
-  SourceEditorManagerIntf: TSourceEditorManagerInterface= nil;                      // set by the IDE
+  SourceEditorManagerIntf: TSourceEditorManagerInterface=nil; // set by the IDE
 
 type
   TEditorMacroState = (emStopped, emRecording, emPlaying, emRecPaused); // msPaused = paused recording
@@ -579,6 +597,8 @@ type
     SearchFor, ReplaceText: string; Flags: TSrcEditSearchOptions;
     var Prompt: boolean; Progress: TIDESearchInTextProgress = nil): TModalResult;
 
+  TBookmarkNumRange = 0..9;
+
 var
   IDESearchInText: TIDESearchInTextFunction = nil;// set by the IDE
 
@@ -592,8 +612,8 @@ var
 begin
   NewName:=IDECodeMacros.CreateUniqueName(Name);
   Result:=TIDECodeMacro.Create(NewName);
-  Result.ShortDescription:=ConvertLineEndings(ShortDescription);
-  Result.LongDescription:=ConvertLineEndings(LongDescription);
+  Result.ShortDescription:=LineBreaksToSystemLineBreaks(ShortDescription);
+  Result.LongDescription:=LineBreaksToSystemLineBreaks(LongDescription);
   Result.OnGetValueProc:=OnGetValueProc;
   Result.OnGetValueMethod:=OnGetValueMethod;
   IDECodeMacros.Add(Result);
@@ -607,8 +627,8 @@ var
 begin
   NewName:=IDECodeMacros.CreateUniqueName(Name);
   Result:=TIDECodeMacro.Create(NewName);
-  Result.ShortDescription:=ConvertLineEndings(ShortDescription);
-  Result.LongDescription:=ConvertLineEndings(LongDescription);
+  Result.ShortDescription:=LineBreaksToSystemLineBreaks(ShortDescription);
+  Result.LongDescription:=LineBreaksToSystemLineBreaks(LongDescription);
   Result.OnGetValueExProc:=OnGetValueProc;
   Result.OnGetValueExMethod:=OnGetValueMethod;
   IDECodeMacros.Add(Result);

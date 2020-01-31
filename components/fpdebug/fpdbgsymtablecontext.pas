@@ -31,7 +31,7 @@ type
     function GetSizeOfAddress: Integer; override;
   public
     constructor Create(AFpSymbolInfo: TFpSymbolInfo);
-    function FindSymbol(const AName: String): TFpDbgValue; override;
+    function FindSymbol(const AName: String): TFpValue; override;
   end;
 
   { TFpSymbolInfo }
@@ -46,9 +46,7 @@ type
     destructor Destroy; override;
     function FindContext(AThreadId, AStackFrame: Integer; AAddress: TDbgPtr = 0): TFpDbgInfoContext; override;
     function FindContext(AAddress: TDbgPtr): TFpDbgInfoContext; override;
-    function FindSymbol(AAddress: TDbgPtr): TFpDbgSymbol; override;
-    function FindSymbol(const AName: String): TFpDbgSymbol; override;
-    function GetLineAddress(const AFileName: String; ALine: Cardinal): TDbgPtr; override;
+    function FindProcSymbol(const AName: String): TFpSymbol; override; overload;
     property Image64Bit: boolean read FImage64Bit;
   end;
 
@@ -86,7 +84,7 @@ begin
     FSizeOfAddress:=4;
 end;
 
-function TFpSymbolContext.FindSymbol(const AName: String): TFpDbgValue;
+function TFpSymbolContext.FindSymbol(const AName: String): TFpValue;
 var
   i: integer;
   val: TFpDbgMemLocation;
@@ -94,9 +92,10 @@ begin
   i := FFpSymbolInfo.FSymbolList.IndexOf(AName);
   if i > -1 then
   begin
-    val.Address:=TDbgPtr(pointer(FFpSymbolInfo.FSymbolList.Objects[i]));
+    val := Default(TFpDbgMemLocation);
+    val.Address:=FFpSymbolInfo.FSymbolList.Data[i];
     val.MType:=mlfTargetMem;
-    result := TFpDbgValueConstAddress.Create(val);
+    result := TFpValueConstAddress.Create(val);
   end
   else
     result := nil;
@@ -136,20 +135,10 @@ begin
   Result:=FContext;
 end;
 
-function TFpSymbolInfo.FindSymbol(AAddress: TDbgPtr): TFpDbgSymbol;
-begin
-  Result:=inherited FindSymbol(AAddress);
-end;
-
-function TFpSymbolInfo.FindSymbol(const AName: String): TFpDbgSymbol;
+function TFpSymbolInfo.FindProcSymbol(const AName: String): TFpSymbol;
 begin
   result := nil;
   //Result:=FContext.FindSymbol(AName);
-end;
-
-function TFpSymbolInfo.GetLineAddress(const AFileName: String; ALine: Cardinal): TDbgPtr;
-begin
-  Result:=inherited GetLineAddress(AFileName, ALine);
 end;
 
 end.

@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -31,8 +31,16 @@ unit OpenInstalledPkgDlg;
 interface
 
 uses
-  SysUtils, Forms, Controls, ComCtrls, StdCtrls, ExtCtrls, LCLProc, ButtonPanel,
-  IDEHelpIntf, IDEWindowIntf, PackageIntf, ListViewFilterEdit,
+  SysUtils,
+  // LCL
+  Forms, Controls, ComCtrls, StdCtrls, ExtCtrls, LCLType, ButtonPanel,
+  // LazUtils
+  LazStringUtils,
+  // LazControls
+  ListViewFilterEdit,
+  // IdeIntf
+  IDEHelpIntf, IDEWindowIntf, PackageIntf,
+  // IDE
   PackageDefs, LazarusIDEStrConsts, PackageSystem;
 
 type
@@ -50,10 +58,11 @@ type
     procedure HelpButtonClick(Sender: TObject);
     procedure OpenButtonClick(Sender: TObject);
     procedure PkgListViewDblClick(Sender: TObject);
+    procedure PkgListViewKeyPress(Sender: TObject; var Key: char);
     procedure PkgListViewSelectItem(Sender: TObject; {%H-}Item: TListItem; {%H-}Selected: Boolean);
   private
-  public
     Package: TLazPackage;
+  public
     procedure UpdateSelection;
     procedure UpdatePackageList;
   end;
@@ -68,16 +77,13 @@ function ShowOpenLoadedPkgDlg(out OpenPackage: TLazPackage): TModalResult;
 var
   Dlg: TOpenLoadedPackagesDlg;
 begin
-  OpenPackage:=nil;
   Dlg:=TOpenLoadedPackagesDlg.Create(nil);
   try
     Dlg.UpdatePackageList;
     Dlg.UpdateSelection;
     Result:=Dlg.ShowModal;
-    if (Result=mrOK) and (Dlg.Package<>nil) then
-      OpenPackage:=Dlg.Package
-    else
-      OpenPackage:=nil;
+    OpenPackage:=Dlg.Package;
+    Assert((Result=mrOK) or (OpenPackage=nil));
   finally
     Dlg.Free;
   end;
@@ -88,6 +94,12 @@ end;
 procedure TOpenLoadedPackagesDlg.PkgListViewDblClick(Sender: TObject);
 begin
   OpenButtonClick(Sender);
+end;
+
+procedure TOpenLoadedPackagesDlg.PkgListViewKeyPress(Sender: TObject; var Key: char);
+begin
+  if Key = Char(VK_RETURN) then
+    OpenButtonClick(Nil);
 end;
 
 procedure TOpenLoadedPackagesDlg.PkgListViewSelectItem(Sender: TObject;
@@ -126,12 +138,16 @@ end;
 
 procedure TOpenLoadedPackagesDlg.OpenButtonClick(Sender: TObject);
 begin
-  if PkgListView.Selected=nil then exit;
-  Package:=PackageGraph.FindPackageWithName(PkgListView.Selected.Caption,nil);
-  if Package=nil then
-    ModalResult:=mrCancel
-  else
-    ModalResult:=mrOk;
+  if Assigned(PkgListView.Selected) then
+  begin
+    Package:=PackageGraph.FindPackageWithName(PkgListView.Selected.Caption,nil);
+    if Assigned(Package) then
+    begin
+      ModalResult:=mrOk;
+      Exit;
+    end;
+  end;
+  ModalResult:=mrCancel;
 end;
 
 procedure TOpenLoadedPackagesDlg.FormCreate(Sender: TObject);
@@ -181,12 +197,12 @@ begin
   if APackage.Modified then AddState(lisOIPmodified);
   if APackage.Missing then AddState(lisOIPmissing);
   case APackage.Installed of
-  pitStatic: AddState(lisOIPinstalledStatic);
-  pitDynamic: AddState(lisOIPinstalledDynamic);
+    pitStatic: AddState(lisOIPinstalledStatic);
+    pitDynamic: AddState(lisOIPinstalledDynamic);
   end;
   case APackage.AutoInstall of
-  pitStatic: AddState(lisOIPautoInstallStatic);
-  pitDynamic: AddState(lisOIPautoInstallDynamic);
+    pitStatic: AddState(lisOIPautoInstallStatic);
+    pitDynamic: AddState(lisOIPautoInstallDynamic);
   end;
   if APackage.ReadOnly then AddState(lisOIPreadonly);
 end;
@@ -195,13 +211,15 @@ procedure TOpenLoadedPackagesDlg.UpdatePackageList;
 
   procedure UpdateOnePackage(aPkg: TLazPackage);
   var
-    Data: TStringArray;
+    ListItem: TListViewDataItem;
   begin
-    SetLength(Data, 3);
-    Data[0] := aPkg.Name;
-    Data[1] := aPkg.Version.AsString;
-    Data[2] := PkgStateToString(aPkg);
-    FilterEdit.Items.Add(Data);
+    //ListItem.Initialize(3);
+    ListItem.Data := Nil;
+    SetLength(ListItem.StringArray, 3);
+    ListItem.StringArray[0] := aPkg.Name;
+    ListItem.StringArray[1] := aPkg.Version.AsString;
+    ListItem.StringArray[2] := PkgStateToString(aPkg);
+    FilterEdit.Items.Add(ListItem);
   end;
 
 var
@@ -211,22 +229,7 @@ begin
   for i:=0 to PackageGraph.Count-1 do
     UpdateOnePackage(PackageGraph[i]);
   FilterEdit.InvalidateFilter;
-  //PkgListView.BeginUpdate;
-  //PkgListView.AlphaSort;
-  //PkgListView.EndUpdate;
 end;
-
-//if PkgListView.Items.Count>i then begin
-//  CurListItem:=PkgListView.Items[i];
-//  CurListItem.SubItems[0]:=CurPkg.Version.AsString;
-//  CurListItem.SubItems[1]:=PkgStateToString(CurPkg);
-//end else begin
-  //CurListItem:=PkgListView.Items.Add;
-  //CurListItem.SubItems.Add(CurPkg.Version.AsString);
-  //CurListItem.SubItems.Add(PkgStateToString(CurPkg));
-//end;
-//CurListItem.Caption:=CurPkg.Name;
-
 
 end.
 

@@ -1,11 +1,12 @@
+# Valdas Jankunas <zmuogs@gmail.com>, 2017.
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"PO-Revision-Date: 2012-08-04 00:02+0300\n"
+"PO-Revision-Date: 2017-07-05 11:54+0200\n"
 "Project-Id-Version: codetoolsstrconsts\n"
 "Language-Team: Lithuanian <kde-i18n-lt@kde.org>\n"
-"X-Generator: Lokalize 1.4\n"
+"X-Generator: Lokalize 2.0\n"
 "Last-Translator: Valdas Jankunas <zmuogs@gmail.com>\n"
 "MIME-Version: 1.0\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
@@ -24,6 +25,7 @@ msgid "closing bracket not found"
 msgstr "uždarantysis skliaustas nerastas"
 
 #: codetoolsstrconsts.crsfoundunexpectedat
+#, object-pascal-format
 msgid "%s, found unexpected %s at %s"
 msgstr "%s, rastas netikėtas „%s“ ties %s"
 
@@ -32,10 +34,12 @@ msgid "record end not found"
 msgstr "nerasta įrašo pabaiga"
 
 #: codetoolsstrconsts.ctsaddsdirtoincludepath
+#, object-pascal-format
 msgid "adds %s to IncPath"
 msgstr "%s pridės prie įdedamųjų kelio"
 
 #: codetoolsstrconsts.ctsaddsdirtosourcepath
+#, object-pascal-format
 msgid "adds %s to SrcPath"
 msgstr "%s pridės prie pirminio kodo kelio"
 
@@ -48,18 +52,22 @@ msgid "an LCL project"
 msgstr "LCL projektas"
 
 #: codetoolsstrconsts.ctsanonymdefinitionsarenotallowed
+#, object-pascal-format
 msgid "Anonymous %s definitions are not allowed"
 msgstr "Anoniminės %s apibrėžtys nėra leidžiamos"
 
 #: codetoolsstrconsts.ctsawithoutb
+#, object-pascal-format
 msgid "%s without %s"
 msgstr "%s be %s"
 
 #: codetoolsstrconsts.ctsbasetypeofnotfound
+#, object-pascal-format
 msgid "base type of \"%s\" not found"
 msgstr "nerastas „%s“ bazinis tipas"
 
 #: codetoolsstrconsts.ctsbeginatwithoutend
+#, object-pascal-format
 msgid "begin at %s without end"
 msgstr "„begin“ ties %s neturi „end“"
 
@@ -68,16 +76,23 @@ msgid "binary operator"
 msgstr "dvejetainis operatorius"
 
 #: codetoolsstrconsts.ctsbracketcloseexpectedbutatomfound
+#, object-pascal-format
 msgid "bracket close expected, but %s found"
 msgstr "tikėtasi uždarančiojo skliausto, tačiau aptikta %s"
 
 #: codetoolsstrconsts.ctsbracketnotfound
+#, object-pascal-format
 msgid "bracket %s not found"
 msgstr "%s skliaustas nerastas"
 
 #: codetoolsstrconsts.ctsbracketopenexpectedbutatomfound
+#, object-pascal-format
 msgid "bracket open expected, but %s found"
 msgstr "tikėtasi atidarančiojo skliausto, tačiau aptikta %s"
+
+#: codetoolsstrconsts.ctscannotaddaunittotheimplementationbecauseonlyaunith
+msgid "cannot add a unit to the implementation, because only a unit has one"
+msgstr "realizacijon įterpti modulio neina, nes tik modulis turi tokią"
 
 #: codetoolsstrconsts.ctscharacterconstantoutofrange
 msgid "character constant out of range"
@@ -96,16 +111,22 @@ msgid "class node without parent node"
 msgstr "klasės mazgas neturi tėvinio mazgo"
 
 #: codetoolsstrconsts.ctsclassnotfound
-#, fuzzy,badformat
-#| msgid "class %s%s%s not found"
+#, object-pascal-format
 msgid "class \"%s\" not found"
-msgstr "klasė %s%s%s nerasta"
+msgstr "klasė „%s“ nerasta"
+
+#: codetoolsstrconsts.ctsclassnotfound2
+#, object-pascal-format
+msgid "class not found \"%s\""
+msgstr "klasė nerasta „%s“"
 
 #: codetoolsstrconsts.ctsclassofdefinitionnotresolved
+#, object-pascal-format
 msgid "\"class of\" definition not resolved: %s"
 msgstr "„class of“ apibrėžtis nenustatyta: %s"
 
 #: codetoolsstrconsts.ctsclasssnotfound
+#, object-pascal-format
 msgid "Class %s not found"
 msgstr "Klasė %s nerasta"
 
@@ -141,10 +162,6 @@ msgstr "konstanta"
 msgid "Converter Directory"
 msgstr "Konverterio aplankas"
 
-#: codetoolsstrconsts.ctscpudirectory
-msgid "CPU directory"
-msgstr "CPU aplankas"
-
 #: codetoolsstrconsts.ctscursorposoutsideofcode
 msgid "cursor pos outside of code"
 msgstr "žymeklis už kodo ribų"
@@ -158,6 +175,7 @@ msgid "Debugger Directory"
 msgstr "Derintuvės aplankas"
 
 #: codetoolsstrconsts.ctsdefaultancestornotfound
+#, object-pascal-format
 msgid "default ancestor %s not found"
 msgstr "nerastas numatytasis protėvis „%s“"
 
@@ -198,6 +216,7 @@ msgid "default java class ancestor JLObject not found"
 msgstr "nerastas „java“ klasės protėvis „JLObject“"
 
 #: codetoolsstrconsts.ctsdefaultparameterexpectedbutatomfound
+#, object-pascal-format
 msgid "default parameter expected, but %s found"
 msgstr "tikėtasi numatyto parametro, tačiau aptikta %s"
 
@@ -221,29 +240,10 @@ msgstr "Apibrėžti LCL"
 msgid "Define LCLwidgetset, e.g. LCLgtk"
 msgstr "Apibrėžti LCLwidgetset, pvz. „LCLgtk“"
 
-#: codetoolsstrconsts.ctsdefinemacrocarbon1
-msgid "Define macro carbon1"
-msgstr "Apibrėžti makrokomandą „carbon1“"
-
-#: codetoolsstrconsts.ctsdefinemacrogtk1
-msgid "Define macro gtk1"
-msgstr "Apibrėžti makrokomandą gtk1"
-
-#: codetoolsstrconsts.ctsdefinemacrogtk2
-msgid "Define macro gtk2"
-msgstr "Apibrėžti makrokomandą gtk2"
-
 #: codetoolsstrconsts.ctsdefinemacroname
+#, object-pascal-format
 msgid "Define Macro %s"
 msgstr "Apibrėžti makrokomandą %s"
-
-#: codetoolsstrconsts.ctsdefinemacroqt1
-msgid "Define macro qt1"
-msgstr "Apibrėžti makrokomandą qt1"
-
-#: codetoolsstrconsts.ctsdefinemacrowince1
-msgid "Define macro wince1"
-msgstr "Apibrėžti makrokomandą wince1"
 
 #: codetoolsstrconsts.ctsdefineprocessortype
 msgid "Define processor type"
@@ -257,19 +257,8 @@ msgstr "Lazarus pirminio kodo apibrėžtys"
 msgid "Designer Directory"
 msgstr "Konstruktoriaus aplankas"
 
-#: codetoolsstrconsts.ctsdesignerunitsdirectory
-msgid "Designer Units"
-msgstr "Konstruktoriaus moduliai"
-
-#: codetoolsstrconsts.ctsdircomponentdoesnotexistsorisdanglingsymlink
-msgid "a directory component in %s does not exist or is a dangling symlink"
-msgstr "%s esantis aplanko komponentas neegzistuoja arba jis yra betikslis simbolinis saitas"
-
-#: codetoolsstrconsts.ctsdircomponentisnotdir
-msgid "a directory component in %s is not a directory"
-msgstr "%s esantis aplanko komponentas nėra aplankas"
-
 #: codetoolsstrconsts.ctsdispidparameterexpectedbutatomfound
+#, object-pascal-format
 msgid "dispid parameter expected, but %s found"
 msgstr "tikėtasi parametro „dispid“, tačiau aptikta %s"
 
@@ -282,6 +271,7 @@ msgid "Doc Editor Directory"
 msgstr "Dokumentacijos rengyklės aplankas"
 
 #: codetoolsstrconsts.ctsduplicateidentifier
+#, object-pascal-format
 msgid "duplicate identifier: %s"
 msgstr "identifikatorius dubliuojasi: %s"
 
@@ -302,6 +292,7 @@ msgid "end of file"
 msgstr "Failo pabaiga"
 
 #: codetoolsstrconsts.ctsendofsourceexpectedbutatomfound
+#, object-pascal-format
 msgid "expected end., but %s found"
 msgstr "tikėtasi „end.“, tačiau aptikta %s"
 
@@ -333,35 +324,38 @@ msgstr "klaida direktyvos išraiškoje"
 msgid "error in paramlist"
 msgstr "klaida parametrų sąraše"
 
-#: codetoolsstrconsts.ctsexecuteaccessdeniedforfile
-msgid "execute access denied for %s"
-msgstr "%s apibrėžtas leidimas startuoti"
-
 #: codetoolsstrconsts.ctsexpected
+#, object-pascal-format
 msgid "\"%s\" expected"
 msgstr "tikėtasi „%s“"
 
 #: codetoolsstrconsts.ctsexpectedamethodtypebutfound
+#, object-pascal-format
 msgid "expected a method type, but found %s"
-msgstr ""
+msgstr "tikėtasi motodo tipo, tačiau aptikta „%s“"
 
 #: codetoolsstrconsts.ctsexpectedbutfound
+#, object-pascal-format
 msgid "expected (, but found %s"
 msgstr "tikėtasi „(“, tačiau rasta „%s“"
 
 #: codetoolsstrconsts.ctsexpectedbutfound2
+#, object-pascal-format
 msgid "expected ), but found %s"
 msgstr "tikėtasi „)“, tačiau rasta „%s“"
 
 #: codetoolsstrconsts.ctsexpectedbutfound3
+#, object-pascal-format
 msgid "expected :=, but %s found"
 msgstr "tikėtasi „:=“, tačiau rasta „%s“"
 
 #: codetoolsstrconsts.ctsexpectedidentifierbutfound
+#, object-pascal-format
 msgid "expected identifier, but found %s"
 msgstr "tikėtasi identifikatoriaus, tačiau rasta „%s“"
 
 #: codetoolsstrconsts.ctsexpectedsemicolonofstatementbutfound
+#, object-pascal-format
 msgid "expected ; of statement, but found %s"
 msgstr "tikėtasi sakinio „;“, tačiau rasta „%s“"
 
@@ -373,10 +367,6 @@ msgstr "eksporto sakinys galimas tik bibliotekose"
 msgid "expression type must be class or record type"
 msgstr "išraiškos tipas turi būti klasė arba įrašas"
 
-#: codetoolsstrconsts.ctsfilehascircularsymlink
-msgid "%s has a circular symbolic link"
-msgstr "%s turi uždarą simbolinį saitą"
-
 #: codetoolsstrconsts.ctsfileisreadonly
 msgid "file is read only"
 msgstr "failas tik skaitymui"
@@ -386,6 +376,7 @@ msgid "Forward"
 msgstr "Priešakis"
 
 #: codetoolsstrconsts.ctsforwardclassdefinitionnotresolved
+#, object-pascal-format
 msgid "Forward class definition not resolved: %s"
 msgstr "Nenustatyta priešakinė klasės apibrėžtis: %s"
 
@@ -406,6 +397,7 @@ msgid "Free Pascal Source Directory"
 msgstr "Free Pascal pirminio kodo biblioteka"
 
 #: codetoolsstrconsts.ctsfreepascalsourcesplusdesc
+#, object-pascal-format
 msgid "Free Pascal Sources, %s"
 msgstr "Free Pascal pirminis kodas, %s"
 
@@ -423,27 +415,21 @@ msgstr "šioje klasėje funkcija „GetEnumerator“ nerasta"
 msgid "generic identifier"
 msgstr "daugybinis identifikatorius"
 
-#: codetoolsstrconsts.ctsgtk2intfdirectory
-msgid "gtk2 interface directory"
-msgstr "gtk2 interfeiso aplankas"
-
 #: codetoolsstrconsts.ctshaserror
 msgid "HasError"
 msgstr "TuriKlaida"
 
 #: codetoolsstrconsts.ctshelperisnotallowed
+#, object-pascal-format
 msgid "Helper after %s is not allowed"
-msgstr ""
+msgstr "Po „%s“ einanti pagelbiklis yra neleistinas"
 
 #: codetoolsstrconsts.ctsidedirectory
 msgid "IDE Directory"
 msgstr "IKA aplankas"
 
-#: codetoolsstrconsts.ctsideintfdirectory
-msgid "IDEIntf Directory"
-msgstr "IDEIntf aplankas"
-
 #: codetoolsstrconsts.ctsidentexpectedbutatomfound
+#, object-pascal-format
 msgid "identifier expected, but %s found"
 msgstr "tikėtasi identifikatoriaus, tačiau aptikta %s"
 
@@ -452,6 +438,7 @@ msgid "unexpected end of file (identifier expected)"
 msgstr "netikėta failo pabaiga (tikėtasi identifikatoriaus)"
 
 #: codetoolsstrconsts.ctsidentexpectedbutkeywordfound
+#, object-pascal-format
 msgid "identifier expected, but keyword %s found"
 msgstr "tikėtasi identifikatoriaus, tačiau aptiktas raktažodis %s"
 
@@ -460,10 +447,12 @@ msgid "identifier"
 msgstr "identifikatorius"
 
 #: codetoolsstrconsts.ctsidentifieralreadydefined
+#, object-pascal-format
 msgid "Identifier %s already defined"
 msgstr "Apibrėžtis %s jau yra įgyvendinta"
 
 #: codetoolsstrconsts.ctsidentifiernotfound
+#, object-pascal-format
 msgid "identifier not found: %s"
 msgstr "identifikatorius nerastas: %s"
 
@@ -496,11 +485,12 @@ msgid "If TargetOS<>win32 then"
 msgstr "Jei paskirties OS <> win32, tada"
 
 #: codetoolsstrconsts.ctsillegalcircleinusedunits
-#, fuzzy,badformat
+#, object-pascal-format
 msgid "illegal circle using unit: %s"
-msgstr "neleistinas naudojamų modulių žiedas"
+msgstr "neleistinas naudojamų modulių žiedas: %s"
 
 #: codetoolsstrconsts.ctsillegalqualifier
+#, object-pascal-format
 msgid "illegal qualifier %s found"
 msgstr "rastas klaidingas kvalifikatorius %s"
 
@@ -513,18 +503,22 @@ msgid "Include circle detected"
 msgstr "Aptiktas įdėjimų žiedas"
 
 #: codetoolsstrconsts.ctsincludedirectoriesplusdirs
+#, object-pascal-format
 msgid "include directories: %s"
 msgstr "įtraukti poaplankius: %s"
 
 #: codetoolsstrconsts.ctsincludefilenotfound
+#, object-pascal-format
 msgid "include file not found \"%s\""
 msgstr "įdedamasis failas „%s“ nerastas"
 
 #: codetoolsstrconsts.ctsincompatibletypesgotexpected
+#, object-pascal-format
 msgid "incompatibles types: expected \"%s\" but got \"%s\""
 msgstr "nesuderinami tipai: tikėtasi „%s“, tačiau gauta „%s“"
 
 #: codetoolsstrconsts.ctsindexparameterexpectedbutatomfound
+#, object-pascal-format
 msgid "index parameter expected, but %s found"
 msgstr "tikėtasi indekso parametro, tačiau aptikta %s"
 
@@ -544,45 +538,43 @@ msgstr "Diegimo aplankas"
 msgid "Installer directories"
 msgstr "Diegimo programos aplankai"
 
-#: codetoolsstrconsts.ctsinsufficientmemory
-msgid "insufficient memory"
-msgstr "trūksta atminties"
-
 #: codetoolsstrconsts.ctsinterfacesectionnotfound
 msgid "interface section not found"
 msgstr "nerasta interfeiso sekcija"
 
-#: codetoolsstrconsts.ctsintfdirectory
-msgid "interface directory"
-msgstr "interfeiso aplankas"
-
 #: codetoolsstrconsts.ctsinvalidclassname
-#, fuzzy,badformat
-#| msgid "invalid class name=%s%s%s"
+#, object-pascal-format
 msgid "invalid class name=\"%s\""
-msgstr "klaidingas klasės pavadinimas=%s%s%s"
+msgstr "klaidingas klasės pavadinimas = „%s“"
 
 #: codetoolsstrconsts.ctsinvalidclassname2
-#, fuzzy,badformat
-#| msgid "invalid class name %s%s%s"
+#, object-pascal-format
 msgid "invalid class name \"%s\""
-msgstr "klaidingas klasės pavadinimas %s%s%s"
+msgstr "klaidingas klasės pavadinimas „%s“"
 
 #: codetoolsstrconsts.ctsinvalidflagvaluefordirective
+#, object-pascal-format
 msgid "invalid flag value \"%s\" for directive %s"
 msgstr "klaidinga vėliavėlės reikšmė „%s“ direktyvai %s"
 
 #: codetoolsstrconsts.ctsinvalidmode
+#, object-pascal-format
 msgid "invalid mode \"%s\""
 msgstr "„%s“ veiksena yra klaidinga"
 
 #: codetoolsstrconsts.ctsinvalidmodeswitch
+#, object-pascal-format
 msgid "invalid mode switch \"%s\""
 msgstr "veiksenos perjungiklis „%s“ yra klaidingas"
 
 #: codetoolsstrconsts.ctsinvalidoperator
+#, object-pascal-format
 msgid "invalid operator %s"
 msgstr "Klaidingas operatorius „%s“<"
+
+#: codetoolsstrconsts.ctsinvalidpositionforinsertionofstatements
+msgid "invalid position for insertion of statements"
+msgstr "nepriimtina pozicija, skirta sakiniams įterpti"
 
 #: codetoolsstrconsts.ctsinvalidsubrange
 msgid "invalid subrange"
@@ -593,26 +585,21 @@ msgid "invalid type"
 msgstr "klaidingas tipas"
 
 #: codetoolsstrconsts.ctsinvalidvariablename
-#, fuzzy,badformat
-#| msgid "invalid variable name %s%s%s"
+#, object-pascal-format
 msgid "invalid variable name \"%s\""
-msgstr "kintamojo pavadinimas %s%s%s yra klaidingas"
+msgstr "kintamojo pavadinimas „%s“ yra klaidingas"
 
 #: codetoolsstrconsts.ctsinvalidvariabletype
-#, fuzzy,badformat
-#| msgid "invalid variable type %s%s%s"
+#, object-pascal-format
 msgid "invalid variable type \"%s\""
-msgstr "kintamojo tipas %s%s%s yra klaidingas"
-
-#: codetoolsstrconsts.ctsjitformdirectory
-msgid "JITForm Directory"
-msgstr "JITForm aplankas"
+msgstr "kintamojo tipas „%s“ yra klaidingas"
 
 #: codetoolsstrconsts.ctskeyword
 msgid "keyword"
 msgstr "raktažodis"
 
 #: codetoolsstrconsts.ctskeywordexampleexpectedbutatomfound
+#, object-pascal-format
 msgid "keyword (e.g. %s) expected, but %s found"
 msgstr "tikėtasi raktažodžio (pvz.: %s), tačiau aptikta %s"
 
@@ -628,11 +615,17 @@ msgstr "Lazarus pagrindinis aplankas"
 msgid "Lazarus Sources"
 msgstr "Lazarus pirminis kodas"
 
+#: codetoolsstrconsts.ctsmethodhasnodeclaration
+#, object-pascal-format
+msgid "method \"%s\" has no declaration"
+msgstr "metodas „%s“ neturi aprašo"
+
 #: codetoolsstrconsts.ctsmethodname
 msgid "method name"
 msgstr "metodo pavadinimas"
 
 #: codetoolsstrconsts.ctsmethodsignaturesnotfoundinclass
+#, object-pascal-format
 msgid "Method signature %s not found in class"
 msgstr "Klasėje nerasta metodo signatūra „%s“"
 
@@ -657,18 +650,22 @@ msgid "missing type identifier"
 msgstr "trūksta tipo identifikatoriaus"
 
 #: codetoolsstrconsts.ctsnameddirectory
+#, object-pascal-format
 msgid "%s Directory"
 msgstr "%s aplankas"
 
 #: codetoolsstrconsts.ctsnamedproject
+#, object-pascal-format
 msgid "%s Project"
 msgstr "%s projektas"
 
 #: codetoolsstrconsts.ctsneededbymode
+#, object-pascal-format
 msgid " (needed by mode \"%s\")"
-msgstr ""
+msgstr "(reikalingas režimui „%s“)"
 
 #: codetoolsstrconsts.ctsnesteddefinitionsarenotallowed
+#, object-pascal-format
 msgid "Nested %s definitions are not allowed"
 msgstr "Įdėtinės %s apibrėžtys neleidžiamos"
 
@@ -685,6 +682,7 @@ msgid "nodefault specifier defined twice"
 msgstr "nenumatytas specifikatorius apibrėžtas dukart"
 
 #: codetoolsstrconsts.ctsnopascalcodefound
+#, object-pascal-format
 msgid "no pascal code found (first token is %s)"
 msgstr "paskalio kodas nerastas (pirmoji leksema - %s)"
 
@@ -693,6 +691,7 @@ msgid "No scanner available"
 msgstr "Nėra žvalgytuvo"
 
 #: codetoolsstrconsts.ctsnoscannerfound
+#, object-pascal-format
 msgid "No scanner found for \"%s\". If this is an include file, please open the main source first."
 msgstr "„%s“ skirtas žvalgytuvas nerastas. Jei tai įdedamasis failas, pirma atverkite pagrindinį pirminį kodą."
 
@@ -701,18 +700,22 @@ msgid "Not enough actual generic parameters"
 msgstr "Per mažai tikrų daugybinių parametrų"
 
 #: codetoolsstrconsts.ctsoldmethodnotfound
+#, object-pascal-format
 msgid "old method not found: %s"
 msgstr "nerastas senasis metodas: %s"
 
 #: codetoolsstrconsts.ctsoperandexpectedbutfound
+#, object-pascal-format
 msgid "operand expected but %s found"
 msgstr "tikėtasi operando, tačiau rasta „%s“"
 
 #: codetoolsstrconsts.ctsoperandexpectedbutfound2
+#, object-pascal-format
 msgid "operand expected, but %s found"
 msgstr "tikėtasi operando, tačiau rasta „%s“"
 
 #: codetoolsstrconsts.ctsoperatorexpectedbutatomfound
+#, object-pascal-format
 msgctxt "codetoolsstrconsts.ctsoperatorexpectedbutatomfound"
 msgid "operator expected, but %s found"
 msgstr "tikėtasi operatoriaus, tačiau rasta „%s“"
@@ -722,15 +725,18 @@ msgid "unexpected end of file (operator expected)"
 msgstr "netikėta failo pabaiga (tikėtasi operatoriaus)"
 
 #: codetoolsstrconsts.ctsoperatorexpectedbutfound
+#, object-pascal-format
 msgid "operator expected but %s found"
 msgstr "tikėtasi operatoriaus, tačiau rasta „%s“"
 
 #: codetoolsstrconsts.ctsoperatorexpectedbutfound2
+#, object-pascal-format
 msgctxt "codetoolsstrconsts.ctsoperatorexpectedbutfound2"
 msgid "operator expected, but %s found"
 msgstr "tikėtasi operatoriaus, tačiau rasta „%s“"
 
 #: codetoolsstrconsts.ctsothercompilerdefines
+#, object-pascal-format
 msgid "%s Compiler Defines"
 msgstr "%s kompiliatoriaus apibrėžtys"
 
@@ -771,6 +777,7 @@ msgid "processor specific"
 msgstr "priklauso nuo procesorio"
 
 #: codetoolsstrconsts.ctsproperttypeexpectedbutatomfound
+#, object-pascal-format
 msgid "property type expected, but %s found"
 msgstr "tikėtasi savybės tipo, tačiau aptikta %s"
 
@@ -779,10 +786,12 @@ msgid "property Current not found"
 msgstr "savybė „Current“ nerasta"
 
 #: codetoolsstrconsts.ctspropertyspecifieralreadydefined
+#, object-pascal-format
 msgid "property specifier already defined: %s"
 msgstr "savybės specifikatorius jau yra abibrėžtas: %s"
 
 #: codetoolsstrconsts.ctsqualifierexpectedbutatomfound
+#, object-pascal-format
 msgid "qualifier expected but %s found"
 msgstr "tikėtasi patikslos, tačiau aptikta %s"
 
@@ -799,10 +808,12 @@ msgid "Runtime library"
 msgstr "Veikos meto biblioteka"
 
 #: codetoolsstrconsts.ctsscannedfiles
+#, object-pascal-format
 msgid "Scanned files: %s"
 msgstr "Skenuota failų: %s"
 
 #: codetoolsstrconsts.ctssemicolonafterpropspecmissing
+#, object-pascal-format
 msgid "; expected after \"%s\" property specifier, but %s found"
 msgstr "; tikėtasi po „%s“ savybės specifikatoriaus, tačiau rasta %s"
 
@@ -811,10 +822,12 @@ msgid "semicolon not found"
 msgstr "neratas kablataškis"
 
 #: codetoolsstrconsts.ctssetsincpathto
+#, object-pascal-format
 msgid "sets IncPath to %s"
 msgstr "įdedamųjų kelia nustato į %s"
 
 #: codetoolsstrconsts.ctssetssrcpathto
+#, object-pascal-format
 msgid "sets SrcPath to %s"
 msgstr "pirminio kodo kelią nustato į %s"
 
@@ -827,42 +840,34 @@ msgid "source is not unit"
 msgstr "šaltinis nėra modulis"
 
 #: codetoolsstrconsts.ctssourcenotfoundunit
-#, fuzzy
-#| msgid "source not found: unit %s"
+#, object-pascal-format
 msgid "source not found: unit %s. Check your FPC source directory."
-msgstr "pirminis kodas nerastas: modulis %s"
-
-#: codetoolsstrconsts.ctssrcpathforcompiledunits
-msgid "src path for compiled units"
-msgstr "pirminio kodo kelias kompiliuotiems moduliams"
+msgstr "pirminis kodas nerastas: modulis „%s“. Patikrinkite „FPC“ pirminio kodo aplanką."
 
 #: codetoolsstrconsts.ctssrcpathinitialization
 msgid "SrcPath Initialization"
 msgstr "Pirminio kodo kelio inicializacija"
 
 #: codetoolsstrconsts.ctsstrexpectedbutatomfound
-#, fuzzy
-#| msgid "%s expected, but %s found"
+#, object-pascal-format
 msgid "expected %s, but %s found"
-msgstr "%s tikėtasi, tačiau rasta %s"
+msgstr "„%s“ tikėtasi, tačiau rasta “%s“"
 
 #: codetoolsstrconsts.ctsstringconstant
 msgid "string constant"
 msgstr "eilutės konstanta"
 
 #: codetoolsstrconsts.ctssyntaxerrorinexpr
+#, object-pascal-format
 msgid "Syntax Error in expression \"%s\""
 msgstr "Išraiškoje „%s“ yra sintaksės klaida"
-
-#: codetoolsstrconsts.ctstcodetoolmanagerconsistencycheck
-msgid "TCodeToolManager.ConsistencyCheck=%d"
-msgstr "TCodeToolManager.ConsistencyCheck=%d"
 
 #: codetoolsstrconsts.ctstermnotsimple
 msgid "Term has no simple type"
 msgstr "Termas neturi paprasto tipo"
 
 #: codetoolsstrconsts.ctsthenexpectedbutfound
+#, object-pascal-format
 msgid "then expected, but %s found"
 msgstr "tikėtasi „then“, tačiau rasta „%s“"
 
@@ -903,30 +908,41 @@ msgid "unexpected end of source"
 msgstr "netikėta pirminio kodo pabaiga"
 
 #: codetoolsstrconsts.ctsunexpectedkeyword
+#, object-pascal-format
 msgid "unexpected keyword \"%s\""
 msgstr "netikėtas raktažodis „%s“"
 
 #: codetoolsstrconsts.ctsunexpectedkeyword2
+#, object-pascal-format
 msgid "unexpected keyword %s"
 msgstr "netikėtas raktažodis „%s“"
 
 #: codetoolsstrconsts.ctsunexpectedkeywordinasmblock
+#, object-pascal-format
 msgid "unexpected keyword \"%s\" in asm block found"
 msgstr "asemblerio bloke aptiktas netikėtas raktažodis „%s“"
 
 #: codetoolsstrconsts.ctsunexpectedkeywordinbeginendblock
+#, object-pascal-format
 msgid "unexpected keyword \"%s\" in begin..end found"
 msgstr "tarp „begin“ ir „end“ aptiktas netikėtas raktažodis „%s“"
 
 #: codetoolsstrconsts.ctsunexpectedkeywordwhilereadingbackwards
+#, object-pascal-format
 msgid "unexpected keyword \"%s\" found while reading blocks backwards"
 msgstr "skaitant blokus atygaline tvarka aptiktas netikėtas raktažodis „%s“"
+
+#: codetoolsstrconsts.ctsunexpectedsectionkeyword
+#, object-pascal-format
+msgid "unexpected section keyword %s found"
+msgstr ""
 
 #: codetoolsstrconsts.ctsunexpectedsubrangeoperatorfound
 msgid "unexpected subrange operator '..' found"
 msgstr "aptiktas netikėtas poaibio operatorius „..“"
 
 #: codetoolsstrconsts.ctsunitnotfound
+#, object-pascal-format
 msgid "unit not found: %s"
 msgstr "modulis nerastas: %s"
 
@@ -935,6 +951,7 @@ msgid "UnitPath Initialization"
 msgstr "Modulių kelio inicializacija"
 
 #: codetoolsstrconsts.ctsunknownfunction
+#, object-pascal-format
 msgid "Unknown function %s"
 msgstr "Nežinoma funkcija %s"
 
@@ -942,11 +959,8 @@ msgstr "Nežinoma funkcija %s"
 msgid "(unknown mainfilename)"
 msgstr "(nežinomas pagrindinio failo pavadinimas)"
 
-#: codetoolsstrconsts.ctsunknownsectionkeyword
-msgid "unknown section keyword %s found"
-msgstr "aptiktas nežinomas sekcijos raktažodis %s"
-
 #: codetoolsstrconsts.ctsunknownsubdescriptor
+#, object-pascal-format
 msgid "(unknown subdescriptor %s)"
 msgstr "(nežinomas vidinis deskriptorius %s)"
 
@@ -966,11 +980,8 @@ msgstr "Paslaugų programų aplankai"
 msgid "var is only allowed in generics, end of class not found"
 msgstr "„var“ galimas tik daugybinėje klasėje; nerasta klasės pabaiga"
 
-#: codetoolsstrconsts.ctswidgetdirectory
-msgid "Widget Directory"
-msgstr "Valdiklių aplankas"
-
 #: codetoolsstrconsts.ctswordnotfound
+#, object-pascal-format
 msgid "\"%s\" not found"
 msgstr "„%s“ nerastas"
 

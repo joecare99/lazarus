@@ -21,7 +21,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -91,10 +91,18 @@ uses
 {$IFDEF unix}
   BaseUnix,
 {$ENDIF}
-  Classes, SysUtils, Process, Forms, Controls, Dialogs, LCLProc,
-  UTF8Process, FileUtil, FileProcs, LazUTF8, LazFileUtils,
-  IDECmdLine, LazConf, Splash, BaseIDEIntf, IDEInstances;
-  
+  Classes, SysUtils, Process,
+  // LCL
+  Forms, Controls, Dialogs,
+  // LazUtils
+  UTF8Process, FileUtil, LazFileUtils, LazUtilities, LazUTF8, LazUTF8Classes,
+  // CodeTools
+  FileProcs,
+  // IdeIntf
+  BaseIDEIntf,
+  // IDE
+  IDECmdLine, LazConf, Splash, IDEInstances;
+
 type
 
   { TLazarusProcess }
@@ -362,7 +370,7 @@ begin
       {$IFDEF darwin}
       if FileExistsUTF8(FLazarusPath+'.app') then begin
         // start the bundle instead
-        FLazarusPath:=FLazarusPath+'.app/Contents/MacOS/'+ExtractFileName(FLazarusPath);
+        FLazarusPath:= FLazarusPath+'.app';// /Contents/MacOS/'+ExtractFileName(FLazarusPath);
       end;
       {$ENDIF}
 
@@ -372,10 +380,23 @@ begin
         {$IFDEF Linux}
         EnvOverrides.Values['LIBOVERLAY_SCROLLBAR']:='0';
         {$ENDIF}
+        {$IFDEF darwin}
+        // "open" process runs a bundle, but doesn't wait for it to finish execution
+        // "startlazarus" logic suggests that the Lazarus process would be waited
+        // and if the special 99 (ExitCodeRestartLazarus) code is received,
+        // would repeat the restart process.
+        // Since "open" doesn't play nice with "startlazarus" logic.
+        // The arguments would not indicate that lazarus was started by startlazarus
+        FLazarusProcess :=
+          TLazarusProcess.Create('open',
+               ' -a ' + FLazarusPath + ' --args  --no-splash-screen ' + GetCommandLineParameters(FCmdLineParams, False)+' '+FCmdLineFiles,
+               EnvOverrides);
+        {$ELSE}
         FLazarusProcess :=
           TLazarusProcess.Create(FLazarusPath,
                GetCommandLineParameters(FCmdLineParams, True)+' '+FCmdLineFiles,
                EnvOverrides);
+        {$ENDIF}
       finally
         EnvOverrides.Free;
       end;
@@ -406,12 +427,18 @@ end;
 
 constructor TLazarusProcess.Create(const LazarusPath: string;
   const CommandLine: string; EnvOverrides: TStringList);
+var
+  Params: TStringListUTF8;
 begin
   FProcess := TProcessUTF8.Create(nil);
   FProcess.InheritHandles := false;
   FProcess.Options := [];
   FProcess.ShowWindow := swoShow;
-  FProcess.CommandLine := LazarusPath + CommandLine;
+  Params:=TStringListUTF8.Create;
+  SplitCmdLineParams(CommandLine,Params);
+  FProcess.Executable:=LazarusPath;
+  FProcess.Parameters:=Params;
+  Params.Free;
   if (EnvOverrides<>nil) and (EnvOverrides.Count>0) then
     AssignEnvironmentTo(FProcess.Environment,EnvOverrides);
 end;

@@ -45,6 +45,7 @@ msgid "Six"
 msgstr "six"
 
 #: stringsunit.rssumofselectednumbers
+#, object-pascal-format
 msgid "Sum of selected numbers: %s"
 msgstr "Sum of selected numbers: %s"
 
@@ -53,6 +54,7 @@ msgid "Three"
 msgstr "three"
 
 #: stringsunit.rstodayis
+#, object-pascal-format
 msgctxt "stringsunit.rstodayis"
 msgid "Today is %s"
 msgstr "Today is %s"
@@ -72,11 +74,13 @@ msgid "Wine"
 msgstr "wine"
 
 #: stringsunit.rsyouselected
+#, object-pascal-format
 msgctxt "stringsunit.rsyouselected"
 msgid "You selected %s."
 msgstr "You selected %s."
 
 #: stringsunit.rsyouselectedat
+#, object-pascal-format
 msgctxt "stringsunit.rsyouselectedat"
 msgid "You selected %0:s at %1:s."
 msgstr "You selected %0:s at %1:s."
@@ -94,26 +98,10 @@ msgstr "Several items"
 msgid "Please select"
 msgstr "Please select"
 
-#: tform2.lblmoney.caption
-msgid "LblMoney"
-msgstr ""
-
-#: tform2.lblsum.caption
-msgid "LblSum"
-msgstr ""
-
-#: tform2.lbltodayis.caption
-msgid "LblTodayIs"
-msgstr ""
-
 #: tform2.radiogroup.caption
 msgctxt "tform2.radiogroup.caption"
 msgid "Single item"
 msgstr "Single item"
-
-#: tlocalizedform.caption
-msgid "LocalizedForm"
-msgstr ""
 
 #: tmainform.button1.caption
 msgctxt "tmainform.button1.caption"

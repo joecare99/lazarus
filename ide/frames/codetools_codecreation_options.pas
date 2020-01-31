@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -25,8 +25,17 @@ unit codetools_codecreation_options;
 interface
 
 uses
-  Classes, SysUtils, FileUtil, Forms, ExtCtrls, StdCtrls, Dialogs, EditBtn,
-  SourceChanger, CodeToolsOptions, LazarusIDEStrConsts, IDEOptionsIntf;
+  SysUtils,
+  // LazUtils
+  FileUtil,
+  // LCL
+  StdCtrls, Dialogs, EditBtn,
+  // CodeTools
+  SourceChanger,
+  // IdeIntf
+  IDEOptionsIntf, IDEOptEditorIntf,
+  // IDE
+  CodeToolsOptions, LazarusIDEStrConsts;
 
 type
 
@@ -34,17 +43,16 @@ type
 
   TCodetoolsCodeCreationOptionsFrame = class(TAbstractIDEOptionsEditor)
     ForwardProcsInsertPolicyComboBox: TComboBox;
+    OverrideStringTypesWithFirstParamTypeCheckBox: TCheckBox;
     TemplateFileEdit: TFileNameEdit;
     UsesInsertPolicyComboBox: TComboBox;
     ForwardProcsKeepOrderCheckBox: TCheckBox;
     ForwardProcsInsertPolicyLabel: TLabel;
-    EventMethodSectionComboBox: TComboBox;
     UsesInsertPolicyLabel: TLabel;
     TemplateFileLabel: TLabel;
     UpdateMultiProcSignaturesCheckBox: TCheckBox;
     UpdateOtherProcSignaturesCaseCheckBox: TCheckBox;
     GroupLocalVariablesCheckBox: TCheckBox;
-    EventMethodSectionLabel: TLabel;
   private
   public
     function GetTitle: String; override;
@@ -94,26 +102,14 @@ begin
     end;
   end;
 
-  EventMethodSectionLabel.Caption:=lisEventMethodSectionLabel;
-  with EventMethodSectionComboBox do begin
-    Assert(Ord(High(TInsertClassSectionResult)) = 3,  'TCodetoolsCodeCreationOptionsFrame.Setup: High(TInsertClassSectionResult) <> 3');
-    with Items do begin
-      BeginUpdate;
-      Add(lisPrivate);
-      Add(lisProtected);
-      Add(lisEMDPublic);
-      Add(lisEMDPublished);
-      Add(dlgEnvAsk);
-      EndUpdate;
-    end;
-  end;
-
   UpdateMultiProcSignaturesCheckBox.Caption:=
     lisCTOUpdateMultipleProcedureSignatures;
   UpdateOtherProcSignaturesCaseCheckBox.Caption:=
     lisUpdateOtherProcedureSignaturesWhenOnlyLetterCaseHa;
   GroupLocalVariablesCheckBox.Caption:=
     lisGroupLocalVariables;
+  OverrideStringTypesWithFirstParamTypeCheckBox.Caption:=
+    lisOverrideStringTypesWithFirstParamType;
 
   TemplateFileLabel.Caption:=lisTemplateFile;
   {$IFNDEF EnableCodeCompleteTemplates}
@@ -150,11 +146,11 @@ begin
       //uipAlphabetically:
                           UsesInsertPolicyComboBox.ItemIndex:=4;
     end;
-    EventMethodSectionComboBox.ItemIndex := Ord(EventMethodSection);
 
     UpdateMultiProcSignaturesCheckBox.Checked:=UpdateMultiProcSignatures;
     UpdateOtherProcSignaturesCaseCheckBox.Checked:=UpdateOtherProcSignaturesCase;
     GroupLocalVariablesCheckBox.Checked:=GroupLocalVariables;
+    OverrideStringTypesWithFirstParamTypeCheckBox.Checked:=OverrideStringTypesWithFirstParamType;
 
     TemplateFileEdit.Text:=CodeCompletionTemplateFileName;
   end;
@@ -181,11 +177,10 @@ begin
     else UsesInsertPolicy:=uipAlphabetically;
     end;
 
-    EventMethodSection := TInsertClassSection(EventMethodSectionComboBox.ItemIndex);
-
     UpdateMultiProcSignatures:=UpdateMultiProcSignaturesCheckBox.Checked;
     UpdateOtherProcSignaturesCase:=UpdateOtherProcSignaturesCaseCheckBox.Checked;
     GroupLocalVariables:=GroupLocalVariablesCheckBox.Checked;
+    OverrideStringTypesWithFirstParamType:=OverrideStringTypesWithFirstParamTypeCheckBox.Checked;
 
     CodeCompletionTemplateFileName:=TemplateFileEdit.Text;
   end;

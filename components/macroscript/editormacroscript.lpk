@@ -13,13 +13,15 @@
       </SearchPaths>
       <Other>
         <CustomOptions Value="$(IDEBuildOptions)"/>
+        <CompilerPath Value="$(CompPath)"/>
       </Other>
     </CompilerOptions>
-    <Description Value="IDE-Extension: Adds PascalScript to editor-macros. 
+    <Description Value="IDE-Extension - Extends the Editor&apos;s macro recorder and player:
+- Macros can be written in PascalScript.
+- Macros can also access some additional properties and methods of the Editor (TSynEdit object).
 
 This package requires: PascalScript from REM Objects (http://www.remobjects.com/ps.aspx)
-
-Extends the Editors macro recorder and player. Macros can be written in pascal script. They also have access to additional properties and methods."/>
+"/>
     <License Value="GPL"/>
     <Files Count="6">
       <Item1>
@@ -37,15 +39,15 @@ Extends the Editors macro recorder and player. Macros can be written in pascal s
       </Item3>
       <Item4>
         <Filename Value="emsselftest.pas"/>
-        <UnitName Value="EMSSelfTest"/>
+        <UnitName Value="emsselftest"/>
       </Item4>
       <Item5>
         <Filename Value="emsideoptions.pas"/>
-        <UnitName Value="EMSIdeOptions"/>
+        <UnitName Value="emsideoptions"/>
       </Item5>
       <Item6>
         <Filename Value="emsstrings.pas"/>
-        <UnitName Value="EMSStrings"/>
+        <UnitName Value="emsstrings"/>
       </Item6>
     </Files>
     <i18n>

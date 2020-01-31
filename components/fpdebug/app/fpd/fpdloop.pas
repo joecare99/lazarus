@@ -28,7 +28,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -37,10 +37,8 @@ unit FPDLoop;
 interface
 
 uses
-  Classes, SysUtils, FileUtil, FpDbgInfo, FpDbgClasses, FpDbgDisasX86, DbgIntfBaseTypes,
-  FpDbgDwarf,
-  FpdMemoryTools,
-  CustApp;
+  Classes, SysUtils, FileUtil, LazFileUtils, LazUTF8, FpDbgInfo, FpDbgClasses,
+  FpDbgDisasX86, DbgIntfBaseTypes, FpDbgDwarf, FpdMemoryTools, CustApp;
 
 type
 
@@ -55,10 +53,9 @@ type
     procedure ShowCode;
     procedure GControllerExceptionEvent(var continue: boolean; const ExceptionClass, ExceptionMessage: string);
     procedure GControllerCreateProcessEvent(var continue: boolean);
-    procedure GControllerHitBreakpointEvent(var continue: boolean; const Breakpoint: TDbgBreakpoint);
+    procedure GControllerHitBreakpointEvent(var continue: boolean; const Breakpoint: TFpDbgBreakpoint);
     procedure GControllerProcessExitEvent(ExitCode: DWord);
     procedure GControllerDebugInfoLoaded(Sender: TObject);
-    procedure OnLog(const AString: string; const ALogLevel: TFPDLogLevel);
   protected
     Procedure DoRun; override;
   public
@@ -132,14 +129,14 @@ var
   i: integer;
 begin
   WriteLN('===');
-  a := GController.CurrentProcess.GetInstructionPointerRegisterValue;
+  a := GController.CurrentThread.GetInstructionPointerRegisterValue;
   for i := 0 to 5 do
   begin
     Write('  [', FormatAddress(a), ']');
 
     if not GController.CurrentProcess.ReadData(a,sizeof(CodeBin),CodeBin)
     then begin
-      //Log('Disassemble: Failed to read memory at %s.', [FormatAddress(a)]);
+      //debugln('Disassemble: Failed to read memory at %s.', [FormatAddress(a)]);
       Code := '??';
       CodeBytes := '??';
       Inc(a);
@@ -157,13 +154,13 @@ end;
 procedure TFPDLoop.ShowCode;
 var
   a: TDbgPtr;
-  sym, symproc: TFpDbgSymbol;
+  sym, symproc: TFpSymbol;
   S: TStringList;
   AName: String;
 begin
   WriteLN('===');
-  a := GController.CurrentProcess.GetInstructionPointerRegisterValue;
-  sym := GController.CurrentProcess.FindSymbol(a);
+  a := GController.CurrentThread.GetInstructionPointerRegisterValue;
+  sym := GController.CurrentProcess.FindProcSymbol(a);
   if sym = nil
   then begin
     WriteLn('  [', FormatAddress(a), '] ???');
@@ -224,25 +221,16 @@ begin
   continue:=false;
 end;
 
-procedure TFPDLoop.GControllerHitBreakpointEvent(var continue: boolean; const Breakpoint: TDbgBreakpoint);
+procedure TFPDLoop.GControllerHitBreakpointEvent(var continue: boolean; const Breakpoint: TFpDbgBreakpoint);
 begin
   if assigned(Breakpoint) then
-    writeln(Format(sBreakpointReached, [FormatAddress(Breakpoint.Location)]))
+    writeln(Format(sBreakpointReached, ['' {FormatAddress(Breakpoint.Location)}]))
   else
     writeln(sProcessPaused);
   if not continue then
   begin
     ShowCode;
     ShowDisas;
-  end;
-end;
-
-procedure TFPDLoop.OnLog(const AString: string; const ALogLevel: TFPDLogLevel);
-begin
-  case ALogLevel of
-    dllDebug : writeln('Debug: '+AString);
-    dllInfo  : writeln(AString);
-    dllError : writeln('Error: '+AString);
   end;
 end;
 
@@ -271,7 +259,8 @@ begin
   inherited Initialize;
   FMemReader := TPDDbgMemReader.Create;
   FMemManager := TFpDbgMemManager.Create(FMemReader, TFpDbgMemConvertorLittleEndian.Create);
-  GController.OnLog:=@OnLog;
+  //TODO: Maybe DebugLogger.OnLog ....
+  //GController.OnLog:=@OnLog;
   GController.OnHitBreakpointEvent:=@GControllerHitBreakpointEvent;
   GController.OnCreateProcessEvent:=@GControllerCreateProcessEvent;
   GController.OnExceptionEvent:=@GControllerExceptionEvent;

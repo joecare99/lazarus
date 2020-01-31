@@ -18,9 +18,16 @@ unit EduSpeedButtons;
 interface
 
 uses
-  Classes, SysUtils, Controls, Graphics, LResources, Forms, StdCtrls, ExtCtrls,
-  LazConfigStorage, ComCtrls, Buttons, IDEOptionsIntf, EduOptions,
-  ObjectInspector, LazIDEIntf, IDEImagesIntf, Dialogs, AvgLvlTree;
+  Classes, SysUtils, Laz_AVL_Tree,
+  // LCL
+  Controls, Graphics, LResources, Forms, StdCtrls, ExtCtrls, Dialogs,
+  ComCtrls, Buttons,
+  // LazUtils
+  LazConfigStorage, AvgLvlTree,
+  // IdeIntf
+  IDEOptionsIntf, IDEOptEditorIntf, LazIDEIntf, IDEImagesIntf,
+  // Education
+  EduOptions;
 
 type
 
@@ -105,9 +112,7 @@ begin
   inherited Destroy;
 end;
 
-
-function TEduSpeedButtonsOptions.GetButtonVisible(ButtonName: string
-  ): boolean;
+function TEduSpeedButtonsOptions.GetButtonVisible(ButtonName: string): boolean;
 begin
   Result:=fVisible[ButtonName]='1';
 end;
@@ -141,7 +146,7 @@ end;
 
 function TEduSpeedButtonsOptions.Save(Config: TConfigStorage): TModalResult;
 var
-  Node: TAvgLvlTreeNode;
+  Node: TAvlTreeNode;
   Item: PStringToStringItem;
   Cnt: Integer;
 begin
@@ -162,28 +167,29 @@ procedure TEduSpeedButtonsOptions.Apply(Enable: boolean);
 var
   i: Integer;
   curButton: TToolButton;
+  Bar: TToolBar;
 begin
+  Bar := GetToolBar('tbStandard');
+  if Assigned(Bar) then
+    for i:=0 to Bar.ButtonCount-1 do begin
+      curButton:=Bar.Buttons[i];
+      if Assigned(curButton) and (curButton.Name <> '') then
+        curButton.Visible:=(not Enable) or ButtonVisible[curButton.Name];
+    end;
 
-  for i:=0 to EduSpeedButtonsOptions.GetToolBar('tbStandard').ButtonCount-1 do begin
-      curButton:=EduSpeedButtonsOptions.GetToolBar('tbStandard').Buttons[i];
-      if NOT(curButton.Name = '') then begin
-          curButton.Visible:=(not Enable) or ButtonVisible[curButton.Name];
-      end;
-  end;
-
-  for i:=0 to EduSpeedButtonsOptions.GetToolBar('tbViewDebug').ButtonCount-1 do begin
-      curButton:=EduSpeedButtonsOptions.GetToolBar('tbViewDebug').Buttons[i];
-      if NOT(curButton.Name = '') then begin
-          curButton.Visible:=(not Enable) or ButtonVisible[curButton.Name];
-      end;
-  end;
+  Bar := GetToolBar('tbViewDebug');
+  if Assigned(Bar) then
+    for i:=0 to Bar.ButtonCount-1 do begin
+      curButton:=Bar.Buttons[i];
+      if Assigned(curButton) and (curButton.Name <> '') then
+        curButton.Visible:=(not Enable) or ButtonVisible[curButton.Name];
+    end;
 end;
 
 function TEduSpeedButtonsOptions.GetToolBar(tbName: string): TToolBar;
 var
   AComponent: TComponent;
 begin
-
   if (tbName='tbStandard') or (tbName='tbViewDebug')then begin
     AComponent:=LazarusIDE.OwningComponent.FindComponent(tbName);
     if AComponent is TToolBar then
@@ -191,7 +197,6 @@ begin
     else
       Result:=nil;
   end;
-
 end;
 
 { TEduSpeedButtonsFrame }
@@ -353,25 +358,30 @@ var
   CategoryNode: TTreeNode;
   curButton: TToolButton;
   Image: TCustomBitmap;
+  StandardBar, ViewDebugBar: TToolBar;
 begin
+  StandardBar:=EduSpeedButtonsOptions.GetToolBar('tbStandard');
+  ViewDebugBar:=EduSpeedButtonsOptions.GetToolBar('tbViewDebug');
+  if (StandardBar=Nil) or (ViewDebugBar=Nil) then Exit;
+
   SpeedButtonsTreeView.BeginUpdate;
   SpeedButtonsTreeView.Items.Clear;
 
   if SpeedButtonsTreeView.Images=nil then begin
     SpeedButtonsTreeView.Images:=TImageList.Create(Self);
-    SpeedButtonsTreeView.Images.Width:=EduSpeedButtonsOptions.GetToolBar('tbStandard').ButtonWidth;
-    SpeedButtonsTreeView.Images.Height:=EduSpeedButtonsOptions.GetToolBar('tbStandard').ButtonHeight;
+    SpeedButtonsTreeView.Images.Width:=StandardBar.ButtonWidth;
+    SpeedButtonsTreeView.Images.Height:=StandardBar.ButtonHeight;
     SpeedButtonsTreeView.StateImages:=IDEImages.Images_16;
   end else
 
     SpeedButtonsTreeView.Images.Clear;
-    ShowImgID:=IDEImages.LoadImage(16,'menu_run');
-    HideImgID:=IDEImages.LoadImage(16,'menu_stop');
+    ShowImgID:=IDEImages.LoadImage('menu_run');
+    HideImgID:=IDEImages.LoadImage('menu_stop');
 
     CategoryNode:=SpeedButtonsTreeView.Items.Add(nil,'Standard Buttons');
-    for i:=0 to EduSpeedButtonsOptions.GetToolBar('tbStandard').ButtonCount-1 do begin
+    for i:=0 to StandardBar.ButtonCount-1 do begin
 
-      curButton:=EduSpeedButtonsOptions.GetToolBar('tbStandard').Buttons[i];
+      curButton:=StandardBar.Buttons[i];
       if NOT(curButton.Name = '') then begin
         curNode:=SpeedButtonsTreeView.Items.AddChild(CategoryNode,curButton.Name);
         Image := GetImageForSpeedBtn(curButton.Name);
@@ -390,9 +400,9 @@ begin
     CategoryNode.Expanded:=true;
 
     CategoryNode:=SpeedButtonsTreeView.Items.Add(nil,'Debug Buttons');
-    for i:=0 to EduSpeedButtonsOptions.GetToolBar('tbViewDebug').ButtonCount-1 do begin
+    for i:=0 to ViewDebugBar.ButtonCount-1 do begin
 
-      curButton:=EduSpeedButtonsOptions.GetToolBar('tbViewDebug').Buttons[i];
+      curButton:=ViewDebugBar.Buttons[i];
       if NOT(curButton.Name = '') then begin
         curNode:=SpeedButtonsTreeView.Items.AddChild(CategoryNode,curButton.Name);
         Image := GetImageForSpeedBtn(curButton.Name);

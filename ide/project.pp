@@ -25,7 +25,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -43,26 +43,28 @@ interface
 {$I ide.inc}
 
 uses
-{$IFDEF IDE_MEM_CHECK}
+  {$IFDEF IDE_MEM_CHECK}
   MemCheck,
-{$ENDIF}
-  // RTL + FCL + LCL
-  Classes, SysUtils, TypInfo, LCLProc, Forms, Controls, Dialogs, maps,
+  {$ENDIF}
+  // RTL + FCL
+  Classes, SysUtils, TypInfo,
+  // LCL
+  LCLProc, Forms, Controls, Dialogs,
   // CodeTools
-  CodeToolsConfig, ExprEval, DefineTemplates,
-  BasicCodeTools, CodeToolsCfgScript, CodeToolManager, CodeCache, FileProcs,
+  CodeToolsConfig, ExprEval, DefineTemplates, BasicCodeTools, CodeToolsCfgScript,
+  LinkScanner, CodeToolManager, CodeCache, FileProcs,
   // LazUtils
-  FPCAdds, FileUtil, LazFileUtils, LazFileCache, LazUTF8, Laz2_XMLCfg,
+  FPCAdds, LazUtilities, FileUtil, LazFileUtils, LazFileCache, LazMethodList,
+  LazLoggerBase, LazUTF8, Laz2_XMLCfg, Maps,
   // IDEIntf
-  PropEdits, CompOptsIntf, ProjectIntf, MacroIntf, MacroDefIntf, UnitResources,
-  PackageIntf, SrcEditorIntf, IDEOptionsIntf, IDEDialogs, LazIDEIntf,
-  // SynEdit
-  SynEdit,
+  PropEdits, UnitResources, EditorSyntaxHighlighterDef,
+  CompOptsIntf, ProjectIntf, MacroIntf, MacroDefIntf, SrcEditorIntf,
+  IDEOptionsIntf, IDEOptEditorIntf, IDEDialogs, LazIDEIntf, PackageIntf,
   // IDE
-  CompOptsModes, ProjectResources, LazConf, W32Manifest, ProjectIcon,
-  LazarusIDEStrConsts, CompilerOptions,
-  TransferMacros, EditorOptions, IDEProcs, RunParamsOpts, ProjectDefs, ProjPackBase,
-  FileReferenceList, EditDefineTree, ModeMatrixOpts, PackageDefs, PackageSystem;
+  CompOptsModes, ProjectResources, LazConf, ProjectIcon,
+  IDECmdLine, IDEProcs, CompilerOptions, RunParamsOpts, ModeMatrixOpts,
+  TransferMacros, ProjectDefs, FileReferenceList, EditDefineTree,
+  LazarusIDEStrConsts, InputHistory, ProjPackCommon, PackageDefs, PackageSystem;
 
 type
   TUnitInfo = class;
@@ -80,7 +82,7 @@ type
   TOnChangeProjectInfoFile = procedure(TheProject: TProject) of object;
 
   TOnSaveUnitSessionInfoInfo = procedure(AUnitInfo: TUnitInfo) of object;
-                                 
+
   TUnitInfoList = (
     uilPartOfProject,
     uilWithEditorIndex,
@@ -187,6 +189,7 @@ type
     procedure SetFoldState(AValue: String);
     procedure SetPageIndex(const AValue: Integer);
     procedure SetIsVisibleTab(const AValue: Boolean);
+    procedure SetSyntaxHighlighter(AValue: TLazSyntaxHighlighter);
     procedure SetWindowIndex(const AValue: Integer);
   protected
     procedure Clear;
@@ -207,7 +210,7 @@ type
     property FoldState: String read FFoldState write SetFoldState;
     property IsLocked: Boolean read FIsLocked  write FIsLocked;
     property CustomHighlighter: Boolean read FCustomHighlighter write FCustomHighlighter; // SetCustomHighlighter
-    property SyntaxHighlighter: TLazSyntaxHighlighter read FSyntaxHighlighter write FSyntaxHighlighter; // SetSyntaxHighlighter
+    property SyntaxHighlighter: TLazSyntaxHighlighter read FSyntaxHighlighter write SetSyntaxHighlighter; // SetSyntaxHighlighter
   end;
 
   { TUnitEditorInfoList }
@@ -289,7 +292,6 @@ type
     FRunFileIfActive: boolean;
     FSessionModified: boolean;
     fSource: TCodeBuffer;
-    fSrcUnitName: String;
     fUsageCount: extended;
     fUserReadOnly:  Boolean;
     fSourceChangeStep: LongInt;
@@ -300,7 +302,7 @@ type
     FUnitResourceFileformat: TUnitResourcefileFormatClass;
 
     function GetEditorInfo(Index: Integer): TUnitEditorInfo;
-    function GetHasResources:boolean;
+    function GetHasResources: boolean;
     function GetModified: boolean;
     function GetNextAutoRevertLockedUnit: TUnitInfo;
     function GetNextLoadedUnit: TUnitInfo;
@@ -328,7 +330,6 @@ type
     procedure SetRunFileIfActive(const AValue: boolean);
     procedure SetSessionModified(const AValue: boolean);
     procedure SetSource(ABuffer: TCodeBuffer);
-    procedure SetSrcUnitName(const NewUnitName:string);
     procedure SetUserReadOnly(const NewValue: boolean);
   protected
     function GetFileName: string; override;
@@ -336,6 +337,7 @@ type
     procedure SetIsPartOfProject(const AValue: boolean); override;
     procedure UpdateList(ListType: TUnitInfoList; Add: boolean);
     procedure SetInternalFilename(const NewFilename: string);
+    procedure SetUnitName(const AValue: string); override;
 
     procedure UpdateHasCustomHighlighter(aDefaultHighlighter: TLazSyntaxHighlighter);
     procedure UpdatePageIndex;
@@ -345,7 +347,7 @@ type
     function GetFileOwner: TObject; override;
     function GetFileOwnerName: string; override;
 
-    function ChangedOnDisk(CompareOnlyLoadSaveTime: boolean): boolean;
+    function ChangedOnDisk(CompareOnlyLoadSaveTime: boolean; IgnoreModifiedFlag: boolean = False): boolean;
     function IsAutoRevertLocked: boolean;
     function IsReverting: boolean;
     function IsMainUnit: boolean;
@@ -470,7 +472,6 @@ type
     property Source: TCodeBuffer read fSource write SetSource;
     property DefaultSyntaxHighlighter: TLazSyntaxHighlighter
                                read FDefaultSyntaxHighlighter write SetDefaultSyntaxHighlighter;
-    property SrcUnitName: String read fSrcUnitName write SetSrcUnitName; // unit name in source
     property UserReadOnly: Boolean read fUserReadOnly write SetUserReadOnly;
     property SourceDirectoryReferenced: boolean read FSourceDirectoryReferenced;
     property AutoReferenceSourceDir: boolean read FAutoReferenceSourceDir
@@ -484,24 +485,21 @@ type
 
   TProjectCompilationToolOptions = class(TCompilationToolOptions)
   private
-    FCompileReasons: TCompileReasons;
     FDefaultCompileReasons: TCompileReasons;
-    procedure SetCompileReasons(const AValue: TCompileReasons);
     procedure SetDefaultCompileReasons(const AValue: TCompileReasons);
   protected
+    procedure SetCompileReasons(const AValue: TCompileReasons); override;
     procedure SubstituteMacros(var s: string); override;
   public
-    procedure Clear; override;
+    constructor Create(TheOwner: TLazCompilerOptions); override;
     function CreateDiff(CompOpts: TCompilationToolOptions;
                         Tool: TCompilerDiffTool): boolean; override;
-    procedure Assign(Src: TCompilationToolOptions); override;
     procedure LoadFromXMLConfig(XMLConfig: TXMLConfig; const Path: string;
                                 DoSwitchPathDelims: boolean); override;
     procedure SaveToXMLConfig(XMLConfig: TXMLConfig; const Path: string;
                               UsePathDelim: TPathDelimSwitch); override;
     function GetProject: TProject;
   public
-    property CompileReasons: TCompileReasons read FCompileReasons write SetCompileReasons;
     property DefaultCompileReasons: TCompileReasons read FDefaultCompileReasons write SetDefaultCompileReasons;
   end;
 
@@ -514,6 +512,7 @@ type
     FBuildMode: TProjectBuildMode;
     FProject: TProject;
     FCompileReasons: TCompileReasons;
+    procedure InvalidateOptions;
   protected
     procedure SetTargetCPU(const AValue: string); override;
     procedure SetTargetOS(const AValue: string); override;
@@ -521,6 +520,7 @@ type
     procedure SetIncludePaths(const AValue: string); override;
     procedure SetLibraryPaths(const AValue: string); override;
     procedure SetLinkerOptions(const AValue: string); override;
+    procedure SetNamespaces(const AValue: string); override;
     procedure SetObjectPath(const AValue: string); override;
     procedure SetSrcPath(const AValue: string); override;
     procedure SetUnitPaths(const AValue: string); override;
@@ -542,10 +542,8 @@ type
     function GetDefaultMainSourceFileName: string; override;
     procedure GetInheritedCompilerOptions(var OptionsList: TFPList); override;
     procedure Assign(Source: TPersistent); override;
-    function IsEqual(CompOpts: TBaseCompilerOptions): boolean; override;
     function CreateDiff(CompOpts: TBaseCompilerOptions;
                         Tool: TCompilerDiffTool = nil): boolean; override; // true if differ
-    procedure InvalidateOptions;
     procedure SetAlternativeCompile(const Command: string; ScanFPCMsgs: boolean); override;
   public
     property LazProject: TProject read FProject;
@@ -592,7 +590,7 @@ type
     procedure LoadFromXMLConfig(XMLConfig: TXMLConfig; const Path: string);
     procedure SaveMacroValuesAtOldPlace(XMLConfig: TXMLConfig; const Path: string);
     procedure SaveToXMLConfig(XMLConfig: TXMLConfig; const Path: string;
-                              IsDefault: Boolean; var Cnt: integer);
+                              IsDefault, ALegacyList: Boolean; var Cnt: integer);
     function GetCaption: string; override;
     function GetIndex: integer; override;
   public
@@ -658,9 +656,9 @@ type
     procedure LoadSessionFromXMLConfig(XMLConfig: TXMLConfig; const Path: string;
                                        LoadAllOptions: boolean);
     procedure SaveProjOptsToXMLConfig(XMLConfig: TXMLConfig; const Path: string;
-                                      SaveSession: boolean);
+                                      SaveSession, ALegacyList: boolean);
     procedure SaveSessionOptsToXMLConfig(XMLConfig: TXMLConfig; const Path: string;
-                                         SaveSession: boolean);
+                                         SaveSession, ALegacyList: boolean);
   public
     property Items[Index: integer]: TProjectBuildMode read GetItems; default;
     property ChangeStamp: integer read FChangeStamp;
@@ -673,12 +671,13 @@ type
 
   { TProjectIDEOptions }
 
-  TProjectIDEOptions = class(TAbstractIDEOptions)
+  TProjectIDEOptions = class(TAbstractIDEProjectOptions)
   private
     FProject: TProject;
   public
     constructor Create(AProject: TProject);
     destructor Destroy; override;
+    function GetProject: TLazProject; override;
     class function GetInstance: TAbstractIDEOptions; override;
     class function GetGroupCaption: string; override;
     property Project: TProject read FProject;
@@ -709,7 +708,9 @@ type
     FAllEditorsInfoMap: TMap;
     FAutoCreateForms: boolean;
     FChangeStampSaved: integer;
+    FDebuggerBackend: String;
     FEnableI18NForLFM: boolean;
+    FHistoryLists: THistoryLists;
     FLastCompileComplete: boolean;
     FMacroEngine: TTransferMacroList;
     FTmpAutoCreatedForms: TStrings; // temporary, used to apply auto create forms changes
@@ -720,6 +721,9 @@ type
     FDefineTemplates: TProjectDefineTemplates;
     fDestroying: boolean;
     FEnableI18N: boolean;
+    FI18NExcludedIdentifiers: TStrings;
+    FI18NExcludedOriginals: TStrings;
+    FForceUpdatePoFiles: Boolean;
     fFirst, fLast: array[TUnitInfoList] of TUnitInfo;
     FFirstRemovedDependency: TPkgDependency;
     FFirstRequiredDependency: TPkgDependency;
@@ -784,6 +788,7 @@ type
     function GetSourceDirectories: TFileReferenceList;
     function GetTargetFilename: string;
     function GetUnits(Index: integer): TUnitInfo;
+    function GetUseLegacyLists: Boolean;
     function JumpHistoryCheckPosition(
                                 APosition:TProjectJumpHistoryPosition): boolean;
     function OnUnitFileBackup(const Filename: string): TModalResult;
@@ -795,6 +800,7 @@ type
                                CheckIfAllowed: boolean; var Allowed: boolean);
     procedure SetActiveBuildMode(const AValue: TProjectBuildMode);
     procedure SetAutoOpenDesignerFormsDisabled(const AValue: boolean);
+    procedure SetDebuggerBackend(AValue: String);
     procedure SetEnableI18N(const AValue: boolean);
     procedure SetEnableI18NForLFM(const AValue: boolean);
     procedure SetLastCompilerParams(AValue: string);
@@ -828,6 +834,7 @@ type
     procedure LoadFromSession;
     function DoLoadLPI(Filename: String): TModalResult;
     function DoLoadSession(Filename: String): TModalResult;
+    function DoLoadLPR(Revert: boolean): TModalResult;
     // Methods for WriteProject
     procedure SaveFlags(const Path: string);
     procedure SaveUnits(const Path: string; SaveSession: boolean);
@@ -837,6 +844,7 @@ type
     procedure SaveToSession;
     function DoWrite(Filename: String; IsLpi: Boolean): TModalResult;
   protected
+    function GetDirectory: string; override;
     function GetActiveBuildModeID: string; override;
     function GetDefineTemplates: TProjPackDefineTemplates;
     function GetFiles(Index: integer): TLazProjectFile; override;
@@ -855,6 +863,7 @@ type
     procedure SetSessionModified(const AValue: boolean); override;
     procedure SetSessionStorage(const AValue: TProjectSessionStorage); override;
     procedure SetUseManifest(AValue: boolean); override;
+    function GetCurrentDebuggerBackend: String; override;
   protected
     // special unit lists
     procedure AddToList(AnUnitInfo: TUnitInfo; ListType: TUnitInfoList);
@@ -882,7 +891,7 @@ type
     function SomeDataModified(Verbose: boolean = false): boolean;
     function SomeSessionModified(Verbose: boolean = false): boolean;
     procedure MainSourceFilenameChanged;
-    procedure GetUnitsChangedOnDisk(var AnUnitList: TFPList);
+    procedure GetUnitsChangedOnDisk(var AnUnitList: TFPList; IgnoreModifiedFlag: boolean = False);
     function HasProjectInfoFileChangedOnDisk: boolean;
     procedure IgnoreProjectInfoFileOnDisk;
     function ReadProject(const NewProjectInfoFile: string;
@@ -955,12 +964,17 @@ type
     function FindFile(const AFilename: string;
                       SearchFlags: TProjectFileSearchFlags): TLazProjectFile; override;
 
+    // used units with 'in' modifier
+    function UpdateIsPartOfProjectFromMainUnit: TModalResult;
+
     // Application.CreateForm statements
     function AddCreateFormToProjectFile(const AClassName, AName:string):boolean;
     function RemoveCreateFormFromProjectFile(const {%H-}AClassName,
                                                          AName: string):boolean;
     function FormIsCreatedInProjectFile(const AClassname, AName:string):boolean;
-    
+    function GetAutoCreatedFormsList: TStrings;
+    property TmpAutoCreatedForms: TStrings read FTmpAutoCreatedForms write FTmpAutoCreatedForms;
+
     // resources
     function GetMainResourceFilename(AnUnitInfo: TUnitInfo): string;
     function GetResourceFile(AnUnitInfo: TUnitInfo; Index:integer):TCodeBuffer;
@@ -992,6 +1006,8 @@ type
                ReqFlags: TPkgIntfRequiredFlags = [];
                MinPolicy: TPackageUpdatePolicy = low(TPackageUpdatePolicy));
     procedure AddPackageDependency(const PackageName: string); override;
+    function RemovePackageDependency(const PackageName: string): boolean;
+      override;
     
     // unit dependencies
     procedure LockUnitComponentDependencies;
@@ -1011,6 +1027,8 @@ type
     function GetStateFilename: string;
     function GetCompileSourceFilename: string;
     procedure AutoAddOutputDirToIncPath;
+    function ExtendUnitSearchPath(NewUnitPaths: string): boolean;
+    function ExtendIncSearchPath(NewIncPaths: string): boolean;
 
     // compile state file
     function LoadStateFile(IgnoreErrors: boolean): TModalResult;
@@ -1024,10 +1042,7 @@ type
     // i18n
     function GetPOOutDirectory: string;
 
-    //auto created forms
-    function GetAutoCreatedFormsList: TStrings;
-    property TmpAutoCreatedForms: TStrings read FTmpAutoCreatedForms write FTmpAutoCreatedForms;
-    // Bookmarks
+    // bookmarks
     function  AddBookmark(X, Y, ID: Integer; AUnitInfo:TUnitInfo):integer;
     procedure DeleteBookmark(ID: Integer);
   public
@@ -1047,6 +1062,10 @@ type
     property Destroying: boolean read fDestroying;
     property EnableI18N: boolean read FEnableI18N write SetEnableI18N;
     property EnableI18NForLFM: boolean read FEnableI18NForLFM write SetEnableI18NForLFM;
+    property I18NExcludedIdentifiers: TStrings read FI18NExcludedIdentifiers;
+    property I18NExcludedOriginals: TStrings read FI18NExcludedOriginals;
+    property UseLegacyLists: Boolean read GetUseLegacyLists;
+    property ForceUpdatePoFiles: Boolean read FForceUpdatePoFiles write FForceUpdatePoFiles;
     property FirstAutoRevertLockedUnit: TUnitInfo read GetFirstAutoRevertLockedUnit;
     property FirstLoadedUnit: TUnitInfo read GetFirstLoadedUnit;
     property FirstPartOfProject: TUnitInfo read GetFirstPartOfProject;
@@ -1082,12 +1101,12 @@ type
     property OnSaveUnitSessionInfo: TOnSaveUnitSessionInfoInfo
       read FOnSaveUnitSessionInfo write FOnSaveUnitSessionInfo;
     property POOutputDirectory: string read FPOOutputDirectory write SetPOOutputDirectory;
-    property ProjectDirectory: string read fProjectDirectory;
     property ProjectInfoFile: string read GetProjectInfoFile write SetProjectInfoFile;
     property PublishOptions: TPublishProjectOptions read FPublishOptions write FPublishOptions;
     property ProjResources: TProjectResources read GetProjResources;
 
     property RunParameterOptions: TRunParamsOptions read GetRunParameterOptions;
+    property HistoryLists: THistoryLists read FHistoryLists;
     property SourceDirectories: TFileReferenceList read GetSourceDirectories;
     property StateFileDate: longint read FStateFileDate write FStateFileDate;
     property StateFlags: TLazProjectStateFlags read FStateFlags write FStateFlags;
@@ -1098,6 +1117,8 @@ type
     property OtherDefines: TStrings read FOtherDefines;
     property UpdateLock: integer read FUpdateLock;
     property UseAsDefault: Boolean read FUseAsDefault write FUseAsDefault; // for dialog only (used to store options once)
+
+    property DebuggerBackend: String read FDebuggerBackend write SetDebuggerBackend;
   end;
 
 
@@ -1112,6 +1133,7 @@ const
 var
   Project1: TProject = nil;// the main project
   
+function FilenameToLazSyntaxHighlighter(Filename: String): TLazSyntaxHighlighter;
 function AddCompileReasonsDiff(const PropertyName: string;
        const Old, New: TCompileReasons; Tool: TCompilerDiffTool = nil): boolean;
 function dbgs(aType: TUnitCompDependencyType): string; overload;
@@ -1122,9 +1144,23 @@ function dbgs(Flags: TUnitInfoFlags): string; overload;
 implementation
 
 const
-  ProjectInfoFileVersion = 9;
+  ProjectInfoFileVersion = 12;
   ProjOptionsPath = 'ProjectOptions/';
 
+
+function FilenameToLazSyntaxHighlighter(Filename: String): TLazSyntaxHighlighter;
+var
+  CompilerMode: TCompilerMode;
+begin
+  Result:=IDEEditorOptions.ExtensionToLazSyntaxHighlighter(ExtractFileExt(Filename));
+  if Result in [lshFreePascal,lshDelphi] then begin
+    CompilerMode:=CodeToolBoss.GetCompilerModeForDirectory(ExtractFilePath(Filename));
+    if CompilerMode in [cmDELPHI,cmTP] then
+      Result:=lshDelphi
+    else
+      Result:=lshFreePascal;
+  end;
+end;
 
 function AddCompileReasonsDiff(const PropertyName: string;
   const Old, New: TCompileReasons; Tool: TCompilerDiffTool): boolean;
@@ -1221,6 +1257,14 @@ procedure TUnitEditorInfo.SetIsVisibleTab(const AValue: Boolean);
 begin
   if FIsVisibleTab = AValue then exit;
   FIsVisibleTab := AValue;
+  FUnitInfo.SessionModified := True;
+end;
+
+procedure TUnitEditorInfo.SetSyntaxHighlighter(AValue: TLazSyntaxHighlighter);
+begin
+  if FSyntaxHighlighter = AValue then Exit;
+  FSyntaxHighlighter := AValue;
+  FCustomHighlighter := FSyntaxHighlighter <> FUnitInfo.DefaultSyntaxHighlighter;
   FUnitInfo.SessionModified := True;
 end;
 
@@ -1594,20 +1638,20 @@ begin
   if Result='' then
     Result:=CodeToolBoss.GetSourceName(fSource,false);
   if Result<>'' then begin
-    // source can be parsed => update SrcUnitName
+    // source can be parsed => update UnitName
     {$IFDEF VerboseIDESrcUnitName}
     if CompareFilenames(ExtractFileNameOnly(Filename),'interpkgconflictfiles')=0 then
       debugln(['TUnitInfo.ReadUnitNameFromSource ',Result]);
     {$ENDIF}
-    fSrcUnitName:=Result;
+    FUnitName:=Result;
   end else begin
     // unable to parse the source
     if FilenameIsPascalSource(Filename) then begin
       // use default: the filename
       Result:=ExtractFileNameOnly(Filename);
-      if CompareText(Result,fSrcUnitName)=0 then begin
+      if CompareText(Result,FUnitName)=0 then begin
         // the last stored unitname has the better case
-        Result:=SrcUnitName;
+        Result:=FUnitName;
       end;
     end;
   end;
@@ -1618,7 +1662,7 @@ begin
   if not FilenameIsPascalUnit(Filename) then
     Result:=''
   else begin
-    Result:=SrcUnitName;
+    Result:=FUnitName;
     if (Result='') or (CompareText(Result,ExtractFileNameOnly(Filename))<>0) then
       Result:=ExtractFileNameOnly(Filename);
   end;
@@ -1626,7 +1670,7 @@ end;
 
 function TUnitInfo.CreateUnitName: string;
 begin
-  Result:=SrcUnitName;
+  Result:=FUnitName;
   if (Result='') and FilenameIsPascalSource(Filename) then
     Result:=ExtractFilenameOnly(Filename);
 end;
@@ -1656,7 +1700,7 @@ begin
   Modified := false;
   SessionModified := false;
   FRunFileIfActive:=false;
-  fSrcUnitName := '';
+  FUnitName := '';
   fUsageCount:=-1;
   fUserReadOnly := false;
   if fSource<>nil then fSource.Clear;
@@ -1710,6 +1754,7 @@ var
   AFilename: String;
   i, X, Y: Integer;
   s: String;
+  BM: TFileBookmark;
 begin
   // global data
   AFilename:=Filename;
@@ -1734,8 +1779,8 @@ begin
     XMLConfig.SetDeleteValue(Path+'ResourceBaseClass/Value',
                              PFComponentBaseClassNames[FResourceBaseClass],
                              PFComponentBaseClassNames[pfcbcNone]);
-    s:=fSrcUnitName;
-    if (s<>'') and (ExtractFileNameOnly(Filename)=s) then s:=''; // only save if SrcUnitName differ from filename
+    s:=FUnitName;
+    if (s<>'') and (ExtractFileNameOnly(Filename)=s) then s:=''; // only save if UnitName differs from filename
     XMLConfig.SetDeleteValue(Path+'UnitName/Value',s,'');
     // save custom data
     SaveStringToStringTree(XMLConfig,CustomData,Path+'CustomData/');
@@ -1754,15 +1799,16 @@ begin
 
     XMLConfig.SetDeleteValue(Path+'UsageCount/Value',RoundToInt(fUsageCount),-1);
     if OpenEditorInfoCount > 0 then
-      for i := Bookmarks.Count - 1 downto 0 do begin
-        if (Project.Bookmarks.BookmarkWithID(Bookmarks[i].ID) = nil) or
-           (Project.Bookmarks.BookmarkWithID(Bookmarks[i].ID).UnitInfo <> self)
+      for i := Bookmarks.Count - 1 downto 0 do
+      begin
+        BM := Bookmarks[i];
+        if (Project.Bookmarks.BookmarkWithID(BM.ID) = nil) or
+           (Project.Bookmarks.BookmarkWithID(BM.ID).UnitInfo <> self)
         then
           Bookmarks.Delete(i)
         else
-        if TSynEdit(OpenEditorInfo[0].EditorComponent.EditorControl).GetBookMark(Bookmarks[i].ID, X{%H-}, Y{%H-})
-        then
-          Bookmarks[i].CursorPos := Point(X, Y);
+        if OpenEditorInfo[0].EditorComponent.GetBookMark(BM.ID, X, Y) then
+          BM.CursorPos := Point(X, Y);
       end;
     FBookmarks.SaveToXMLConfig(XMLConfig,Path+'Bookmarks/');
     XMLConfig.SetDeleteValue(Path+'Loaded/Value',fLoaded,false);
@@ -1812,15 +1858,15 @@ begin
     if (AFilename<>'') and Assigned(fOnLoadSaveFilename) then
       fOnLoadSaveFilename(AFilename,true);
     if FilenameIsPascalSource(Filename) then begin
-      fSrcUnitName:=XMLConfig.GetValue(Path+'UnitName/Value','');
-      if fSrcUnitName='' then
-        fSrcUnitName:=ExtractFileNameOnly(Filename);
+      FUnitName:=XMLConfig.GetValue(Path+'UnitName/Value','');
+      if FUnitName='' then
+        FUnitName:=ExtractFileNameOnly(Filename);
       {$IFDEF VerboseIDESrcUnitName}
       if CompareFilenames(ExtractFileNameOnly(Filename),'interpkgconflictfiles')=0 then
-        debugln(['TUnitInfo.LoadFromXMLConfig ',fSrcUnitName]);
+        debugln(['TUnitInfo.LoadFromXMLConfig ',FUnitName]);
       {$ENDIF}
     end else
-      fSrcUnitName:='';
+      FUnitName:='';
 
     // save custom data
     LoadStringToStringTree(XMLConfig,CustomData,Path+'CustomData/');
@@ -1843,8 +1889,7 @@ begin
   else
     LoadedDesigner:=false;
   fUserReadOnly:=XMLConfig.GetValue(Path+'ReadOnly/Value',false);
-  FBuildFileIfActive:=XMLConfig.GetValue(Path+'BuildFileIfActive/Value',
-                                         false);
+  FBuildFileIfActive:=XMLConfig.GetValue(Path+'BuildFileIfActive/Value',false);
   FRunFileIfActive:=XMLConfig.GetValue(Path+'RunFileIfActive/Value',false);
   fUsageCount:=XMLConfig.GetValue(Path+'UsageCount/Value',-1);
   if fUsageCount<1 then begin
@@ -1857,29 +1902,29 @@ begin
   LoadStringToStringTree(XMLConfig,CustomSessionData,Path+'CustomSessionData/');
 end;
 
-procedure TUnitInfo.SetSrcUnitName(const NewUnitName:string);
+procedure TUnitInfo.SetUnitName(const AValue: string);
 var
   Allowed: boolean;
   OldUnitName: String;
 begin
-  if (fSrcUnitName <> NewUnitName) and (NewUnitName <> '') then
+  if (FUnitName <> AValue) and (AValue <> '') then
   begin
     Allowed := true;
-    OldUnitName := fSrcUnitName;
+    OldUnitName := FUnitName;
     if OldUnitName = '' then
       OldUnitName := ExtractFileNameOnly(Filename);
     if Assigned(FOnUnitNameChange) then
-      FOnUnitNameChange(Self, OldUnitName, NewUnitName, false, Allowed);
+      FOnUnitNameChange(Self, OldUnitName, AValue, false, Allowed);
     // (ignore Allowed)
     if (fSource <> nil) then
     begin
-      CodeToolBoss.RenameSource(fSource,NewUnitName);
+      CodeToolBoss.RenameSource(fSource,AValue);
     end;
     {$IFDEF VerboseIDESrcUnitName}
     if CompareFilenames(ExtractFileNameOnly(Filename),'interpkgconflictfiles')=0 then
-      debugln(['TUnitInfo.SetSrcUnitName ',NewUnitName]);
+      debugln(['TUnitInfo.SetSrcUnitName ',AValue]);
     {$ENDIF}
-    fSrcUnitName := NewUnitName;
+    FUnitName := AValue;
     Modified := true;
     if (Project <> nil) then Project.UnitModified(Self);
   end;
@@ -1912,7 +1957,7 @@ begin
   end;
   
   fFileName:=NewFilename;
-  if EditorOpts<>nil then
+  if IDEEditorOptions<>nil then
     UpdateDefaultHighlighter(FilenameToLazSyntaxHighlighter(FFilename));
   UpdateSourceDirectoryReference;
 end;
@@ -1930,7 +1975,8 @@ end;
 procedure TUnitInfo.UpdatePageIndex;
 var
   HasPageIndex: Boolean;
-  BookmarkID, i, j: integer;
+  i, j: integer;
+  BM: TFileBookmark;
 begin
   HasPageIndex := False;
   i := FEditorInfoList.Count - 1;
@@ -1941,17 +1987,18 @@ begin
   end;
   UpdateList(uilWithEditorIndex, HasPageIndex);
 
-  if assigned(Project1) and assigned(Project1.Bookmarks) then begin
+  if Assigned(Project1) and Assigned(Project1.Bookmarks) then
+  begin
     if OpenEditorInfoCount > 0 then begin
       inc(FSetBookmarLock);
       try
         // Adjust bookmarks
-        for i := Bookmarks.Count - 1 downto 0 do begin
-          BookmarkID := Bookmarks[i].ID;
-          j := Project1.Bookmarks.IndexOfID(BookmarkID);
+        for i := Bookmarks.Count-1 downto 0 do
+        begin
+          BM := Bookmarks[i];
+          j := Project1.Bookmarks.IndexOfID(BM.ID);
           if (j < 0) then
-            TSynEdit(OpenEditorInfo[0].EditorComponent.EditorControl).SetBookMark(BookmarkID,
-              Bookmarks[i].CursorPos.X, Bookmarks[i].CursorPos.Y);
+            OpenEditorInfo[0].EditorComponent.SetBookMark(BM.ID, BM.CursorPos.X, BM.CursorPos.Y);
         end;
       finally
         dec(FSetBookmarLock);
@@ -1986,7 +2033,7 @@ end;
 procedure TUnitInfo.SetFilename(const AValue: string);
 begin
   if fSource<>nil then
-    RaiseException('TUnitInfo.SetFilename Source<>nil')
+    RaiseGDBException('TUnitInfo.SetFilename Source<>nil')
   else
     SetInternalFilename(AValue);
 end;
@@ -2003,7 +2050,7 @@ function TUnitInfo.GetDirectory: string;
 begin
   if IsVirtual then begin
     if Project<>nil then
-      Result:=Project.ProjectDirectory
+      Result:=Project.Directory
     else
       Result:='';
   end else  begin
@@ -2065,9 +2112,10 @@ begin
   Result:=FRevertLockCount>0;
 end;
 
-function TUnitInfo.ChangedOnDisk(CompareOnlyLoadSaveTime: boolean): boolean;
+function TUnitInfo.ChangedOnDisk(CompareOnlyLoadSaveTime: boolean;
+  IgnoreModifiedFlag: boolean): boolean;
 begin
-  Result:=(Source<>nil) and Source.FileOnDiskHasChanged;
+  Result:=(Source<>nil) and Source.FileOnDiskHasChanged(IgnoreModifiedFlag);
   //if Result then debugln(['TUnitInfo.ChangedOnDisk ',Filename,' FileAgeCached=',FileAgeCached(Source.Filename)]);
   if Result
   and (not CompareOnlyLoadSaveTime)
@@ -2607,6 +2655,11 @@ begin
   inherited Destroy;
 end;
 
+function TProjectIDEOptions.GetProject: TLazProject;
+begin
+  Result:=FProject;
+end;
+
 class function TProjectIDEOptions.GetInstance: TAbstractIDEOptions;
 begin
   if Project1<>nil then
@@ -2664,9 +2717,15 @@ begin
   Title := '';
   FUnitList := TFPList.Create;  // list of TUnitInfo
   FOtherDefines := TStringList.Create;
+  FEnableI18N := False;
+  FEnableI18NForLFM := True;
+  FI18NExcludedIdentifiers := TStringList.Create;
+  FI18NExcludedOriginals := TStringList.Create;
 
   FResources := TProjectResources.Create(Self);
   ProjResources.OnModified := @EmbeddedObjectModified;
+
+  FHistoryLists := THistoryLists.Create;
 end;
 
 {------------------------------------------------------------------------------
@@ -2686,6 +2745,8 @@ begin
   FreeAndNil(FAllEditorsInfoList);
   FreeThenNil(FResources);
   FreeThenNil(FBookmarks);
+  FreeThenNil(FI18NExcludedOriginals);
+  FreeThenNil(FI18NExcludedIdentifiers);
   FreeThenNil(FOtherDefines);
   FreeThenNil(FUnitList);
   FreeThenNil(FJumpHistory);
@@ -2693,6 +2754,7 @@ begin
   FreeThenNil(FPublishOptions);
   FreeThenNil(FRunParameters);
   FreeThenNil(FDefineTemplates);
+  FreeThenNil(FHistoryLists);
 
   inherited Destroy;
 end;
@@ -2742,7 +2804,13 @@ begin
     SetFlag(pfMainUnitHasUsesSectionForAllUnits, OldProjectType in [ptProgram,ptApplication]);
     SetFlag(pfMainUnitHasCreateFormStatements, OldProjectType in [ptApplication]);
     SetFlag(pfMainUnitHasTitleStatement,OldProjectType in [ptApplication]);
+    SetFlag(pfMainUnitHasScaledStatement,OldProjectType in [ptApplication]);
     SetFlag(pfRunnable, OldProjectType in [ptProgram,ptApplication,ptCustomProgram]);
+  end;
+  if FFileVersion<=11 then begin
+    // set CompatibilityMode flag for legacy projects (this flag was added in FFileVersion=12 that changed
+    // item format so that LPI cannot be opened in legacy Lazarus unless pfCompatibilityMode is set)
+    SetFlag(pfCompatibilityMode, True);
   end;
   Flags:=Flags-[pfUseDefaultCompilerOptions];
 end;
@@ -2765,18 +2833,21 @@ begin
 end;
 
 procedure TProject.LoadSessionInfo(const Path: string; Merge: boolean);
+// Note: the session can be stored in the lpi as well
+// So this method is used for loading the lpi units as well
 var
   NewUnitInfo: TUnitInfo;
   NewUnitCount, i: integer;
   SubPath: String;
   NewUnitFilename: String;
   OldUnitInfo: TUnitInfo;
-  MergeUnitInfo: Boolean;
+  MergeUnitInfo, LegacyList: Boolean;
 begin
   {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('TProject.ReadProject D reading units');{$ENDIF}
-  NewUnitCount:=FXMLConfig.GetValue(Path+'Units/Count',0);
+  LegacyList:=(FFileVersion<=11) or FXMLConfig.IsLegacyList(Path+'Units/');
+  NewUnitCount:=FXMLConfig.GetListItemCount(Path+'Units/', 'Unit', LegacyList);
   for i := 0 to NewUnitCount - 1 do begin
-    SubPath:=Path+'Units/Unit'+IntToStr(i)+'/';
+    SubPath:=Path+'Units/'+FXMLConfig.GetListItemXPath('Unit', i, LegacyList)+'/';
     NewUnitFilename:=FXMLConfig.GetValue(SubPath+'Filename/Value','');
     OnLoadSaveFilename(NewUnitFilename,true);
     // load unit and add it
@@ -2825,7 +2896,7 @@ procedure TProject.LoadFromLPI;
 const
   Path = ProjOptionsPath;
 begin
-  if (FFileVersion=0) and (FXMLConfig.GetValue(Path+'Units/Count',0)=0) then
+  if (FFileVersion=0) and (FXMLConfig.GetListItemCount(Path+'Units/', 'Unit', true)=0) then
     if IDEMessageDialog(lisStrangeLpiFile,
         Format(lisTheFileDoesNotLookLikeALpiFile, [ProjectInfoFile]),
         mtConfirmation,[mbIgnore,mbAbort])<>mrIgnore
@@ -2845,6 +2916,7 @@ begin
   //   automatically fixes broken lpi files.
   FNewMainUnitID := FXMLConfig.GetValue(Path+'General/MainUnit/Value', 0);
   Title := FXMLConfig.GetValue(Path+'General/Title/Value', '');
+  Scaled := FXMLConfig.GetValue(Path+'General/Scaled/Value', False);
   AutoCreateForms := FXMLConfig.GetValue(Path+'General/AutoCreateForms/Value', true);
 
   // fpdoc
@@ -2861,25 +2933,34 @@ begin
     EnableI18NForLFM := FXMLConfig.GetValue(Path+'i18n/EnableI18N/LFM', True);
     POOutputDirectory := SwitchPathDelims(
          FXMLConfig.GetValue(Path+'i18n/OutDir/Value', ''),fPathDelimChanged);
+    LoadStringList(FXMLConfig, FI18NExcludedIdentifiers, Path+'i18n/ExcludedIdentifiers/');
+    LoadStringList(FXMLConfig, FI18NExcludedOriginals, Path+'i18n/ExcludedOriginals/');
   end;
   {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('TProject.ReadProject E reading comp sets');{$ENDIF}
 
   // load custom data
   LoadStringToStringTree(FXMLConfig,CustomData,Path+'CustomData/');
   {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('TProject.ReadProject update ct boss');{$ENDIF}
-  CodeToolBoss.GlobalValues.Variables[ExternalMacroStart+'ProjPath']:=ProjectDirectory;
+  CodeToolBoss.GlobalValues.Variables[ExternalMacroStart+'ProjPath']:=Directory;
   CodeToolBoss.DefineTree.ClearCache;
   // load the dependencies
   LoadPkgDependencyList(FXMLConfig,Path+'RequiredPackages/',
                         FFirstRequiredDependency,pdlRequires,Self,true,false);
   // load the Run and Build parameter Options
-  RunParameterOptions.Load(FXMLConfig,Path,fPathDelimChanged);
+  RunParameterOptions.Clear;
+  if FFileVersion<11 then
+    RunParameterOptions.LegacyLoad(FXMLConfig,Path,fPathDelimChanged)
+  else
+    RunParameterOptions.Load(FXMLConfig,Path+'RunParams/',fPathDelimChanged,rpsLPI);
   // load the Publish Options
   PublishOptions.LoadFromXMLConfig(FXMLConfig,Path+'PublishOptions/',fPathDelimChanged);
   // load defines used for custom options
   LoadOtherDefines(Path);
   // load session info
   LoadSessionInfo(Path,false);
+
+  FDebuggerBackend := FXMLConfig.GetValue(Path+'Debugger/Backend/Value', '');
+
   // call hooks to read their info (e.g. DebugBoss)
   if Assigned(OnLoadProjectInfo) then
     OnLoadProjectInfo(Self, FXMLConfig, false);
@@ -2905,6 +2986,12 @@ begin
   LoadOtherDefines(Path);
   // load session info
   LoadSessionInfo(Path,true);
+
+  if FFileVersion>=11 then
+    RunParameterOptions.Load(FXMLConfig,Path+'RunParams/',fPathDelimChanged,rpsLPS);
+  HistoryLists.Clear;
+  if FFileVersion>=12 then
+    HistoryLists.LoadFromXMLConfig(FXMLConfig,Path+'HistoryLists/');
 
   // call hooks to read their info (e.g. DebugBoss)
   if Assigned(OnLoadProjectInfo) then
@@ -3023,6 +3110,23 @@ begin
     LoadDefaultSession;
 end;
 
+function TProject.DoLoadLPR(Revert: boolean): TModalResult;
+// lpr is here the main module, it does not need to have the extension .lpr
+var
+  LPRUnitInfo: TUnitInfo;
+begin
+  Result:=mrOk;
+  if (MainUnitID<0) or (not (pfMainUnitIsPascalSource in Flags)) then
+    exit; // has no lpr
+  LPRUnitInfo:=MainUnitInfo;
+  if (LPRUnitInfo.Source=nil) then begin
+    LPRUnitInfo.Source:=CodeToolBoss.LoadFile(LPRUnitInfo.Filename,true,Revert);
+    if LPRUnitInfo.Source=nil then exit(mrCancel);
+  end;
+
+  UpdateIsPartOfProjectFromMainUnit;
+end;
+
 // Method ReadProject itself
 function TProject.ReadProject(const NewProjectInfoFile: string;
   GlobalMatrixOptions: TBuildMatrixOptions; LoadAllOptions: Boolean): TModalResult;
@@ -3045,6 +3149,10 @@ begin
       Result:=DoLoadSession(ProjectSessionFile);
       if Result<>mrOK then Exit;
     end;
+
+    // load lpr
+    if (pfMainUnitIsPascalSource in Flags) and (MainUnitInfo<>nil) then
+      DoLoadLPR(false); // ignore errors
 
   finally
     EndUpdate;
@@ -3076,10 +3184,10 @@ begin
   for i:=0 to UnitCount-1 do
     if UnitMustBeSaved(Units[i],FProjectWriteFlags,SaveSession) then begin
       Units[i].SaveToXMLConfig(FXMLConfig,
-        Path+'Units/Unit'+IntToStr(SaveUnitCount)+'/',True,SaveSession,fCurStorePathDelim);
+        Path+'Units/'+FXMLConfig.GetListItemXPath('Unit', SaveUnitCount, UseLegacyLists)+'/',True,SaveSession,fCurStorePathDelim);
       inc(SaveUnitCount);
     end;
-  FXMLConfig.SetDeleteValue(Path+'Units/Count',SaveUnitCount,0);
+  FXMLConfig.SetListItemCount(Path+'Units/',SaveUnitCount,UseLegacyLists);
 end;
 
 procedure TProject.SaveOtherDefines(const Path: string);
@@ -3124,6 +3232,7 @@ const
 var
   CurFlags: TProjectWriteFlags;
 begin
+  FFileVersion:=ProjectInfoFileVersion;
   // format
   FXMLConfig.SetValue(Path+'Version/Value',ProjectInfoFileVersion);
   FXMLConfig.SetDeleteValue(Path+'PathDelim/Value',PathDelimSwitchToDelim[fCurStorePathDelim],'/');
@@ -3132,15 +3241,16 @@ begin
                            ProjectSessionStorageNames[SessionStorage],
                            ProjectSessionStorageNames[DefaultProjectSessionStorage]);
   // general properties
-  FXMLConfig.SetValue(Path+'General/MainUnit/Value', MainUnitID); // always write a value to support opening by older IDEs (<=0.9.28). This can be changed in a few releases.
+  FXMLConfig.SetDeleteValue(Path+'General/MainUnit/Value', MainUnitID ,0);
   FXMLConfig.SetDeleteValue(Path+'General/AutoCreateForms/Value',
                            AutoCreateForms,true);
   FXMLConfig.SetDeleteValue(Path+'General/Title/Value', Title,'');
+  FXMLConfig.SetDeleteValue(Path+'General/Scaled/Value', Scaled,False);
   FXMLConfig.SetDeleteValue(Path+'General/UseAppBundle/Value', UseAppBundle, True);
 
   // fpdoc
   FXMLConfig.SetDeleteValue(Path+'LazDoc/Paths',
-     SwitchPathDelims(CreateRelativeSearchPath(FPDocPaths,ProjectDirectory),
+     SwitchPathDelims(CreateRelativeSearchPath(FPDocPaths,Directory),
                       fCurStorePathDelim), '');
   FXMLConfig.SetDeleteValue(Path+'LazDoc/PackageName',FPDocPackageName,'');
 
@@ -3148,26 +3258,32 @@ begin
   FXMLConfig.SetDeleteValue(Path+'i18n/EnableI18N/Value', EnableI18N, false);
   FXMLConfig.SetDeleteValue(Path+'i18n/EnableI18N/LFM', EnableI18NForLFM, true);
   FXMLConfig.SetDeleteValue(Path+'i18n/OutDir/Value',
-     SwitchPathDelims(CreateRelativePath(POOutputDirectory,ProjectDirectory),
+     SwitchPathDelims(CreateRelativePath(POOutputDirectory,Directory),
                       fCurStorePathDelim), '');
+  SaveStringList(FXMLConfig, FI18NExcludedIdentifiers, Path+'i18n/ExcludedIdentifiers/');
+  SaveStringList(FXMLConfig, FI18NExcludedOriginals, Path+'i18n/ExcludedOriginals/');
+
   // Resources
   ProjResources.WriteToProjectFile(FXMLConfig, Path);
   // save custom data
   SaveStringToStringTree(FXMLConfig,CustomData,Path+'CustomData/');
   // Save the macro values and compiler options
-  BuildModes.SaveProjOptsToXMLConfig(FXMLConfig, Path, FSaveSessionInLPI);
+  BuildModes.SaveProjOptsToXMLConfig(FXMLConfig, Path, FSaveSessionInLPI, UseLegacyLists);
   BuildModes.SaveSharedMatrixOptions(Path);
   if FSaveSessionInLPI then
     BuildModes.SaveSessionData(Path);
   // save the Publish Options
   PublishOptions.SaveToXMLConfig(FXMLConfig,Path+'PublishOptions/',fCurStorePathDelim);
   // save the Run and Build parameter options
-  RunParameterOptions.Save(FXMLConfig,Path,fCurStorePathDelim);
+  RunParameterOptions.LegacySave(FXMLConfig,Path,fCurStorePathDelim);
+  RunParameterOptions.Save(FXMLConfig,Path+'RunParams/',fCurStorePathDelim,rpsLPI);
   // save dependencies
   SavePkgDependencyList(FXMLConfig,Path+'RequiredPackages/',
     FFirstRequiredDependency,pdlRequires,fCurStorePathDelim);
   // save units
   SaveUnits(Path,FSaveSessionInLPI);
+
+  FXMLConfig.SetDeleteValue(Path+'Debugger/Backend/Value', DebuggerBackend, '');
 
   if FSaveSessionInLPI then begin
     // save defines used for custom options
@@ -3209,13 +3325,14 @@ procedure TProject.SaveToSession;
 const
   Path = 'ProjectSession/';
 begin
+  FFileVersion:=ProjectInfoFileVersion;
   fCurStorePathDelim:=SessionStorePathDelim;
   FXMLConfig.SetDeleteValue(Path+'PathDelim/Value',
                           PathDelimSwitchToDelim[fCurStorePathDelim],'/');
   FXMLConfig.SetValue(Path+'Version/Value',ProjectInfoFileVersion);
 
   // Save the session build modes
-  BuildModes.SaveSessionOptsToXMLConfig(FXMLConfig, Path, True);
+  BuildModes.SaveSessionOptsToXMLConfig(FXMLConfig, Path, True, UseLegacyLists);
   BuildModes.SaveSessionData(Path);
   // save all units
   SaveUnits(Path,true);
@@ -3223,6 +3340,10 @@ begin
   SaveOtherDefines(Path);
   // save session info
   SaveSessionInfo(Path);
+  // save the Run and Build parameter options
+  RunParameterOptions.Save(FXMLConfig,Path+'RunParams/',fCurStorePathDelim,rpsLPS);
+  // save history lists
+  HistoryLists.SaveToXMLConfig(FXMLConfig,Path+'HistoryLists/');
 
   // Notifiy hooks
   if Assigned(OnSaveProjectInfo) then
@@ -3271,6 +3392,11 @@ begin
     end;
     FXMLConfig:=nil;
   until Result<>mrRetry;
+end;
+
+function TProject.GetDirectory: string;
+begin
+  Result:=fProjectDirectory;
 end;
 
 // Method WriteProject itself
@@ -3334,9 +3460,10 @@ begin
     end else begin
       WriteLPS:=WriteLPI or SomeSessionModified or (not FileExistsUTF8(SessFilename));
     end;
+    //debugln(['TProject.WriteProject WriteLPI=',WriteLPI,' WriteLPS=',WriteLPS]);
     if not (WriteLPI or WriteLPS) then exit(mrOk);
   end;
-  //debugln(['TProject.WriteProject WriteLPI=',WriteLPI,' WriteLPS=',WriteLPS,' Modifed=',Modified,' SessionModified=',SessionModified]);
+  //debugln(['TProject.WriteProject WriteLPI=',WriteLPI,' WriteLPS=',WriteLPS,' Modified=',Modified,' SessionModified=',SessionModified]);
 
   // increase usage counters
   UpdateUsageCounts(CfgFilename);
@@ -3473,7 +3600,7 @@ begin
   AnUnit.OnLoadSaveFilename:=@OnLoadSaveFilename;
   AnUnit.OnUnitNameChange:=@OnUnitNameChange;
 
-  // lock the main unit (when it is changed on disk it should *not* auto revert)
+  // lock the main unit (when it is changed on disk it must *not* auto revert)
   if MainUnitID=NewIndex then
     MainUnitInfo.IncreaseAutoRevertLock;
 
@@ -3509,9 +3636,9 @@ begin
     // remove unit from uses section and from createforms in program file
     if (OldUnitInfo.IsPartOfProject) then begin
       if RemoveFromUsesSection then begin
-        if (OldUnitInfo.SrcUnitName<>'') then begin
+        if (OldUnitInfo.Unit_Name<>'') then begin
           CodeToolBoss.RemoveUnitFromAllUsesSections(MainUnitInfo.Source,
-            OldUnitInfo.SrcUnitName);
+            OldUnitInfo.Unit_Name);
         end;
         if (OldUnitInfo.ComponentName<>'') then begin
           CodeToolBoss.RemoveCreateFormStatement(MainUnitInfo.Source,
@@ -3540,7 +3667,7 @@ var
 begin
   NewBuf:=CodeToolBoss.CreateFile(Filename);
   AnUnitInfo:=TUnitInfo.Create(NewBuf);
-  if EditorOpts<>nil then
+  if IDEEditorOptions<>nil then
     AnUnitInfo.DefaultSyntaxHighlighter := FilenameToLazSyntaxHighlighter(NewBuf.Filename);
   Result:=AnUnitInfo;
 end;
@@ -3617,6 +3744,8 @@ begin
   FAutoOpenDesignerFormsDisabled := false;
   FEnableI18N:=false;
   FEnableI18NForLFM:=true;
+  FI18NExcludedOriginals.Clear;
+  FI18NExcludedIdentifiers.Clear;
   FBookmarks.Clear;
   ClearBuildModes;
   FDefineTemplates.Clear;
@@ -3650,7 +3779,7 @@ end;
 
 procedure TProject.EndUpdate;
 begin
-  if FUpdateLock<=0 then RaiseException('TProject.EndUpdate');
+  if FUpdateLock<=0 then RaiseGDBException('TProject.EndUpdate');
   dec(FUpdateLock);
   FSourceDirectories.EndUpdate;
   FDefineTemplates.EndUpdate;
@@ -3766,11 +3895,12 @@ end;
 
 procedure TProject.SetSessionModified(const AValue: boolean);
 begin
-  if AValue=SessionModified then exit;
   {$IFDEF VerboseIDEModified}
   debugln(['TProject.SetSessionModified new Modified=',AValue]);
   {$ENDIF}
   inherited SetSessionModified(AValue);
+  if AValue then
+    IncreaseSessionChangeStamp;
 end;
 
 procedure TProject.SetExecutableType(const AValue: TProjectExecutableType);
@@ -3790,6 +3920,11 @@ end;
 procedure TProject.SetUseManifest(AValue: boolean);
 begin
   ProjResources.XPManifest.UseManifest:=AValue;
+end;
+
+function TProject.GetCurrentDebuggerBackend: String;
+begin
+  Result := FDebuggerBackend;
 end;
 
 function TProject.UnitCount:integer;
@@ -3830,7 +3965,7 @@ begin
   Prefix:=AnUnitName;
   while (Prefix<>'') and (Prefix[length(Prefix)] in ['0'..'9']) do
     Prefix:=copy(Prefix,1,length(Prefix)-1);
-  if (Prefix='') or (not IsValidIdent(Prefix)) then
+  if not IsValidIdent(Prefix) then
     Prefix:='Unit';
   u:=0;
   repeat
@@ -3895,9 +4030,9 @@ begin
     if ((OnlyProjectUnits and Units[Result].IsPartOfProject)
     or (not OnlyProjectUnits))
     and (IgnoreUnit<>Units[Result])
-    and (Units[Result].SrcUnitName<>'')
+    and (Units[Result].Unit_Name<>'')
     then begin
-      if (CompareDottedIdentifiers(PChar(Units[Result].SrcUnitName),PChar(AnUnitName))=0)
+      if (CompareDottedIdentifiers(PChar(Units[Result].Unit_Name),PChar(AnUnitName))=0)
       then
         exit;
     end;
@@ -3971,13 +4106,13 @@ var
   CurPath: String;
 begin
   Result:=Filename;
-  BaseDir:=AppendPathDelim(ProjectDirectory);
+  BaseDir:=AppendPathDelim(Directory);
   if (BaseDir<>'') and FilenameIsAbsolute(BaseDir) and UseUp then
     Result:=CreateRelativePath(Result,BaseDir)
   else begin
     CurPath:=copy(ExtractFilePath(Result),1,length(BaseDir));
     if CompareFilenames(BaseDir,CurPath)=0 then
-      Result:=copy(Result,length(CurPath)+1,length(Result));
+      delete(Result,1,length(CurPath));
   end;
 end;
 
@@ -4267,7 +4402,7 @@ begin
   end;
   AFilename:=TrimFilename(AFilename);
   
-  ProjectPath:=AppendPathDelim(ProjectDirectory);
+  ProjectPath:=AppendPathDelim(Directory);
   if ProjectPath<>'' then begin
     if Load then begin
       // make filename absolute
@@ -4298,7 +4433,7 @@ end;
 function TProject.RemoveProjectPathFromFilename(const AFilename: string): string;
 var ProjectPath:string;
 begin
-  ProjectPath:=ProjectDirectory;
+  ProjectPath:=Directory;
   if ProjectPath='' then ProjectPath:=GetCurrentDirUTF8;
   Result:=AFilename;
   ForcePathDelims(Result);
@@ -4311,15 +4446,18 @@ begin
 end;
 
 function TProject.FileIsInProjectDir(const AFilename: string): boolean;
-var ProjectDir, FilePath: string;
+var
+  ProjectDir, FilePath: string;
 begin
-  if FilenameIsAbsolute(AFilename) then begin
-    if (not IsVirtual) then begin
-      ProjectDir:=ProjectDirectory;
+  if FilenameIsAbsolute(AFilename) then
+  begin
+    if IsVirtual then
+      Result:=false
+    else begin
+      ProjectDir:=Directory;
       FilePath:=LeftStr(AFilename,length(ProjectDir));
-      Result:=(CompareFileNames(ProjectDir,FilePath)=0);
-    end else
-      Result:=false;
+      Result:=CompareFileNames(ProjectDir,FilePath)=0;
+    end;
   end else
     Result:=true;
 end;
@@ -4338,12 +4476,14 @@ procedure TProject.GetVirtualDefines(DefTree: TDefineTree; DirDef: TDirectoryDef
   
 begin
   if (not IsVirtual) then exit;
+  ExtendPath(NamespacesMacroName,CompilerOptions.Namespaces);
   ExtendPath(UnitPathMacroName,CompilerOptions.OtherUnitFiles);
   ExtendPath(IncludePathMacroName,CompilerOptions.IncludePath);
   ExtendPath(SrcPathMacroName,CompilerOptions.SrcPath);
 end;
 
-procedure TProject.GetUnitsChangedOnDisk(var AnUnitList: TFPList);
+procedure TProject.GetUnitsChangedOnDisk(var AnUnitList: TFPList;
+  IgnoreModifiedFlag: boolean);
 var
   AnUnitInfo: TUnitInfo;
 begin
@@ -4351,13 +4491,18 @@ begin
   AnUnitInfo:=fFirst[uilAutoRevertLocked];
   while (AnUnitInfo<>nil) do begin
     if (AnUnitInfo.Source<>nil)
-    and AnUnitInfo.ChangedOnDisk(false) then begin
+    and AnUnitInfo.ChangedOnDisk(false, IgnoreModifiedFlag) then begin
       if AnUnitList=nil then
         AnUnitList:=TFPList.Create;
       AnUnitList.Add(AnUnitInfo);
     end;
     AnUnitInfo:=AnUnitInfo.fNext[uilAutoRevertLocked];
   end;
+end;
+
+function TProject.GetUseLegacyLists: Boolean;
+begin
+  Result:=pfCompatibilityMode in Flags;
 end;
 
 function TProject.HasProjectInfoFileChangedOnDisk: boolean;
@@ -4522,9 +4667,13 @@ end;
 
 procedure TProject.GetAllRequiredPackages(var List: TFPList;
   ReqFlags: TPkgIntfRequiredFlags; MinPolicy: TPackageUpdatePolicy);
+var
+  FPMakeList: TFPList;
 begin
-  if Assigned(OnGetAllRequiredPackages) then
-    OnGetAllRequiredPackages(nil,FirstRequiredDependency,List,ReqFlags,MinPolicy);
+  if Assigned(OnGetAllRequiredPackages) then begin
+    OnGetAllRequiredPackages(nil,FirstRequiredDependency,List,FPMakeList,ReqFlags,MinPolicy);
+    FPMakeList.Free;
+  end;
 end;
 
 procedure TProject.AddPackageDependency(const PackageName: string);
@@ -4534,8 +4683,19 @@ begin
   if FindDependencyByNameInList(FirstRequiredDependency,pdlRequires,PackageName)
   <>nil then exit;
   PkgDependency:=TPkgDependency.Create;
+  PkgDependency.DependencyType:=pdtLazarus;
   PkgDependency.PackageName:=PackageName;
   AddRequiredDependency(PkgDependency);
+end;
+
+function TProject.RemovePackageDependency(const PackageName: string): boolean;
+var
+  PkgDependency: TPkgDependency;
+begin
+  PkgDependency:=FindDependencyByNameInList(FirstRequiredDependency,pdlRequires,PackageName);
+  Result := Assigned(PkgDependency);
+  if Result then
+    RemoveRequiredDependency(PkgDependency);
 end;
 
 procedure TProject.LockUnitComponentDependencies;
@@ -4565,7 +4725,7 @@ procedure TProject.UpdateUnitComponentDependencies;
     PropInfo: PPropInfo;
     PropList: PPropList;
     CurCount,i: integer;
-    ReferenceComponent: TComponent;
+    ReferenceComp: TObject;
     OwnerComponent: TComponent;
     ReferenceUnit: TUnitInfo;
     Dependency: TUnitComponentDependency;
@@ -4598,11 +4758,11 @@ procedure TProject.UpdateUnitComponentDependencies;
           PropInfo:=PropList^[i];
           if (PropInfo^.PropType^.Kind=tkClass) then begin
             // property of kind TObject
-            ReferenceComponent:=TComponent(GetObjectProp(AComponent,PropInfo));
-            //debugln('TProject.UpdateUnitComponentDependencies Property ',dbgsName(AComponent),' Name=',PropInfo^.Name,' Type=',PropInfo^.PropType^.Name,' Value=',dbgsName(ReferenceComponent),' TypeInfo=',TypeInfo^.Name);
-            if ReferenceComponent is TComponent then begin
+            ReferenceComp:=GetObjectProp(AComponent,PropInfo);
+            //debugln('TProject.UpdateUnitComponentDependencies Property ',dbgsName(AComponent),' Name=',PropInfo^.Name,' Type=',PropInfo^.PropType^.Name,' Value=',dbgsName(ReferenceComp),' TypeInfo=',TypeInfo^.Name);
+            if ReferenceComp is TComponent then begin
               // reference is a TComponent
-              OwnerComponent:=ReferenceComponent;
+              OwnerComponent:=TComponent(ReferenceComp);
               while OwnerComponent.Owner<>nil do
                 OwnerComponent:=OwnerComponent.Owner;
               if OwnerComponent<>AnUnitInfo.Component then begin
@@ -4621,7 +4781,7 @@ procedure TProject.UpdateUnitComponentDependencies;
                                          ReferenceUnit,[ucdtOldProperty]);
                     Dependency.SetUsedByPropPath(
                       Dependency.CreatePropPath(AComponent,PropInfo^.Name),
-                      Dependency.CreatePropPath(ReferenceComponent));
+                      Dependency.CreatePropPath(TComponent(ReferenceComp)));
                   end;
                 end;
               end;
@@ -4814,15 +4974,14 @@ end;
 
 procedure TProject.AddSrcPath(const SrcPathAddition: string);
 begin
-  CompilerOptions.SrcPath:=MergeSearchPaths(CompilerOptions.SrcPath,
-                                            GetForcedPathDelims(SrcPathAddition));
+  CompilerOptions.MergeToSrcPath( GetForcedPathDelims(SrcPathAddition) );
 end;
 
 function TProject.GetSourceDirs(WithProjectDir, WithoutOutputDir: boolean): string;
 begin
   Result:=SourceDirectories.CreateSearchPathFromAllFiles;
   if WithProjectDir then
-    Result:=MergeSearchPaths(Result,ProjectDirectory);
+    Result:=MergeSearchPaths(Result,Directory);
   if WithoutOutputDir then
     Result:=RemoveSearchPaths(Result,GetOutputDirectory);
 end;
@@ -4841,7 +5000,7 @@ function TProject.GetStateFilename: string;
 begin
   Result:=GetOutputDirectory;
   if (not FilenameIsAbsolute(Result)) and (not IsVirtual) then
-    Result:=ProjectDirectory;
+    Result:=Directory;
   Result:=AppendPathDelim(Result)+ChangeFileExt(GetCompileSourceFilename,'.compiled');
 end;
 
@@ -4854,16 +5013,55 @@ begin
 end;
 
 procedure TProject.AutoAddOutputDirToIncPath;
-var
-  IncPath: String;
 begin
   if pfLRSFilesInOutputDirectory in Flags then begin
     // the .lrs files are auto created in the output directory
     // => make sure the project output directory is in the include path
-    IncPath:=CompilerOptions.IncludePath;
-    if SearchDirectoryInSearchPath(IncPath,'$(ProjOutDir)')<1 then
-      CompilerOptions.IncludePath:=MergeSearchPaths(IncPath,';$(ProjOutDir)');
+    if SearchDirectoryInSearchPath(CompilerOptions.IncludePath,'$(ProjOutDir)')<1 then
+      CompilerOptions.MergeToIncludePaths(';$(ProjOutDir)');
   end;
+end;
+
+function TProject.ExtendUnitSearchPath(NewUnitPaths: string): boolean;
+var
+  CurUnitPaths: String;
+  r: TModalResult;
+begin
+  CurUnitPaths:=CompilerOptions.ParsedOpts.GetParsedValue(pcosUnitPath);
+  NewUnitPaths:=RemoveSearchPaths(NewUnitPaths,CurUnitPaths);
+  if NewUnitPaths<>'' then begin
+    NewUnitPaths:=CreateRelativeSearchPath(NewUnitPaths,Directory);
+    r:=IDEMessageDialog(lisExtendUnitPath,
+      Format(lisExtendUnitSearchPathOfProjectWith, [#13, NewUnitPaths]),
+      mtConfirmation, [mbYes, mbNo, mbCancel]);
+    case r of
+    mrYes: CompilerOptions.MergeToUnitPaths(NewUnitPaths);
+    mrNo: ;
+    else exit(false);
+    end;
+  end;
+  Result:=true;
+end;
+
+function TProject.ExtendIncSearchPath(NewIncPaths: string): boolean;
+var
+  CurIncPaths: String;
+  r: TModalResult;
+begin
+  CurIncPaths:=CompilerOptions.ParsedOpts.GetParsedValue(pcosIncludePath);
+  NewIncPaths:=RemoveSearchPaths(NewIncPaths,CurIncPaths);
+  if NewIncPaths<>'' then begin
+    NewIncPaths:=CreateRelativeSearchPath(NewIncPaths,Directory);
+    r:=IDEMessageDialog(lisExtendIncludePath,
+      Format(lisExtendIncludeFilesSearchPathOfProjectWith, [#13, NewIncPaths]),
+      mtConfirmation, [mbYes, mbNo, mbCancel]);
+    case r of
+    mrYes: CompilerOptions.MergeToIncludePaths(NewIncPaths);
+    mrNo: ;
+    else exit(false);
+    end;
+  end;
+  Result:=true;
 end;
 
 function TProject.LoadStateFile(IgnoreErrors: boolean): TModalResult;
@@ -4962,7 +5160,7 @@ procedure TProject.UpdateAllCustomHighlighter;
 var
   i: Integer;
 begin
-  if EditorOpts=nil then exit;
+  if IDEEditorOptions=nil then exit;
   for i:=0 to UnitCount-1 do
     Units[i].UpdateHasCustomHighlighter(FilenameToLazSyntaxHighlighter(Units[i].Filename));
 end;
@@ -4971,7 +5169,7 @@ procedure TProject.UpdateAllSyntaxHighlighter;
 var
   i: Integer;
 begin
-  if EditorOpts=nil then exit;
+  if IDEEditorOptions=nil then exit;
   for i:=0 to UnitCount-1 do
     Units[i].UpdateDefaultHighlighter(FilenameToLazSyntaxHighlighter(Units[i].Filename));
 end;
@@ -4983,7 +5181,7 @@ begin
     debugln(['TProject.GetPOOutDirectory failed POOutputDirectory="',POOutputDirectory,'"']);
   Result:=TrimFilename(Result);
   if not FilenameIsAbsolute(Result) then
-    Result:=TrimFilename(AppendPathDelim(ProjectDirectory)+Result);
+    Result:=TrimFilename(AppendPathDelim(Directory)+Result);
 end;
 
 function TProject.GetAutoCreatedFormsList: TStrings;
@@ -5035,8 +5233,8 @@ begin
       // check if no other project unit has this name
       for i:=0 to UnitCount-1 do begin
         if (Units[i].IsPartOfProject)
-        and (Units[i]<>AnUnitInfo) and (Units[i].SrcUnitName<>'')
-        and (CompareText(Units[i].SrcUnitName,NewUnitName)=0) then begin
+        and (Units[i]<>AnUnitInfo) and (Units[i].Unit_Name<>'')
+        and (CompareText(Units[i].Unit_Name,NewUnitName)=0) then begin
           Allowed:=false;
           exit;
         end;
@@ -5061,7 +5259,8 @@ end;
 
 procedure TProject.SetActiveBuildMode(const AValue: TProjectBuildMode);
 begin
-  if FActiveBuildMode=AValue then exit;
+  // Must be set even if FActiveBuildMode=AValue. Modes may be added and deleted,
+  //  the same old address can be used by a new mode.
   FActiveBuildMode:=AValue;
   if FActiveBuildMode<>nil then
     FLazCompilerOptions:=FActiveBuildMode.CompilerOptions
@@ -5093,6 +5292,13 @@ procedure TProject.SetAutoOpenDesignerFormsDisabled(const AValue: boolean);
 begin
   if FAutoOpenDesignerFormsDisabled=AValue then exit;
   FAutoOpenDesignerFormsDisabled:=AValue;
+end;
+
+procedure TProject.SetDebuggerBackend(AValue: String);
+begin
+  if FDebuggerBackend = AValue then Exit;
+  FDebuggerBackend := AValue;
+  Modified := True;
 end;
 
 procedure TProject.SetEnableI18NForLFM(const AValue: boolean);
@@ -5421,7 +5627,7 @@ begin
   end;
 
   // check build macros
-  if (MacroName<>'') and IsValidIdent(MacroName) then
+  if IsValidIdent(MacroName) then
   begin
     Values:=GetBuildMacroValues(CompilerOptions,true);
     if Values<>nil then begin
@@ -5455,8 +5661,8 @@ var
       AFileName:=ExtractFilename(AFileName);
     if siffCaseSensitive in SearchFlags then
       Result:=SearchedFilename=AFilename
-    else
-      Result:=CompareFilenamesIgnoreCase(SearchedFilename,AFilename)=0;
+    else // check Pascal case insensitivity (CompareText, do not use CompareFilenamesIgnoreCase, because of Turkish I)
+      Result:=CompareText(SearchedFilename,AFilename)=0;
   end;
   
 begin
@@ -5484,6 +5690,51 @@ function TProject.FindFile(const AFilename: string;
   SearchFlags: TProjectFileSearchFlags): TLazProjectFile;
 begin
   Result:=UnitInfoWithFilename(AFilename, SearchFlags);
+end;
+
+function TProject.UpdateIsPartOfProjectFromMainUnit: TModalResult;
+var
+  FoundInUnits, MissingInUnits, NormalUnits: TStrings;
+  i: Integer;
+  Code: TCodeBuffer;
+  CurFilename: String;
+  AnUnitInfo, NewUnitInfo: TUnitInfo;
+begin
+  if (MainUnitID<0) or (MainUnitInfo.Source=nil)
+  or ([pfMainUnitIsPascalSource,pfMainUnitHasUsesSectionForAllUnits]*Flags
+    <>[pfMainUnitIsPascalSource,pfMainUnitHasUsesSectionForAllUnits])
+  then
+    exit(mrOk);
+  try
+    if CodeToolBoss.FindDelphiProjectUnits(MainUnitInfo.Source,FoundInUnits,
+      MissingInUnits, NormalUnits, true)
+    then
+      Result:=mrOk
+    else
+      Result:=mrCancel;
+    if FoundInUnits<>nil then begin
+      for i:=0 to FoundInUnits.Count-1 do begin
+        Code:=FoundInUnits.Objects[i] as TCodeBuffer;
+        CurFilename:=Code.Filename;
+        AnUnitInfo:=UnitInfoWithFilename(CurFilename);
+        if (AnUnitInfo<>nil) and AnUnitInfo.IsPartOfProject then continue;
+        if ConsoleVerbosity>=0 then
+          debugln(['Note: (lazarus) [TProject.UpdateIsPartOfProjectFromMainUnit] used unit ',FoundInUnits[i],' not marked in lpi. Setting IsPartOfProject flag.']);
+        if AnUnitInfo=nil then begin
+          NewUnitInfo:=TUnitInfo.Create(nil);
+          NewUnitInfo.Filename:=CurFilename;
+          NewUnitInfo.IsPartOfProject:=true;
+          NewUnitInfo.Source:=Code;
+          AddFile(NewUnitInfo,false);
+        end else
+          AnUnitInfo.IsPartOfProject:=true;
+      end;
+    end;
+  finally
+    FoundInUnits.Free;
+    MissingInUnits.Free;
+    NormalUnits.Free;
+  end;
 end;
 
 function TProject.IndexOfFilename(const AFilename: string): integer;
@@ -5557,7 +5808,7 @@ function TProject.ProjectUnitWithUnitname(const AnUnitName: string): TUnitInfo;
 begin
   Result:=fFirst[uilPartOfProject];
   while Result<>nil do begin
-    if CompareText(AnUnitName,Result.SrcUnitName)=0 then exit;
+    if CompareText(AnUnitName,Result.Unit_Name)=0 then exit;
     Result:=Result.fNext[uilPartOfProject];
   end;
 end;
@@ -5686,7 +5937,7 @@ begin
 
   if (MainUnitID>=0) then begin
     if Requires(PackageGraph.LCLPackage,true)
-    and (Flags*[pfMainUnitHasCreateFormStatements,pfMainUnitHasTitleStatement]<>[])
+    and (Flags*[pfMainUnitHasCreateFormStatements,pfMainUnitHasTitleStatement,pfMainUnitHasScaledStatement]<>[])
     then begin
       // this is a probably a LCL project where the main source only contains
       // automatic code
@@ -5792,70 +6043,20 @@ end;
 
 { TProjectCompilationToolOptions }
 
-procedure TProjectCompilationToolOptions.SetCompileReasons(
-  const AValue: TCompileReasons);
+constructor TProjectCompilationToolOptions.Create(TheOwner: TLazCompilerOptions);
 begin
-  if FCompileReasons=AValue then exit;
-  FCompileReasons:=AValue;
-  {$IFDEF VerboseIDEModified}
-  debugln(['TProjectCompilationToolOptions.SetCompileReasons']);
-  {$ENDIF}
-  IncreaseChangeStamp;
-end;
-
-procedure TProjectCompilationToolOptions.SetDefaultCompileReasons(
-  const AValue: TCompileReasons);
-begin
-  if FDefaultCompileReasons=AValue then exit;
-  FDefaultCompileReasons:=AValue;
-  {$IFDEF VerboseIDEModified}
-  debugln(['TProjectCompilationToolOptions.SetDefaultCompileReasons']);
-  {$ENDIF}
-  IncreaseChangeStamp;
-end;
-
-procedure TProjectCompilationToolOptions.SubstituteMacros(var s: string);
-var
-  CompOpts: TProjectCompilerOptions;
-begin
-  if Owner is TProjectCompilerOptions then begin
-    CompOpts:=TProjectCompilerOptions(Owner);
-    //debugln(['TProjectCompilationToolOptions.SubstituteMacros ',DbgSName(Owner),' ',CompOpts.LazProject<>nil]);
-    s:=CompOpts.SubstituteProjectMacros(s,false);
-  end else
-    inherited SubstituteMacros(s);
-end;
-
-procedure TProjectCompilationToolOptions.Clear;
-begin
-  inherited Clear;
-  CompileReasons := crAll;
+  inherited Create(TheOwner);
+  FDefaultCompileReasons:=crAll;
 end;
 
 function TProjectCompilationToolOptions.CreateDiff(
   CompOpts: TCompilationToolOptions; Tool: TCompilerDiffTool): boolean;
 begin
-  if (CompOpts is TProjectCompilationToolOptions) then begin
-    Result:=AddCompileReasonsDiff('CompileReasons',CompileReasons,
-                  TProjectCompilationToolOptions(CompOpts).CompileReasons,Tool);
-  end else begin
-    Result:=true;
-    if Tool<>nil then Tool.Differ:=true;
-  end;
-  if (Tool=nil) and Result then exit;
-  if (inherited CreateDiff(CompOpts, Tool)) then Result:=true;
-end;
-
-procedure TProjectCompilationToolOptions.Assign(Src: TCompilationToolOptions);
-begin
-  inherited Assign(Src);
-  if Src is TProjectCompilationToolOptions
-  then begin
-    CompileReasons := TProjectCompilationToolOptions(Src).CompileReasons;
-  end
-  else begin
-    CompileReasons := crAll;
-  end;
+  Assert(Assigned(Tool),'TProjectCompilationToolOptions.CreateDiff: Tool=Nil.');
+  Result:=AddCompileReasonsDiff('CompileReasons', CompileReasons,
+                                CompOpts.CompileReasons, Tool);
+  if Result then exit;
+  if inherited CreateDiff(CompOpts, Tool) then Result:=true;
 end;
 
 procedure TProjectCompilationToolOptions.LoadFromXMLConfig(XMLConfig: TXMLConfig;
@@ -5884,30 +6085,47 @@ begin
     Result:=nil;
 end;
 
+procedure TProjectCompilationToolOptions.SetCompileReasons(const AValue: TCompileReasons);
+begin
+  if FCompileReasons=AValue then exit;
+  FCompileReasons:=AValue;
+  Owner.IncreaseChangeStamp;
+end;
+
+procedure TProjectCompilationToolOptions.SetDefaultCompileReasons(const AValue: TCompileReasons);
+begin
+  if FDefaultCompileReasons=AValue then exit;
+  FDefaultCompileReasons:=AValue;
+  Owner.IncreaseChangeStamp;
+end;
+
+procedure TProjectCompilationToolOptions.SubstituteMacros(var s: string);
+var
+  CompOpts: TProjectCompilerOptions;
+begin
+  if Owner is TProjectCompilerOptions then begin
+    CompOpts:=TProjectCompilerOptions(Owner);
+    //debugln(['TProjectCompilationToolOptions.SubstituteMacros ',DbgSName(Owner),' ',CompOpts.LazProject<>nil]);
+    s:=CompOpts.SubstituteProjectMacros(s,false);
+  end else
+    inherited SubstituteMacros(s);
+end;
+
 { TProjectCompilerOptions }
 
 procedure TProjectCompilerOptions.LoadFromXMLConfig(AXMLConfig: TXMLConfig;
   const Path: string);
 begin
   inherited LoadFromXMLConfig(AXMLConfig,Path);
-  
   //FileVersion:=aXMLConfig.GetValue(Path+'Version/Value', 0);
-
-  // old compatibility
-  if AXMLConfig.GetValue(Path+'SkipCompiler/Value',false) then
-    FCompileReasons := []
-  else
-    FCompileReasons := LoadXMLCompileReasons(AXMLConfig,Path+'CompileReasons/',crAll);
-  //debugln(['TProjectCompilerOptions.LoadFromXMLConfig ',Path+'CompileReasons/ ',crCompile in FCompileReasons]);
+  FCompileReasons := LoadXMLCompileReasons(AXMLConfig,Path+'CompileReasons/',crAll);
 end;
 
 procedure TProjectCompilerOptions.SaveToXMLConfig(AXMLConfig: TXMLConfig;
   const Path: string);
 begin
   inherited SaveToXMLConfig(AXMLConfig,Path);
-  
   SaveXMLCompileReasons(AXMLConfig, Path+'CompileReasons/', FCompileReasons, crAll);
-  //debugln(['TProjectCompilerOptions.SaveToXMLConfig ',Path+'CompileReasons/ ',crCompile in FCompileReasons]);
 end;
 
 procedure TProjectCompilerOptions.SetTargetCPU(const AValue: string);
@@ -5948,6 +6166,13 @@ begin
   if LinkerOptions=AValue then exit;
   InvalidateOptions;
   inherited SetLinkerOptions(AValue);
+end;
+
+procedure TProjectCompilerOptions.SetNamespaces(const AValue: string);
+begin
+  if Namespaces=AValue then exit;
+  InvalidateOptions;
+  inherited SetNamespaces(AValue);
 end;
 
 procedure TProjectCompilerOptions.SetObjectPath(const AValue: string);
@@ -6020,11 +6245,6 @@ begin
   end;
 end;
 
-function TProjectCompilerOptions.IsEqual(CompOpts: TBaseCompilerOptions): boolean;
-begin
-  Result:=inherited IsEqual(CompOpts);
-end;
-
 function TProjectCompilerOptions.CreateDiff(CompOpts: TBaseCompilerOptions;
   Tool: TCompilerDiffTool): boolean;
 begin
@@ -6044,7 +6264,7 @@ end;
 
 procedure TProjectCompilerOptions.InvalidateOptions;
 begin
-  if (LazProject=nil) then exit;
+  //if (LazProject=nil) then exit;
 end;
 
 procedure TProjectCompilerOptions.SetAlternativeCompile(const Command: string;
@@ -6066,18 +6286,10 @@ end;
 
 constructor TProjectCompilerOptions.Create(const AOwner: TObject);
 begin
-  FCompileReasons := [crCompile, crBuild, crRun];
+  FCompileReasons := crAll;
   inherited Create(AOwner, TProjectCompilationToolOptions);
-  with TProjectCompilationToolOptions(ExecuteBefore) do begin
-    DefaultCompileReasons:=crAll;
-    CompileReasons:=DefaultCompileReasons;
-  end;
-  with TProjectCompilationToolOptions(ExecuteAfter) do begin
-    DefaultCompileReasons:=crAll;
-    CompileReasons:=DefaultCompileReasons;
-  end;
-  if AOwner <> nil
-  then FProject := AOwner as TProject;
+  if AOwner <> nil then
+    FProject := AOwner as TProject;
   ParsedOpts.OnLocalSubstitute:=@SubstituteProjectMacros;
 end;
 
@@ -6088,8 +6300,9 @@ end;
 
 function TProjectCompilerOptions.IsActive: boolean;
 begin
-  Result:=(LazProject<>nil) and (LazProject.CompilerOptions=Self)
-          and not LazProject.BuildModes.Assigning;
+  Result:=(LazProject<>nil)
+      and not LazProject.BuildModes.Assigning
+      and (LazProject.CompilerOptions=Self);
 end;
 
 procedure TProjectCompilerOptions.Clear;
@@ -6169,6 +6382,7 @@ end;
 procedure TProjectDefineTemplates.UpdateSrcDirIfDef;
 var
   Changed: Boolean;
+  NamespacesDefTempl: TDefineTemplate;
   UnitPathDefTempl: TDefineTemplate;
   IncPathDefTempl: TDefineTemplate;
   SrcPathDefTempl: TDefineTemplate;
@@ -6197,21 +6411,27 @@ begin
       da_If);
     FMain.AddChild(FSrcDirIf);
     
+    // create namespaces template for this directory
+    NamespacesDefTempl:=TDefineTemplate.Create('Namespaces', lisPkgDefsNamespaces,
+      NamespacesMacroName,NamespacesMacro+';$ProjectNamespaces('+Owner.IDAsString+')',
+      da_Define);
+    FSrcDirIf.AddChild(NamespacesDefTempl);
+
     // create unit path template for this directory
     UnitPathDefTempl:=TDefineTemplate.Create('UnitPath', lisPkgDefsUnitPath,
-      '#UnitPath','$(#UnitPath);$ProjectUnitPath('+Owner.IDAsString+')',
+      UnitPathMacroName,UnitPathMacro+';$ProjectUnitPath('+Owner.IDAsString+')',
       da_Define);
     FSrcDirIf.AddChild(UnitPathDefTempl);
 
     // create include path template for this directory
     IncPathDefTempl:=TDefineTemplate.Create('IncPath','Include Path',
-      '#IncPath','$(#IncPath);$ProjectIncPath('+Owner.IDAsString+')',
+      IncludePathMacroName,IncludePathMacro+';$ProjectIncPath('+Owner.IDAsString+')',
       da_Define);
     FSrcDirIf.AddChild(IncPathDefTempl);
 
     // create src path template for this directory
     SrcPathDefTempl:=TDefineTemplate.Create('SrcPath','Src Path',
-      '#SrcPath','$(#SrcPath);$ProjectSrcPath('+Owner.IDAsString+')',
+      SrcPathMacroName,SrcPathMacro+';$ProjectSrcPath('+Owner.IDAsString+')',
       da_Define);
     FSrcDirIf.AddChild(SrcPathDefTempl);
 
@@ -6238,7 +6458,7 @@ begin
   if FOutputDir=nil then begin
     //DebugLn('TProjectDefineTemplates.UpdateDefinesForOutputDirectory ',Owner.IDAsString,' creating FOutputDir');
     FOutputDir:=TDefineTemplate.Create(ProjectOutputDirDefTemplName,
-      'Output directoy of proj', '', Proj.GetOutputDirectory, da_Directory);
+      'Output directory of proj', '', Proj.GetOutputDirectory, da_Directory);
     FOutputDir.SetDefineOwner(Proj,false);
     FOutputDir.SetFlags([dtfAutoGenerated],[],false);
     DisableDefaultsInDirectories(FOutputDir,false);
@@ -6407,7 +6627,7 @@ begin
   if (Owner as TProject).IsVirtual then
     NewProjectDir:=VirtualDirectory
   else
-    NewProjectDir:=(Owner as TProject).ProjectDirectory;
+    NewProjectDir:=(Owner as TProject).Directory;
   if CodeToolBoss.SetGlobalValue(ExternalMacroStart+'ProjPath',NewProjectDir)
   then
     Changed:=true;
@@ -6654,13 +6874,13 @@ begin
   XMLConfig.SetDeleteValue(Path+'Count',Cnt,0);
 end;
 
-procedure TProjectBuildMode.SaveToXMLConfig(XMLConfig: TXMLConfig; const Path: string;
-  IsDefault: Boolean; var Cnt: integer);
+procedure TProjectBuildMode.SaveToXMLConfig(XMLConfig: TXMLConfig;
+  const Path: string; IsDefault, ALegacyList: Boolean; var Cnt: integer);
 var
   SubPath: String;
 begin
+  SubPath:=Path+'BuildModes/'+XMLConfig.GetListItemXPath('Item', Cnt, ALegacyList, True)+'/';
   inc(Cnt);
-  SubPath:=Path+'BuildModes/Item'+IntToStr(Cnt)+'/';
   XMLConfig.SetDeleteValue(SubPath+'Name',Identifier,'');
   if IsDefault then
     XMLConfig.SetDeleteValue(SubPath+'Default',True,false)
@@ -6838,7 +7058,7 @@ begin
   Result:=TProjectBuildMode.Create(Self);
   Result.FIdentifier:=Identifier;
   if LazProject<>nil then
-    Result.CompilerOptions.BaseDirectory:=LazProject.ProjectDirectory;
+    Result.CompilerOptions.BaseDirectory:=LazProject.Directory;
   Result.AddOnChangedHandler(@OnItemChanged);
   fItems.Add(Result);
 end;
@@ -6949,6 +7169,7 @@ function TProjectBuildModes.CreateExtraModes(aCurMode: TProjectBuildMode): TProj
       OverflowChecks:=IsDebug;
       StackChecks:=IsDebug;
       IncludeAssertionCode:=IsDebug;
+      VerifyObjMethodCall:=IsDebug;
       // Debug flags
       GenerateDebugInfo:=IsDebug;
       UseExternalDbgSyms:=IsDebug;
@@ -7037,10 +7258,12 @@ var
   i: Integer;
   Ident, SubPath: String;
   CurMode: TProjectBuildMode;
+  LegacyList: Boolean;
 begin
+  LegacyList := FXMLConfig.IsLegacyList(Path);
   for i:=FromIndex to ToIndex do
   begin
-    SubPath:=Path+'Item'+IntToStr(i)+'/';
+    SubPath:=Path+FXMLConfig.GetListItemXPath('Item', i-1, LegacyList, True)+'/';
     Ident:=FXMLConfig.GetValue(SubPath+'Name','');
     CurMode:=Add(Ident);                     // add another mode
     CurMode.InSession:=InSession;
@@ -7059,7 +7282,7 @@ begin
   for i:=1 to Cnt do begin
     SubPath:=Path+'Macro'+IntToStr(i)+'/';
     MacroName:=FXMLConfig.GetValue(SubPath+'Name','');
-    if (MacroName='') or not IsValidIdent(MacroName) then continue;
+    if not IsValidIdent(MacroName) then continue;
     MacroValue:=FXMLConfig.GetValue(SubPath+'Value','');
     //debugln(['LoadMacroValues Mode="',CurMode.Identifier,'" ',MacroName,'="',MacroValue,'" session=',CurMode.InSession]);
     AddMatrixMacro(MacroName,MacroValue,CurMode.Identifier,CurMode.InSession);
@@ -7070,13 +7293,15 @@ procedure TProjectBuildModes.LoadAllMacroValues(const Path: string; Cnt: Integer
 var
   i: Integer;
   SubPath: String;
+  IsLegacyList: Boolean;
 begin
   // First default mode.
   LoadMacroValues(Path+'MacroValues/', Items[0]);
+  IsLegacyList := FXMLConfig.IsLegacyList(Path+'BuildModes/');
   // Iterate rest of the modes.
   for i:=2 to Cnt do
   begin
-    SubPath:=Path+'BuildModes/Item'+IntToStr(i)+'/';
+    SubPath:=Path+'BuildModes/'+FXMLConfig.GetListItemXPath('Item', i-1, IsLegacyList, True);
     LoadMacroValues(SubPath+'MacroValues/', Items[i-1]);
   end;
 end;
@@ -7118,15 +7343,17 @@ procedure TProjectBuildModes.LoadProjOptsFromXMLConfig(XMLConfig: TXMLConfig; co
 // Load for project
 var
   Cnt: Integer;
+  IsLegacyList: Boolean;
 begin
   FXMLConfig := XMLConfig;
 
-  Cnt:=FXMLConfig.GetValue(Path+'BuildModes/Count',0);
+  IsLegacyList := FXMLConfig.IsLegacyList(Path+'BuildModes/');
+  Cnt:=FXMLConfig.GetListItemCount(Path+'BuildModes/', 'Item', IsLegacyList);
   if Cnt>0 then begin
     // Project default mode is stored at the old XML path for backward compatibility.
     // Testing the 'Default' XML attribute is not needed because the first mode
     // is always default.
-    Items[0].Identifier:=FXMLConfig.GetValue(Path+'BuildModes/Item1/Name', '');
+    Items[0].Identifier:=FXMLConfig.GetValue(Path+'BuildModes/'+XMLConfig.GetListItemXPath('Item', 0, IsLegacyList, True)+'/Name', '');
     Items[0].CompilerOptions.LoadFromXMLConfig(FXMLConfig, 'CompilerOptions/');
     LoadOtherCompilerOpts(Path+'BuildModes/', 2, Cnt, False);
     LoadAllMacroValues(Path+'MacroValues/', Cnt);
@@ -7142,6 +7369,7 @@ procedure TProjectBuildModes.LoadSessionFromXMLConfig(XMLConfig: TXMLConfig;
 // Load for session
 var
   Cnt: Integer;
+  IsLegacyList: Boolean;
 begin
   FXMLConfig := XMLConfig;
 
@@ -7149,7 +7377,8 @@ begin
     // load matrix options
     SessionMatrixOptions.LoadFromXMLConfig(FXMLConfig, Path+'BuildModes/SessionMatrixOptions/');
 
-  Cnt:=FXMLConfig.GetValue(Path+'BuildModes/Count',0);
+  IsLegacyList := FXMLConfig.IsLegacyList(Path+'BuildModes/');
+  Cnt:=FXMLConfig.GetListItemCount(Path+'BuildModes/', 'Item', IsLegacyList);
   if Cnt>0 then begin
     // Add a new mode for session compiler options.
     LoadOtherCompilerOpts(Path+'BuildModes/', 1, Cnt, True);
@@ -7201,7 +7430,7 @@ end;
 
 // SaveToXMLConfig itself
 procedure TProjectBuildModes.SaveProjOptsToXMLConfig(XMLConfig: TXMLConfig;
-  const Path: string; SaveSession: boolean);
+  const Path: string; SaveSession, ALegacyList: boolean);
 var
   i, Cnt: Integer;
 begin
@@ -7216,12 +7445,12 @@ begin
   Cnt:=0;
   for i:=0 to Count-1 do
     if SaveSession or not Items[i].InSession then
-      Items[i].SaveToXMLConfig(FXMLConfig, Path, i=0, Cnt);
-  FXMLConfig.SetDeleteValue(Path+'BuildModes/Count',Cnt,0);
+      Items[i].SaveToXMLConfig(FXMLConfig, Path, i=0, ALegacyList, Cnt);
+  FXMLConfig.SetListItemCount(Path+'BuildModes/',Cnt,ALegacyList);
 end;
 
 procedure TProjectBuildModes.SaveSessionOptsToXMLConfig(XMLConfig: TXMLConfig;
-  const Path: string; SaveSession: boolean);
+  const Path: string; SaveSession, ALegacyList: boolean);
 var
   i, Cnt: Integer;
 begin
@@ -7230,8 +7459,8 @@ begin
   Cnt:=0;
   for i:=0 to Count-1 do
     if Items[i].InSession and SaveSession then
-      Items[i].SaveToXMLConfig(FXMLConfig, Path, false, Cnt);
-  FXMLConfig.SetDeleteValue(Path+'BuildModes/Count',Cnt,0);
+      Items[i].SaveToXMLConfig(FXMLConfig, Path, false, ALegacyList, Cnt);
+  FXMLConfig.SetListItemCount(Path+'BuildModes/',Cnt,ALegacyList);
 end;
 
 

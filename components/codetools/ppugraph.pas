@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -30,12 +30,22 @@ unit PPUGraph;
 interface
 
 uses
-  Classes, SysUtils, dynlibs, PPUParser, CodeTree, AVL_Tree, FileProcs,
-  LazFileUtils, BasicCodeTools, CodeGraph, CodeToolManager, CodeToolsStructs;
+  Classes, SysUtils, Laz_AVL_Tree,
+  {$IFnDEF HASAMIGA}
+  dynlibs,
+  {$ENDIF}
+  // LazUtils
+  LazStringUtils,
+  // Codetools
+  PPUParser, CodeTree, FileProcs, LazFileUtils, BasicCodeTools, CodeGraph,
+  CodeToolManager, CodeToolsStructs;
 
 const
   FPCPPUGroupPrefix = 'fpc_';
-  
+  {$IFDEF HASAMIGA}
+  SharedSuffix = 'library';
+  {$ENDIF}
+
 type
   TPPUGroup = class;
 
@@ -661,7 +671,7 @@ begin
             System.Delete(GroupName,i,1);
         if (Groupname='') then continue;
         Groupname:=FPCPPUGroupPrefix+LowerCase(Groupname);
-        if (not IsValidIdent(Groupname)) then continue;
+        if (not LazIsValidIdent(Groupname,true,true)) then continue;
         AddFPCGroup(GroupName,AppendPathDelim(FPCPPUBaseDir)+FileInfo.Name);
       end;
     until FindNextUTF8(FileInfo)<>0;
@@ -690,7 +700,7 @@ begin
       if (CompareFileExt(Filename,'ppu',false)<>0) then continue;
       AUnitName:=ExtractFileNameOnly(Filename);
       Filename:=AppendPathDelim(Directory)+Filename;
-      if (AUnitName='') or (not IsValidIdent(AUnitName)) then begin
+      if not LazIsValidIdent(AUnitName,true,true) then begin
         DebugLn(['TPPUGroups.AddFPCGroup NOTE: invalid ppu name: ',Filename]);
         continue;
       end;

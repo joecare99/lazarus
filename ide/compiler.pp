@@ -26,7 +26,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -38,10 +38,17 @@ unit Compiler;
 interface
 
 uses
-  Classes, SysUtils, LCLProc, Forms, Controls, contnrs, strutils,
-  IDEExternToolIntf, IDEMsgIntf, LazIDEIntf, LazUTF8,
-  IDECmdLine, LazarusIDEStrConsts, CompilerOptions, Project,
-  DefineTemplates, TransferMacros, EnvironmentOpts, LazFileUtils;
+  Classes, SysUtils, contnrs, strutils,
+  // LazUtils
+  LazUTF8, LazFileUtils, LazUtilities, LazLoggerBase,
+  // LCL
+  Forms, Controls,
+  // Codetools
+  DefineTemplates, LinkScanner, CodeToolManager, TransferMacros,
+  // IdeIntf
+  IDEExternToolIntf, IDEMsgIntf, LazIDEIntf,
+  // IDE
+  IDECmdLine, LazarusIDEStrConsts, CompilerOptions, Project, EnvironmentOpts;
 
 type
   TOnCmdLineCreate = procedure(var CmdLine: string; var Abort:boolean) of object;
@@ -56,9 +63,8 @@ type
     destructor Destroy; override;
     function Compile(AProject: TProject;
                      const WorkingDir, CompilerFilename, CompilerParams: string;
-                     BuildAll, SkipLinking, SkipAssembler: boolean;
-                     const aCompileHint: string
-                    ): TModalResult;
+                     BuildAll, SkipLinking, SkipAssembler, CurrentDirectoryIsTestDir: boolean;
+                     const aCompileHint: string): TModalResult;
     procedure WriteError(const Msg: string);
   end;
 
@@ -218,7 +224,7 @@ type
     property ErrorMsg: String read fErrorMsg write fErrorMsg;
   end;
 
-  { TCompilerOptThread }
+  { TCompilerOptThread - thread for reading 'fpc -h' output }
 
   TCompilerOptThread = class(TThread)
   private
@@ -238,7 +244,6 @@ type
     property ReadTime: TDateTime read fReadTime;
     property ErrorMsg: string read GetErrorMsg;
   end;
-
 
 implementation
 
@@ -266,7 +271,8 @@ end;
 ------------------------------------------------------------------------------}
 function TCompiler.Compile(AProject: TProject; const WorkingDir,
   CompilerFilename, CompilerParams: string; BuildAll, SkipLinking,
-  SkipAssembler: boolean; const aCompileHint: string): TModalResult;
+  SkipAssembler, CurrentDirectoryIsTestDir: boolean; const aCompileHint: string
+  ): TModalResult;
 var
   CmdLine : String;
   Abort : Boolean;
@@ -275,7 +281,8 @@ var
   Title: String;
   TargetOS: String;
   TargetCPU: String;
-  TargetFilename: String;
+  TargetFilename, SubTool: String;
+  CompilerKind: TPascalCompiler;
 begin
   Result:=mrCancel;
   if ConsoleVerbosity>=1 then
@@ -336,7 +343,12 @@ begin
     Tool.Process.Executable:=CompilerFilename;
     Tool.CmdLineParams:=CmdLine;
     Tool.Process.CurrentDirectory:=WorkingDir;
-    FPCParser:=TFPCParser(Tool.AddParsers(SubToolFPC));
+    Tool.CurrentDirectoryIsTestDir:=CurrentDirectoryIsTestDir;
+    SubTool:=SubToolFPC;
+    CompilerKind:=CodeToolBoss.GetPascalCompilerForDirectory(WorkingDir);
+    if CompilerKind=pcPas2js then
+      SubTool:=SubToolPas2js;
+    FPCParser:=TFPCParser(Tool.AddParsers(SubTool));
     FPCParser.ShowLinesCompiled:=EnvironmentOptions.MsgViewShowFPCMsgLinesCompiled;
     FPCParser.HideHintsSenderNotUsed:=not AProject.CompilerOptions.ShowHintsForSenderNotUsed;
     FPCParser.HideHintsUnitNotUsedInMainSource:=not AProject.CompilerOptions.ShowHintsForUnusedUnitsInMainSrc;
@@ -926,6 +938,7 @@ begin
   fDefines := TStringList.Create;
   fInvalidOptions := TStringList.Create;
   fSupportedCategories := TStringList.Create;
+  fSupportedCategories.Sorted := True;
   fGeneratedOptions := TStringList.Create;
   fRootOptGroup := TCompilerOptGroup.Create(Self, Nil);
 end;
@@ -1050,7 +1063,6 @@ begin
       else if AnsiStartsStr(Supported, Line) then
         Category := AddNewCategory(Copy(Line, Length(Supported)+1, Length(Line)));
     end;
-    fSupportedCategories.Sorted := True;
   finally
     sl.Free;
   end;
@@ -1335,7 +1347,7 @@ begin
   MinOrigLine := MaxInt;
   for i := 0 to aStrings.Count-1 do
   begin
-    OriLine := Integer({%H-}PtrUInt(Pointer(aStrings.Objects[i])));
+    OriLine := Integer({%H-}PtrUInt(aStrings.Objects[i]));
     if (OriLine > -1) and (OriLine < MinOrigLine) then
     begin
       MinOrigLine := OriLine;
@@ -1426,7 +1438,7 @@ procedure TCompilerOptThread.StartParsing;
 begin
   if fStartedOnce then
     WaitFor;
-  fReader.CompilerExecutable:=LazarusIDE.GetFPCompilerFilename;
+  fReader.CompilerExecutable:=LazarusIDE.GetCompilerFilename;
   fReader.UpdateTargetParam;
   Start;
   fStartedOnce:=true;

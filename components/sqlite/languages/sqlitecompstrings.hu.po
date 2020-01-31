@@ -1,4 +1,3 @@
-#
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
@@ -17,6 +16,7 @@ msgid "Add"
 msgstr "Hozzáadás"
 
 #: sqlitecompstrings.satablenamedalreadyexistsareyousureyouwanttoreplace
+#, object-pascal-format
 msgid "A Table named \"%s\" already exists. Are you sure you want to replace this table?%sAll data stored will be lost."
 msgstr "Egy \"%s\" nevű tábla már létezik. Biztosan le akarja cserélni erre?%sMinden tárolt adat el fog veszni."
 
@@ -49,6 +49,7 @@ msgid "File name not set: it's not possible to create/edit a table."
 msgstr "A fájl neve nincs megadva: a tábla létrehozása/szerkesztése nem lehetséges."
 
 #: sqlitecompstrings.sfilepath
+#, object-pascal-format
 msgid "File Path: %s"
 msgstr "Fájl útvonala: %s"
 
@@ -73,9 +74,11 @@ msgid "Field type not recognized."
 msgstr "A mező típusa ismeretlen."
 
 #: sqlitecompstrings.stablename
+#, object-pascal-format
 msgid "Table Name: %s"
 msgstr "Tábla neve: %s"
 
 #: sqlitecompstrings.stablenamenotsetitsnotpossibletocreateeditatable
 msgid "Table name not set: it's not possible to create/edit a table."
 msgstr "A tábla neve nincs megadva: a tábla létrehozása/szerkesztése nem lehetséges."
+

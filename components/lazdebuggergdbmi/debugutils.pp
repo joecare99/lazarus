@@ -24,7 +24,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -35,7 +35,11 @@ unit DebugUtils;
 interface 
 
 uses
-  DbgIntfBaseTypes, Classes, LCLProc, LazUTF8;
+  Classes,
+  // LazUtils
+  LazLoggerBase, LazUTF8,
+  // DebuggerIntf
+  DbgIntfBaseTypes;
 
 type
 
@@ -214,7 +218,7 @@ begin
         if AString[n] = '''' then Result := Result + '''';
       end;
     #192..#255: begin // Maybe utf8
-        u := UTF8CharacterLength(@AString[n]);
+        u := UTF8CodepointSize(@AString[n]);
         if (u > 0) and (n+u-1 <= l) then begin
           if not InString then
             ToggleInString;

@@ -25,7 +25,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -37,10 +37,16 @@ unit EvaluateDlg;
 interface
 
 uses
-  Classes, SysUtils, LCLType, Forms,
-  IDEWindowIntf, IDEImagesIntf, DbgIntfDebuggerBase, LazarusIDEStrConsts,
-  ComCtrls, StdCtrls, Menus, Dialogs, DebuggerDlg, BaseDebugManager,
-  InputHistory, IDEProcs, Debugger, DebuggerStrConst;
+  Classes, SysUtils,
+  // LCL
+  LCLType, Forms, Controls, ComCtrls, StdCtrls, Menus, Dialogs,
+  // IdeIntf
+  IDEWindowIntf, IDEImagesIntf,
+  // DebuggerIntf
+  DbgIntfDebuggerBase,
+  // IDE
+  LazarusIDEStrConsts, BaseDebugManager, InputHistory, IDEProcs,
+  Debugger, DebuggerDlg, DebuggerStrConst;
 
 type
 
@@ -68,6 +74,9 @@ type
     tbWatch: TToolButton;
     tbModify: TToolButton;
     tbEvaluate: TToolButton;
+    procedure cmbExpressionKeyUp(Sender: TObject; var {%H-}Key: Word;
+      {%H-}Shift: TShiftState);
+    procedure cmbExpressionSelect(Sender: TObject);
     procedure cmbNewValueKeyDown(Sender: TObject; var Key: Word;
       {%H-}Shift: TShiftState);
     procedure FormClose(Sender: TObject; var {%H-}CloseAction: TCloseAction);
@@ -86,14 +95,19 @@ type
     procedure tbWatchClick(Sender: TObject);
     
   private
+    fSkipKeySelect: Boolean;
     fHistDirection:TEvalHistDirection;
+    procedure EvaluateCallback(Sender: TObject; ASuccess: Boolean;
+      ResultText: String; ResultDBGType: TDBGType);
     function GetFindText: string;
     procedure SetFindText(const NewFindText: string);
     procedure Evaluate;
     procedure Modify;
   public
     constructor Create(TheOwner: TComponent); override;
+    procedure Execute(const AExpression: String);
     property FindText: string read GetFindText write SetFindText;
+    procedure UpdateData;
   end;
 
 implementation
@@ -106,7 +120,6 @@ var
 const
   RESULTSEPARATOR='-----------';
   RESULTEVAL='>>>> ';
-  RESULTMOD='<<>> ';
 
 { TEvaluateDlg }
 
@@ -114,6 +127,7 @@ constructor TEvaluateDlg.Create(TheOwner:TComponent);
 begin
   inherited Create(TheOwner);
 
+  fSkipKeySelect := False;
   Caption := lisKMEvaluateModify;
   cmbExpression.Items.Assign(InputHistories.HistoryLists.
     GetList(ClassName,True,rltCaseSensitive));
@@ -131,60 +145,80 @@ begin
   fHistDirection:=EHDNone;
 
   ToolBar1.Images := IDEImages.Images_16;
-  tbInspect.ImageIndex := IDEImages.LoadImage(16, 'debugger_inspect');
-  tbWatch.ImageIndex := IDEImages.LoadImage(16, 'debugger_watches');
-  tbModify.ImageIndex := IDEImages.LoadImage(16, 'debugger_modify');
-  tbEvaluate.ImageIndex := IDEImages.LoadImage(16, 'debugger_evaluate');
-  tbHistory.ImageIndex := IDEImages.LoadImage(16, 'evaluate_no_hist');
+  tbInspect.ImageIndex := IDEImages.LoadImage('debugger_inspect');
+  tbWatch.ImageIndex := IDEImages.LoadImage('debugger_watches');
+  tbModify.ImageIndex := IDEImages.LoadImage('debugger_modify');
+  tbEvaluate.ImageIndex := IDEImages.LoadImage('debugger_evaluate');
+  tbHistory.ImageIndex := IDEImages.LoadImage('evaluate_no_hist');
 
   mnuHistory.Items[0].Caption:=drsEvalHistoryNone;
   mnuHistory.Items[1].Caption:=dsrEvalHistoryUp;
   mnuHistory.Items[2].Caption:=dsrEvalHistoryDown;
 end;
 
-procedure TEvaluateDlg.Evaluate;
+procedure TEvaluateDlg.Execute(const AExpression: String);
+begin
+  SetFindText(AExpression);
+end;
+
+procedure TEvaluateDlg.UpdateData;
+begin
+  Evaluate;
+end;
+
+procedure TEvaluateDlg.EvaluateCallback(Sender: TObject; ASuccess: Boolean;
+  ResultText: String; ResultDBGType: TDBGType);
 var
-  S, R: String;
-  DBGType: TDBGType;
-  Opts: TDBGEvaluateFlags;
+  S: TCaption;
 begin
   S := cmbExpression.Text;
-  InputHistories.HistoryLists.Add(ClassName, S,rltCaseSensitive);
-  DBGType:=nil;
-  Opts := [];
-  if chkTypeCast.Checked then
-    Opts := [defClassAutoCast];
-  R:='';
-  if DebugBoss.Evaluate(S, R, DBGType, Opts)
-  then begin
+
+  if ASuccess then begin
     if cmbExpression.Items.IndexOf(S) = -1
     then cmbExpression.Items.Insert(0, S);
     tbModify.Enabled := True;
 
-    if (DBGType <> nil) and (DBGType.Attributes * [saArray, saDynArray] <> []) and (DBGType.Len >= 0)
-    then R := Format(drsLen, [DBGType.Len]) + LineEnding + R;
+    if (ResultDBGType <> nil) and (ResultDBGType.Attributes * [saArray, saDynArray] <> []) and (ResultDBGType.Len >= 0)
+    then ResultText := Format(drsLen, [ResultDBGType.Len]) + LineEnding + ResultText;
 
   end
   else
     tbModify.Enabled := False;
-  FreeAndNil(DBGType);
+
+  FreeAndNil(ResultDBGType);
   if fHistDirection<>EHDNone then
     begin
     if txtResult.Lines.Text='' then
-      txtResult.Lines.Text := RESULTEVAL+ S+':'+LineEnding+ R + LineEnding
+      txtResult.Lines.Text := RESULTEVAL+ S+':'+LineEnding+ ResultText + LineEnding
     else
       if fHistDirection=EHDUp then
-        txtResult.Lines.Text := RESULTEVAL+ S+':'+LineEnding+ R + LineEnding
+        txtResult.Lines.Text := RESULTEVAL+ S+':'+LineEnding+ ResultText + LineEnding
            + RESULTSEPARATOR + LineEnding + txtResult.Lines.Text
       else
         begin
         txtResult.Lines.Text := txtResult.Lines.Text + RESULTSEPARATOR + LineEnding
-           + RESULTEVAL+ S+':'+LineEnding+ R+LineEnding;
+           + RESULTEVAL+ S+':'+LineEnding+ ResultText+LineEnding;
         txtResult.SelStart:=length(txtResult.Lines.Text);
         end;
     end
   else
-    txtResult.Lines.Text := R;
+    txtResult.Lines.Text := ResultText;
+end;
+
+procedure TEvaluateDlg.Evaluate;
+var
+  S: String;
+  Opts: TDBGEvaluateFlags;
+begin
+  S := cmbExpression.Text;
+  if S = '' then Exit;
+  InputHistories.HistoryLists.Add(ClassName, S,rltCaseSensitive);
+  Opts := [];
+  if chkTypeCast.Checked then
+    Opts := [defClassAutoCast];
+  if not DebugBoss.Evaluate(S, @EvaluateCallback, Opts)
+  then
+    EvaluateCallback(nil, false, '', nil);
 end;
 
 procedure TEvaluateDlg.cmbExpressionChange(Sender: TObject);
@@ -201,6 +235,7 @@ end;
 procedure TEvaluateDlg.cmbExpressionKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
+  fSkipKeySelect := True;
   if (Key = VK_RETURN) and tbEvaluate.Enabled
   then begin
     Evaluate;
@@ -211,21 +246,21 @@ end;
 procedure TEvaluateDlg.MenuItem1Click(Sender: TObject);
 begin
   fHistDirection:=EHDNone;
-  tbHistory.ImageIndex := IDEImages.LoadImage(16, 'evaluate_no_hist');
+  tbHistory.ImageIndex := IDEImages.LoadImage('evaluate_no_hist');
   txtResult.Lines.Clear;
 end;
 
 procedure TEvaluateDlg.MenuItem2Click(Sender: TObject);
 begin
   fHistDirection:=EHDUp;
-  tbHistory.ImageIndex := IDEImages.LoadImage(16, 'evaluate_up');
+  tbHistory.ImageIndex := IDEImages.LoadImage('evaluate_up');
   txtResult.Lines.Clear;
 end;
 
 procedure TEvaluateDlg.MenuItem3Click(Sender: TObject);
 begin
   fHistDirection:=EHDDown;
-  tbHistory.ImageIndex := IDEImages.LoadImage(16, 'callstack_goto');
+  tbHistory.ImageIndex := IDEImages.LoadImage('callstack_goto');
   txtResult.Lines.Clear;
 end;
 
@@ -248,8 +283,7 @@ end;
 
 procedure TEvaluateDlg.Modify;
 var
-  S, V, R: String;
-  DBGType: TDBGType;
+  S, V: String;
 begin
   S := Trim(cmbExpression.Text);
   if S = '' then Exit;
@@ -263,27 +297,7 @@ begin
   if cmbNewValue.Items.IndexOf(V) = -1
   then cmbNewValue.Items.Insert(0, V);
 
-  DBGType:=nil;
-  R:='';
-  if not DebugBoss.Evaluate(S, R, DBGType) then Exit;
-  FreeAndNil(DBGType);
-  if fHistDirection<>EHDNone then
-    begin
-    if txtResult.Lines.Text='' then
-      txtResult.Lines.Text := RESULTMOD+ S+':'+LineEnding+ R + LineEnding
-    else
-      if fHistDirection=EHDUp then
-        txtResult.Lines.Text := RESULTMOD+ S+':'+LineEnding+ R + LineEnding
-           + RESULTSEPARATOR + LineEnding + txtResult.Lines.Text
-      else
-        begin
-        txtResult.Lines.Text := txtResult.Lines.Text + RESULTSEPARATOR + LineEnding
-           + RESULTMOD+ S+':'+LineEnding+ R+LineEnding;
-        txtResult.SelStart:=length(txtResult.Lines.Text);
-        end;
-    end
-  else
-    txtResult.Lines.Text := R;
+  Evaluate;
 end;
 
 procedure TEvaluateDlg.FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -306,6 +320,18 @@ begin
   end;
 end;
 
+procedure TEvaluateDlg.cmbExpressionKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  fSkipKeySelect := False;
+end;
+
+procedure TEvaluateDlg.cmbExpressionSelect(Sender: TObject);
+begin
+  if not fSkipKeySelect then
+    Evaluate;
+end;
+
 procedure TEvaluateDlg.FormShow(Sender: TObject);
 begin
   cmbExpression.SetFocus;
@@ -314,7 +340,7 @@ end;
 procedure TEvaluateDlg.FormKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
-  if Key = VK_ESCAPE then
+  if (Key = VK_ESCAPE) and not Docked then
     Close
   else
     inherited;;

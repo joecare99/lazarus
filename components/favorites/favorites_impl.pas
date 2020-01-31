@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -30,9 +30,16 @@ unit favorites_impl;
 interface
 
 uses
-  Classes, SysUtils, ToolBarIntf, IDEImagesIntf, Graphics, PackageIntf,
-  Menus, LazIDEIntf, ProjectIntf, Laz2_XMLCfg, IDEOptionsIntf,
-  IDECommands, ComCtrls, favoritesstr, ImgList, LazFileUtils;
+  Classes, SysUtils,
+  // LCL
+  Graphics, ComCtrls, Menus, ImgList,
+  // LazUtils
+  LazFileUtils, Laz2_XMLCfg,
+  // IdeIntf
+  ToolBarIntf, IDEImagesIntf, LazIDEIntf, ProjectIntf, IDEOptionsIntf,
+  IDECommands, IDEUtils,
+  // Favorites
+  favoritesstr;
 
 type
   TFavoritesHandler = class
@@ -111,7 +118,7 @@ end;
 
 procedure TOpenFileFavToolButton.DoOnAdded;
 var
-  xImg: TCustomBitmap;
+  xGlyphs: TLCLGlyphs;
 begin
   inherited DoOnAdded;
 
@@ -123,21 +130,11 @@ begin
     DropdownMenu := TPopupMenu.Create(Self);
 
   if DropdownMenu.Images=nil then
-  begin
-    DropdownMenu.Images := TCustomImageList.Create(Self);
-    DropdownMenu.Images.Width := 16;
-    DropdownMenu.Images.Height := 16;
-  end;
+    DropdownMenu.Images := LCLGlyphs;
+  xGlyphs := DropdownMenu.Images as TLCLGlyphs;
 
-  xImg := TBitmap.Create;
-  try
-    IDEImages.Images_16.GetBitmap(IDEImages.LoadImage(16, 'laz_add'), xImg);
-    FAddImageIndex := DropdownMenu.Images.Add(xImg, nil);
-    IDEImages.Images_16.GetBitmap(IDEImages.LoadImage(16, 'laz_delete'), xImg);
-    FRemoveImageIndex := DropdownMenu.Images.Add(xImg, nil);
-  finally
-    xImg.Free;
-  end;
+  FAddImageIndex := xGlyphs.GetImageIndex('laz_add');
+  FRemoveImageIndex := xGlyphs.GetImageIndex('laz_delete');
 
   FOrigOnPopup := DropdownMenu.OnPopup;
   DropdownMenu.OnPopup := @RefreshMenu;
@@ -168,11 +165,10 @@ end;
 procedure TOpenFileFavToolButton.RefreshMenu(Sender: TObject);
 var
   xM, xSep: TMenuItem;
-  xFavoriteFile: string;
+  xFavoriteFile, xExt: string;
   xMI, xAddToFav: TFileNameMenuItem;
   xProj: TLazProject;
   xMIndex: Integer;
-  xExt: RawByteString;
 begin
   if Assigned(FOrigOnPopup) then
     FOrigOnPopup(Sender);

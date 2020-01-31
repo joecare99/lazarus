@@ -4,26 +4,18 @@
 
 unit LazControls;
 
+{$warn 5023 off : no warning about unused units}
 interface
 
 uses
   CheckBoxThemed, DividerBevel, ExtendedNotebook, ListFilterEdit, 
   ListViewFilterEdit, TreeFilterEdit, ShortPathEdit, LvlGraphCtrl, 
-  ExtendedTabControls, SpinEx, LazarusPackageIntf;
+  ExtendedTabControls, SpinEx, SmallOrderedSetEditor, LazarusPackageIntf;
 
 implementation
 
 procedure Register;
 begin
-  RegisterUnit('CheckBoxThemed', @CheckBoxThemed.Register);
-  RegisterUnit('DividerBevel', @DividerBevel.Register);
-  RegisterUnit('ExtendedNotebook', @ExtendedNotebook.Register);
-  RegisterUnit('ListFilterEdit', @ListFilterEdit.Register);
-  RegisterUnit('ListViewFilterEdit', @ListViewFilterEdit.Register);
-  RegisterUnit('TreeFilterEdit', @TreeFilterEdit.Register);
-  RegisterUnit('ShortPathEdit', @ShortPathEdit.Register);
-  RegisterUnit('LvlGraphCtrl', @LvlGraphCtrl.Register);
-  RegisterUnit('SpinEx', @SpinEx.Register);
 end;
 
 initialization

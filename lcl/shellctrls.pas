@@ -22,8 +22,11 @@ unit ShellCtrls;
 interface
 
 uses
-  Classes, SysUtils, Forms, Graphics, LCLType, AvgLvlTree,
-  ComCtrls, LCLProc, FileUtil, LazFileUtils, LazUtf8, LCLStrConsts;
+  Classes, SysUtils, Laz_AVL_Tree,
+  // LCL
+  Forms, Graphics, ComCtrls, LCLProc, LCLStrConsts,
+  // LazUtils
+  FileUtil, LazFileUtils, LazUTF8, Masks;
 
 {$if defined(Windows) or defined(darwin)}
 {$define CaseInsensitiveFilenames}
@@ -42,12 +45,17 @@ type
 
   TFileSortType = (fstNone, fstAlphabet, fstFoldersFirst);
 
+  TMaskCaseSensitivity = (mcsPlatformDefault, mcsCaseInsensitive, mcsCaseSensitive);
+
   { Forward declaration of the classes }
 
   TCustomShellTreeView = class;
   TCustomShellListView = class;
 
   { TCustomShellTreeView }
+
+  TAddItemEvent = procedure(Sender: TObject; const ABasePath: String;
+                            const AFileInfo: TSearchRec; var CanAdd: Boolean) of object;
 
   TCustomShellTreeView = class(TCustomTreeView)
   private
@@ -56,6 +64,7 @@ type
     FShellListView: TCustomShellListView;
     FFileSortType: TFileSortType;
     FInitialRoot: String;
+    FOnAddItem: TAddItemEvent;
     { Setters and getters }
     function GetPath: string;
     procedure SetFileSortType(const AValue: TFileSortType);
@@ -70,8 +79,8 @@ type
     { Other methods specific to Lazarus }
     function  PopulateTreeNodeWithFiles(
       ANode: TTreeNode; ANodePath: string): Boolean;
-    procedure PopulateWithBaseFiles;
     procedure DoSelectionChanged; override;
+    procedure DoAddItem(const ABasePath: String; const AFileInfo: TSearchRec; var CanAdd: Boolean);
     function CanExpand(Node: TTreeNode): Boolean; override;
   public
     { Basic methods }
@@ -82,9 +91,11 @@ type
     class function  GetBasePath: string;
     function  GetRootPath: string;
     class procedure GetFilesInDir(const ABaseDir: string;
-      AMask: string; AObjectTypes: TObjectTypes; AResult: TStrings; AFileSortType: TFileSortType = fstNone);
+      AMask: string; AObjectTypes: TObjectTypes; AResult: TStrings; AFileSortType: TFileSortType = fstNone;
+      ACaseSensitivity: TMaskCaseSensitivity = mcsPlatformDefault);
     { Other methods specific to Lazarus }
     function  GetPathFromNode(ANode: TTreeNode): string;
+    procedure PopulateWithBaseFiles;
     procedure Refresh(ANode: TTreeNode); overload;
 
     { Properties }
@@ -93,7 +104,7 @@ type
     property FileSortType: TFileSortType read FFileSortType write SetFileSortType;
     property Root: string read FRoot write SetRoot;
     property Path: string read GetPath write SetPath;
-
+    property OnAddItem: TAddItemEvent read FOnAddItem write FOnAddItem;
     { Protected properties which users may want to access, see bug 15374 }
     property Items;
   end;
@@ -142,6 +153,7 @@ type
     property Tag;
     property ToolTips;
     property Visible;
+    property OnAddItem;
     property OnAdvancedCustomDraw;
     property OnAdvancedCustomDrawItem;
     property OnChange;
@@ -171,6 +183,9 @@ type
     property OnMouseWheel;
     property OnMouseWheelDown;
     property OnMouseWheelUp;
+    property OnMouseWheelHorz;
+    property OnMouseWheelLeft;
+    property OnMouseWheelRight;
     property OnSelectionChanged;
     property OnShowHint;
     property OnUTF8KeyPress;
@@ -190,18 +205,22 @@ type
   TCustomShellListView = class(TCustomListView)
   private
     FMask: string;
+    FMaskCaseSensitivity: TMaskCaseSensitivity;
     FObjectTypes: TObjectTypes;
     FRoot: string;
     FShellTreeView: TCustomShellTreeView;
+    FOnAddItem: TAddItemEvent;
     FOnFileAdded: TCSLVFileAddedEvent;
     { Setters and getters }
     procedure SetMask(const AValue: string);
+    procedure SetMaskCaseSensitivity(AValue: TMaskCaseSensitivity);
     procedure SetShellTreeView(const Value: TCustomShellTreeView);
     procedure SetRoot(const Value: string);
   protected
     { Methods specific to Lazarus }
     procedure PopulateWithRoot();
     procedure Resize; override;
+    procedure DoAddItem(const ABasePath: String; const AFileInfo: TSearchRec; var CanAdd: Boolean);
     property OnFileAdded: TCSLVFileAddedEvent read FOnFileAdded write FOnFileAdded;
   public
     { Basic methods }
@@ -211,9 +230,11 @@ type
     function GetPathFromItem(ANode: TListItem): string;
     { Properties }
     property Mask: string read FMask write SetMask; // Can be used to conect to other controls
+    property MaskCaseSensitivity: TMaskCaseSensitivity read FMaskCaseSensitivity write SetMaskCaseSensitivity default mcsPlatformDefault;
     property ObjectTypes: TObjectTypes read FObjectTypes write FObjectTypes;
     property Root: string read FRoot write SetRoot;
     property ShellTreeView: TCustomShellTreeView read FShellTreeView write SetShellTreeView;
+    property OnAddItem: TAddItemEvent read FOnAddItem write FOnAddItem;
     { Protected properties which users may want to access, see bug 15374 }
     property Items;
   end;
@@ -249,6 +270,8 @@ type
 //    property HotTrackStyles;
 //    property HoverTime;
     property LargeImages;
+    property Mask;
+    property MaskCaseSensitivity;
     property MultiSelect;
 //    property OwnerData;
 //    property OwnerDraw;
@@ -298,10 +321,14 @@ type
     property OnMouseWheel;
     property OnMouseWheelDown;
     property OnMouseWheelUp;
+    property OnMouseWheelHorz;
+    property OnMouseWheelLeft;
+    property OnMouseWheelRight;
     property OnResize;
     property OnSelectItem;
     property OnStartDrag;
     property OnUTF8KeyPress;
+    property OnAddItem;
     property OnFileAdded;
     { TCustomShellListView properties }
     property ObjectTypes;
@@ -329,6 +356,7 @@ type
   EInvalidPath = class(EShellCtrl);
 
 function DbgS(OT: TObjectTypes): String; overload;
+function DbgS(CS: TMaskCaseSensitivity): String; overload;
 
 procedure Register;
 
@@ -341,6 +369,7 @@ uses Windows;
 const
   //no need to localize, it's a message for the programmer
   sShellTreeViewIncorrectNodeType = 'TShellTreeView: the newly created node is not a TShellTreeNode!';
+  MaskCaseSensitivityStrings: array[TMaskCaseSensitivity] of String = ('mcsPlatformDefault', 'mcsCaseInsensitive', 'mcsCaseSensitive');
 
 function DbgS(OT: TObjectTypes): String; overload;
 begin
@@ -350,6 +379,11 @@ begin
   if (otHidden in OT) then Result := Result + 'otHidden';
   if Result[Length(Result)] = ',' then System.Delete(Result, Length(Result), 1);
   Result := Result + ']';
+end;
+
+function DbgS(CS: TMaskCaseSensitivity): String;
+begin
+  Result := MaskCaseSensitivityStrings[CS];
 end;
 
 { TFileItem : internal helper class used for temporarily storing info in an internal TStrings component}
@@ -509,7 +543,7 @@ var
 begin
   if FFileSortType=AValue then exit;
   FFileSortType:=AValue;
-  if (csLoading in ComponentState) then Exit;
+  if (([csLoading,csDesigning] * ComponentState) <> []) then Exit;
   CurrPath := GetPath;
   try
     BeginUpdate;
@@ -610,11 +644,6 @@ begin
 
 end;
 
-function STVCompareFiles(f1, f2: Pointer): integer;
-begin
-  Result:=CompareFilenames(AnsiString(f1),AnsiString(f2));
-end;
-
 { Helper routine.
   Finds all files/directories directly inside a directory.
   Does not recurse inside subdirectories.
@@ -622,23 +651,17 @@ end;
   AResult will contain TFileItem objects upon return, make sure to free them in the calling routine
 
   AMask may contain multiple file masks separated by ;
-  Don't add a final ; after the last mask.
 }
 class procedure TCustomShellTreeView.GetFilesInDir(const ABaseDir: string;
-  AMask: string; AObjectTypes: TObjectTypes; AResult: TStrings; AFileSortType: TFileSortType);
+  AMask: string; AObjectTypes: TObjectTypes; AResult: TStrings; AFileSortType: TFileSortType; ACaseSensitivity: TMaskCaseSensitivity);
 var
   DirInfo: TSearchRec;
-  FindResult: Integer;
-  IsDirectory, IsValidDirectory, IsHidden, AddFile: Boolean;
-  SearchStr: string;
-  MaskStr: string;
+  FindResult, i: Integer;
+  IsDirectory, IsValidDirectory, IsHidden, AddFile, UseMaskList: Boolean;
+  SearchStr, MaskStr, ShortFilename: string;
+  MaskList: TMaskList;
   Files: TList;
   FileItem: TFileItem;
-  i: Integer;
-  MaskStrings: TStringList;
-  FileTree: TAvgLvlTree;
-  ShortFilename: AnsiString;
-  j: Integer;
   {$if defined(windows) and not defined(wince)}
   ErrMode : LongWord;
   {$endif}
@@ -651,105 +674,108 @@ begin
   try
   {$endif}
 
-  if Trim(AMask) = '' then MaskStr := AllFilesMask
-  else MaskStr := AMask;
-
-  // The string list implements support for multiple masks separated
-  // by semi-colon ";"
-  MaskStrings := TStringList.Create;
-  FileTree:=TAvgLvlTree.Create(@STVCompareFiles);
-  try
-    {$ifdef NotLiteralFilenames}
-    MaskStrings.CaseSensitive := False;
-    {$else}
-    MaskStrings.CaseSensitive := True;
-    {$endif}
-
-    MaskStrings.Delimiter := ';';
-    MaskStrings.DelimitedText := MaskStr;
-
-    if AFileSortType=fstNone then Files:=nil
-    else Files:=TList.Create;
-
-    j:=0;
-    for i := 0 to MaskStrings.Count - 1 do
+    MaskStr := Trim(AMask);
+    while (Length(MaskStr) > 0) and (MaskStr[Length(MaskStr)] = ';') do
+      System.Delete(MaskStr, Length(MaskStr), 1);
+    if Trim(MaskStr) = '' then
+      MaskStr := AllFilesMask;
+    //Use a TMaksList if more than 1 mask is specified or if MaskCaseSensitivity differs from the platform default behaviour
+    UseMaskList := (Pos(';', MaskStr) > 0) or
+                   {$ifdef NotLiteralFilenames}
+                   (ACaseSensitivity = mcsCaseSensitive)
+                   {$else}
+                   (ACaseSensitivity = mcsCaseInsensitive)
+                   {$endif}
+                   ;
+    if UseMaskList then
     begin
-      if MaskStrings.IndexOf(MaskStrings[i]) < i then Continue; // From patch from bug 17761: TShellListView Mask: duplicated items if mask is " *.ext;*.ext "
-      SearchStr := IncludeTrailingPathDelimiter(ABaseDir) + MaskStrings.Strings[i];
+      //"Escape" occurrences of '[', since TMaskList treats those as start of a set,
+      //this behaviour would be incompatible with the situation if no MaskList was used
+      //and it would break backwards compatibilty and could raise unexpected EConvertError where it did not in the past.
+      //If you need sets in the MaskList, use the OnAddItem event for that. (BB)
+      MaskStr := StringReplace(MaskStr, '[', '[[]', [rfReplaceAll]);
+      {$ifdef NotLiteralFilenames}
+      MaskList := TMaskList.Create(MaskStr, ';', (ACaseSensitivity = mcsCaseSensitive));  //False by default
+      {$else}
+      MaskList := TMaskList.Create(MaskStr, ';', (ACaseSensitivity <> mcsCaseInsensitive)); //True by default
+      {$endif}
+    end;
+
+    try
+      if AFileSortType = fstNone then
+        Files:=nil
+      else
+        Files := TList.Create;
+
+      i := 0;
+      if UseMaskList then
+        SearchStr := IncludeTrailingPathDelimiter(ABaseDir) + AllFilesMask
+      else
+        SearchStr := IncludeTrailingPathDelimiter(ABaseDir) + MaskStr; //single mask, let FindFirst/FindNext handle matching
 
       FindResult := FindFirstUTF8(SearchStr, faAnyFile, DirInfo);
-
-      while FindResult = 0 do
+      while (FindResult = 0) do
       begin
-        inc(j);
-        if j=100 then
-        begin
-          Application.ProcessMessages;
-          j:=0;
-        end;
-
         ShortFilename := DirInfo.Name;
-
-        IsDirectory := (DirInfo.Attr and FaDirectory = FaDirectory);
-
         IsValidDirectory := (ShortFilename <> '.') and (ShortFilename <> '..');
-
-        IsHidden := (DirInfo.Attr and faHidden = faHidden);
-
-        // First check if we show hidden files
-        if IsHidden then AddFile := (otHidden in AObjectTypes)
-        else AddFile := True;
-
-        // If it is a directory, check if it is a valid one
-        if IsDirectory then
-          AddFile := AddFile and ((otFolders in AObjectTypes) and IsValidDirectory)
-        else
-          AddFile := AddFile and (otNonFolders in AObjectTypes);
-
-        // AddFile identifies if the file is valid or not
-        if AddFile then
+        //no need to call MaskListMatches (which loops through all masks) if ShortFileName is '.' or '..' since we never process this
+        if ((not UseMaskList) or MaskList.Matches(DirInfo.Name)) and IsValidDirectory  then
         begin
-          if not Assigned(Files) then begin
-            if FileTree.Find(Pointer(ShortFilename))=nil then
-            begin
-              // From patch from bug 17761: TShellListView Mask: duplicated items if mask is " *.ext;*.ext "
-              FileTree.Add(Pointer(ShortFilename));
-              AResult.AddObject(ShortFilename, TFileItem.Create(DirInfo, ABaseDir));
-            end;
-          end else
-            Files.Add ( TFileItem.Create(DirInfo, ABaseDir));
-        end;
+          inc(i);
+          if i = 100 then
+          begin
+            Application.ProcessMessages;
+            i := 0;
+          end;
+          IsDirectory := (DirInfo.Attr and FaDirectory = FaDirectory);
+          IsHidden := (DirInfo.Attr and faHidden{%H-} = faHidden{%H-});
 
+          // First check if we show hidden files
+          if IsHidden then
+            AddFile := (otHidden in AObjectTypes)
+          else
+            AddFile := True;
+
+          // If it is a directory, check if it is a valid one
+          if IsDirectory then
+            AddFile := AddFile and ((otFolders in AObjectTypes) and IsValidDirectory)
+          else
+            AddFile := AddFile and (otNonFolders in AObjectTypes);
+
+          // AddFile identifies if the file is valid or not
+          if AddFile then
+          begin
+            if not Assigned(Files) then
+            begin
+              AResult.AddObject(ShortFilename, TFileItem.Create(DirInfo, ABaseDir));
+            end else
+              Files.Add(TFileItem.Create(DirInfo, ABaseDir));
+          end;
+        end;// Filename matches the mask
         FindResult := FindNextUTF8(DirInfo);
-      end;
+      end; //FindResult = 0
 
       FindCloseUTF8(DirInfo);
-    end;
-  finally
-    FileTree.Free;
-    MaskStrings.Free;
-  end;
-
-  if Assigned(Files) then begin
-
-    case AFileSortType of
-      fstAlphabet:     Files.Sort(@FilesSortAlphabet);
-      fstFoldersFirst: Files.Sort(@FilesSortFoldersFirst);
+    finally
+      if UseMaskList then
+        MaskList.Free;
     end;
 
-    for i:=0 to Files.Count-1 do
+    if Assigned(Files) then
     begin
-      FileItem:=TFileItem(Files[i]);
-      if (i < Files.Count - 1) and (TFileItem(Files[i]).FileInfo.Name = TFileItem(Files[i + 1]).FileInfo.Name) then
-      begin
-        FileItem.Free;
-        Continue; // cause Files is sorted // From patch from bug 17761: TShellListView Mask: duplicated items if mask is " *.ext;*.ext "
+      case AFileSortType of
+        fstAlphabet:     Files.Sort(@FilesSortAlphabet);
+        fstFoldersFirst: Files.Sort(@FilesSortFoldersFirst);
       end;
-      AResult.AddObject(FileItem.FileInfo.Name, FileItem);
+
+      for i:=0 to Files.Count-1 do
+      begin
+        FileItem:=TFileItem(Files[i]);
+        AResult.AddObject(FileItem.FileInfo.Name, FileItem);
+      end;
+      //don't free the TFileItems here, they will freed by the calling routine
+      Files.Free;
     end;
-    //don't free the TFileItems here, they will freed by the calling routine
-    Files.Free;
-  end;
 
   {$if defined(windows) and not defined(wince)}
   finally
@@ -768,6 +794,9 @@ begin
   {$endif}
   {$ifdef unix}
   Result := '/';
+  {$endif}
+  {$ifdef HASAMIGA}
+  Result := '';
   {$endif}
 end;
 
@@ -788,6 +817,7 @@ var
   i: Integer;
   Files: TStringList;
   NewNode: TTreeNode;
+  CanAdd: Boolean;
 
    function HasSubDir(Const ADir: String): Boolean;
    var
@@ -799,14 +829,14 @@ var
      Result:=False;
      try
        Attr := faDirectory;
-       if (otHidden in fObjectTypes) then Attr := Attr or faHidden;
+       if (otHidden in fObjectTypes) then Attr := Attr or faHidden{%H-};
        FindRes := FindFirstUTF8(AppendPathDelim(ADir) + AllFilesMask, Attr , SR);
        while (FindRes = 0) do
        begin
          if ((SR.Attr and faDirectory <> 0) and (SR.Name <> '.') and
             (SR.Name <> '..')) then
          begin
-           IsHidden := ((Attr and faHidden) > 0);
+           IsHidden := ((Attr and faHidden{%H-}) > 0);
            if not (IsHidden and (not ((otHidden in fObjectTypes)))) then
            begin
              Result := True;
@@ -833,15 +863,20 @@ begin
 
     for i := 0 to Files.Count - 1 do
     begin
-      NewNode := Items.AddChildObject(ANode, Files.Strings[i], nil);
-      TShellTreeNode(NewNode).FFileInfo := TFileItem(Files.Objects[i]).FileInfo;
-      TShellTreeNode(NewNode).SetBasePath(TFileItem(Files.Objects[i]).FBasePath);
+      CanAdd := True;
+      with TFileItem(Files.Objects[i]) do DoAddItem(FBasePath, FileInfo, CanAdd);
+      if CanAdd then
+      begin
+        NewNode := Items.AddChildObject(ANode, Files.Strings[i], nil);
+        TShellTreeNode(NewNode).FFileInfo := TFileItem(Files.Objects[i]).FileInfo;
+        TShellTreeNode(NewNode).SetBasePath(TFileItem(Files.Objects[i]).FBasePath);
 
-      if (fObjectTypes * [otNonFolders] = []) then
-        NewNode.HasChildren := (TShellTreeNode(NewNode).IsDirectory and
-                               HasSubDir(AppendpathDelim(ANodePath)+Files[i]))
-      else
-        NewNode.HasChildren := TShellTreeNode(NewNode).IsDirectory;
+        if (fObjectTypes * [otNonFolders] = []) then
+          NewNode.HasChildren := (TShellTreeNode(NewNode).IsDirectory and
+                                 HasSubDir(AppendpathDelim(ANodePath)+Files[i]))
+        else
+          NewNode.HasChildren := TShellTreeNode(NewNode).IsDirectory;
+      end;
     end;
   finally
     Files.Free;
@@ -858,7 +893,7 @@ var
 begin
   // avoids crashes in the IDE by not populating during design
   if (csDesigning in ComponentState) then Exit;
-
+  Items.Clear;
   r := GetLogicalDriveStrings(SizeOf(Drives), Drives);
   if r = 0 then Exit;
   if r > SizeOf(Drives) then Exit;
@@ -870,7 +905,7 @@ begin
     //Yes, we want to remove the backslash,so don't use ChompPathDelim here
     TShellTreeNode(NewNode).FFileInfo.Name := ExcludeTrailingBackslash(pDrive);
     //On NT platforms drive-roots really have these attributes
-    TShellTreeNode(NewNode).FFileInfo.Attr := faDirectory + faSysFile + faHidden;
+    TShellTreeNode(NewNode).FFileInfo.Attr := faDirectory + faSysFile{%H-} + faHidden{%H-};
     TShellTreeNode(NewNode).SetBasePath('');
     NewNode.HasChildren := True;
     Inc(pDrive, 4);
@@ -883,6 +918,7 @@ begin
   // avoids crashes in the IDE by not populating during design
   // also do not populate before loading is done
   if ([csDesigning, csLoading] * ComponentState <> []) then Exit;
+  Items.Clear;
 
   // This allows showing "/" in Linux, but in Windows it makes no sense to show the base
   if GetBasePath() <> '' then
@@ -926,6 +962,13 @@ begin
         FShellListView.Root := '';
     end;
   end;
+end;
+
+procedure TCustomShellTreeView.DoAddItem(const ABasePath: String;
+  const AFileInfo: TSearchRec; var CanAdd: Boolean);
+begin
+  if Assigned(FOnAddItem) then
+    FOnAddItem(Self, ABasePath, AFileInfo, CanAdd);
 end;
 
 function TCustomShellTreeView.GetPathFromNode(ANode: TTreeNode): string;
@@ -1063,7 +1106,7 @@ var
     else
     begin
       Attr := FileGetAttrUtf8(Fn);
-      Result := ((Attr and faHidden) = faHidden) and not PathIsDriveRoot(Fn);
+      Result := ((Attr and faHidden{%H-}) = faHidden{%H-}) and not PathIsDriveRoot(Fn);
       if not Result then
       begin
         //it also is not allowed that any folder above is hidden
@@ -1095,7 +1138,7 @@ var
             if (Length(Fn) = 2) and (Fn[2] = ':') then Continue;
             {$endif}
             Attr := FileGetAttrUtf8(Fn);
-            if (Attr <> -1) and ((Attr and faHidden) > 0) and not PathIsDriveRoot(Fn) then
+            if (Attr <> -1) and ((Attr and faHidden{%H-}) > 0) and not PathIsDriveRoot(Fn) then
             begin
               Result := True;
               {$ifdef debug_shellctrls}
@@ -1322,6 +1365,34 @@ begin
   end;
 end;
 
+procedure TCustomShellListView.SetMaskCaseSensitivity(
+  AValue: TMaskCaseSensitivity);
+var
+  OldMask: String;
+  NeedRefresh: Boolean;
+begin
+  if FMaskCaseSensitivity = AValue then Exit;
+  {$ifdef NotLiteralFilenames}
+  if (FMaskCaseSensitivity in [mcsPlatformDefault, mcsCaseInsensitive]) then
+    NeedRefresh := (AValue = mcsCaseSensitive)
+  else
+    NeedRefresh := True;
+  {$else}
+  if (FMaskCaseSensitivity in [mcsPlatformDefault, mcsCaseSensitive]) then
+    NeedRefresh := (AValue = mcsCaseInsensitive)
+  else
+    NeedRefresh :=True;
+  {$endif}
+  FMaskCaseSensitivity := AValue;
+  if NeedRefresh then
+  begin
+    //Trick SetMask to believe a refresh is needed.
+    OldMask := FMask;
+    FMask := #0 + FMask;
+    SetMask(OldMask);
+  end;
+end;
+
 procedure TCustomShellListView.SetRoot(const Value: string);
 begin
   if FRoot <> Value then
@@ -1345,6 +1416,7 @@ begin
   // Initial property values
   ViewStyle := vsReport;
   ObjectTypes := [otNonFolders];
+  FMaskCaseSensitivity := mcsPlatformDefault;
 
   Self.Columns.Add;
   Self.Columns.Add;
@@ -1369,6 +1441,7 @@ var
   NewItem: TListItem;
   CurFileName, CurFilePath: string;
   CurFileSize: Int64;
+  CanAdd: Boolean;
 begin
   // avoids crashes in the IDE by not populating during design
   if (csDesigning in ComponentState) then Exit;
@@ -1379,28 +1452,33 @@ begin
   Files := TStringList.Create;
   try
     Files.OwnsObjects := True;
-    TCustomShellTreeView.GetFilesInDir(FRoot, FMask, FObjectTypes, Files);
+    TCustomShellTreeView.GetFilesInDir(FRoot, FMask, FObjectTypes, Files, fstNone, FMaskCaseSensitivity);
 
     for i := 0 to Files.Count - 1 do
     begin
-      NewItem := Items.Add;
-      CurFileName := Files.Strings[i];
-      CurFilePath := IncludeTrailingPathDelimiter(FRoot) + CurFileName;
-      // First column - Name
-      NewItem.Caption := CurFileName;
-      // Second column - Size
-      // The raw size in bytes is stored in the data part of the item
-      CurFileSize := FileSize(CurFilePath); // in Bytes
-      NewItem.Data := Pointer(PtrInt(CurFileSize));
-      if CurFileSize < 1024 then
-        NewItem.SubItems.Add(Format(sShellCtrlsBytes, [IntToStr(CurFileSize)]))
-      else if CurFileSize < 1024 * 1024 then
-        NewItem.SubItems.Add(Format(sShellCtrlsKB, [IntToStr(CurFileSize div 1024)]))
-      else
-        NewItem.SubItems.Add(Format(sShellCtrlsMB, [IntToStr(CurFileSize div (1024 * 1024))]));
-      // Third column - Type
-      NewItem.SubItems.Add(ExtractFileExt(CurFileName));
-      if Assigned(FOnFileAdded) then FOnFileAdded(Self,NewItem);
+      CanAdd := True;
+      with TFileItem(Files.Objects[i]) do DoAddItem(FBasePath, FileInfo, CanAdd);
+      if CanAdd then
+      begin
+        NewItem := Items.Add;
+        CurFileName := Files.Strings[i];
+        CurFilePath := IncludeTrailingPathDelimiter(FRoot) + CurFileName;
+        // First column - Name
+        NewItem.Caption := CurFileName;
+        // Second column - Size
+        // The raw size in bytes is stored in the data part of the item
+        CurFileSize := TFileItem(Files.Objects[i]).FFileInfo.Size; // in Bytes. (We already know this, so no need for FileSize(CurFilePath))
+        NewItem.Data := Pointer(PtrInt(CurFileSize));
+        if CurFileSize < 1024 then
+          NewItem.SubItems.Add(Format(sShellCtrlsBytes, [IntToStr(CurFileSize)]))
+        else if CurFileSize < 1024 * 1024 then
+          NewItem.SubItems.Add(Format(sShellCtrlsKB, [IntToStr(CurFileSize div 1024)]))
+        else
+          NewItem.SubItems.Add(Format(sShellCtrlsMB, [IntToStr(CurFileSize div (1024 * 1024))]));
+        // Third column - Type
+        NewItem.SubItems.Add(ExtractFileExt(CurFileName));
+        if Assigned(FOnFileAdded) then FOnFileAdded(Self,NewItem);
+      end;
     end;
     Sort;
   finally
@@ -1441,6 +1519,13 @@ begin
      Column[0].Width, ' C1.Width=', Column[1].Width,
      ' C2.Width=', Column[2].Width]);
   {$endif}
+end;
+
+procedure TCustomShellListView.DoAddItem(const ABasePath: String;
+  const AFileInfo: TSearchRec; var CanAdd: Boolean);
+begin
+  if Assigned(FOnAddItem) then
+    FOnAddItem(Self, ABasePath, AFileInfo, CanAdd);
 end;
 
 function TCustomShellListView.GetPathFromItem(ANode: TListItem): string;

@@ -43,8 +43,11 @@ type
 
   TQtComboStrings = class(TStringList)
   private
+    FSorted: Boolean;
     FWinControl: TWinControl;
     FOwner: TQtComboBox;
+    FChanging: boolean;
+    procedure SetSorted(AValue: Boolean);
   protected
     procedure Put(Index: Integer; const S: string); override;
     {$IFNDEF HAS_INHERITED_INSERTITEM}
@@ -54,13 +57,18 @@ type
   public
     constructor Create(AWinControl: TWinControl; AOwner: TQtComboBox);
     destructor Destroy; override;
+    function Add(const S: String): Integer; override;
     procedure Assign(Source: TPersistent); override;
     procedure Clear; override;
     procedure Delete(Index: Integer); override;
+    function Find(const S: String; out Index: Integer): Boolean;
+    function IndexOf(const S: String): Integer; override;
+    procedure Insert(Index: Integer; const S: String); override;
     procedure Sort; override;
     procedure Exchange(AIndex1, AIndex2: Integer); override;
   public
     property Owner: TQtComboBox read FOwner;
+    property Sorted: Boolean read FSorted write SetSorted;
   end;
 
 
@@ -145,7 +153,7 @@ begin
     W := TextEdit.getText;
   end;
   if W <> '' then
-    SetInternalText(UTF16ToUTF8(W))
+    SetInternalText(W{%H-})
   else
     SetInternalText('');
   FTextChanged := False;
@@ -174,7 +182,7 @@ begin
   TextEdit := TQtTextEdit(FOwner.Handle);
   if ABlockSignals then
     TextEdit.BeginUpdate;
-  W := GetUtf8String(AStr);
+  W := AStr;
   if AClear then
   begin
     // never trigger changed signal when clearing text here.
@@ -272,16 +280,13 @@ begin
 end;
 
 procedure TQtMemoStrings.Put(Index: Integer; const S: string);
-var
-  W: WideString;
 begin
   {$ifdef VerboseQtMemoStrings}
   WriteLn('TQtMemoStrings.Put Index=',Index,' S=',S);
   {$endif}
   if FTextChanged then InternalUpdate;
   FStringList[Index] := S;
-  W := GetUTF8String(S);
-  TQtTextEdit(FOwner.Handle).setLineText(Index, W);
+  TQtTextEdit(FOwner.Handle).setLineText(Index, S{%H-});
 end;
 
 procedure TQtMemoStrings.SetTextStr(const Value: string);
@@ -292,7 +297,7 @@ begin
   WriteLn('TQtMemoStrings.SetTextStr Value=',Value);
   {$endif}
   SetInternalText(Value);
-  W := GetInternalText;
+  W := {%H-}GetInternalText;
   ExternalUpdate(W, True, False);
   FTextChanged := False;
 end;
@@ -353,7 +358,7 @@ begin
     {$endif}
     FStringList.Clear;
     SetInternalText(TStrings(Source).Text);
-    W := GetInternalText;
+    W := {%H-}GetInternalText;
     ExternalUpdate(W, True, False);
     FTextChanged := False;
     exit;
@@ -418,51 +423,23 @@ end;
 procedure TQtMemoStrings.Insert(Index: integer; const S: string);
 var
   W: WideString;
-
-  function WorkaroundNeeded: Boolean;
-  var
-    HaveLt: Boolean;
-    HaveGt: Boolean;
-  begin
-    HaveLt := System.Pos('<', S) > 0;
-    HaveGt := System.Pos('>', S) > 0;
-    Result := HaveLt or HaveGt;
-  end;
-
 begin
   if FTextChanged then InternalUpdate;
   if Index < 0 then Index := 0;
 
   {$ifdef VerboseQtMemoStrings}
-  writeln('TQtMemoStrings.Insert Index=',Index);
+  writeln('TQtMemoStrings.Insert Index=',Index,' COUNT=',FStringList.Count);
   {$endif}
 
-  if Index <= FStringList.Count then
-  begin
+  // simplified because of issue #29670
+  // allow insert invalid index like others do
+  if Index >= FStringList.Count then
+    Index := FStringList.Add(S)
+  else
     FStringList.Insert(Index, S);
-    if (TQtTextEdit(FOwner.Handle).getBlockCount - Index <= 1) then
-    begin
-      // workaround for qt richtext parser bug. issues #17170 and #22715
-      if WorkaroundNeeded then
-      begin
-        W := GetUTF8String(S);
-        if (Index >= FStringList.Count - 1) then
-          TQtTextEdit(FOwner.Handle).appendLine(W)
-        else
-          TQtTextEdit(FOwner.Handle).insertLine(Index, W);
-      end else
-      begin
-        // append is much faster in case when we add strings
-        W := S;
-        ExternalUpdate(W, False, False);
-        FTextChanged := False;
-      end;
-    end else
-    begin
-      W := GetUTF8String(S);
-      TQtTextEdit(FOwner.Handle).insertLine(Index, W);
-    end;
-  end;
+  W := {%H-}S;
+  TQtTextEdit(FOwner.Handle).insertLine(Index, W);
+  FTextChanged := False; // FStringList is already updated, no need to update from WS.
 end;
 
 procedure TQtMemoStrings.LoadFromFile(const FileName: string);
@@ -491,6 +468,24 @@ end;
 
 { TQtComboStrings }
 
+procedure TQtComboStrings.SetSorted(AValue: Boolean);
+var
+  i: Integer;
+begin
+  if FSorted=AValue then Exit;
+  FSorted:=AValue;
+  if not FSorted then Exit;
+
+  for i := 0 to Count - 2 do
+  begin
+    if UTF8CompareText(Strings[i], Strings[i + 1]) < 0 then
+    begin
+      Sort;
+      Break;
+    end;
+  end;
+end;
+
 procedure TQtComboStrings.Put(Index: Integer; const S: string);
 begin
   inherited Put(Index, S);
@@ -498,6 +493,7 @@ begin
   FOwner.setItemText(Index, S);
   FOwner.EndUpdate;
 end;
+
 {$IFNDEF HAS_INHERITED_INSERTITEM}
 procedure TQtComboStrings.InsertItem(Index: Integer; const S: string);
 var
@@ -518,6 +514,7 @@ begin
   FOwner.EndUpdate;
 end;
 {$ENDIF}
+
 procedure TQtComboStrings.InsertItem(Index: Integer; const S: string; O: TObject);
 var
   FSavedIndex: Integer;
@@ -533,16 +530,18 @@ begin
     if (FSavedIndex <> FOwner.currentIndex) then
       FOwner.setCurrentIndex(FSavedIndex);
     FOwner.setText(FSavedText);
-  end;
+  end else
+    FOwner.setCurrentIndex(FSavedIndex);
   FOwner.EndUpdate;
 end;
 
-constructor TQtComboStrings.Create(AWinControl: TWinControl;
-    AOwner: TQtComboBox);
+constructor TQtComboStrings.Create(AWinControl: TWinControl; AOwner: TQtComboBox);
 begin
   inherited Create;
   FWinControl := AWinControl;
   FOwner := AOwner;
+  FSorted := TComboBox(AOwner.LCLObject).Sorted;
+  FChanging := False;
 end;
 
 destructor TQtComboStrings.Destroy;
@@ -551,12 +550,38 @@ begin
   inherited Destroy;
 end;
 
-procedure TQtComboStrings.Assign(Source: TPersistent);
+function TQtComboStrings.Add(const S: String): Integer;
 begin
+  if FSorted then
+  begin
+    Find(S, Result);
+    FChanging := True;
+    Insert(Result, S);
+    FChanging := False;
+  end else
+    Result := inherited Add(S);
+end;
+
+procedure TQtComboStrings.Assign(Source: TPersistent);
+var
+  AList: TStringList;
+begin
+  if (Source = Self) or (Source = nil) then Exit;
   if Assigned(FWinControl) and (FWinControl.HandleAllocated) then
   begin
     FOwner.BeginUpdate;
-    inherited Assign(Source);
+    if Sorted then
+    begin
+      AList := TStringList.Create;
+      try
+        AList.Assign(Source);
+        AList.Sort;
+        inherited Assign(AList);
+      finally
+        AList.Free;
+      end;
+    end else
+      inherited Assign(Source);
     FOwner.EndUpdate;
   end;
 end;
@@ -582,6 +607,56 @@ begin
     FOwner.removeItem(Index);
     FOwner.EndUpdate;
   end;
+end;
+
+function TQtComboStrings.Find(const S: String; out Index: Integer): Boolean;
+var
+  L, R, I: Integer;
+  CompareRes: PtrInt;
+begin
+  Result := False;
+  // Use binary search.
+  L := 0;
+  R := Count - 1;
+  while (L <= R) do
+  begin
+    I := L + (R - L) div 2;
+    CompareRes := UTF8CompareText(S, Strings[I]);
+    if (CompareRes > 0) then
+      L := I + 1
+    else
+    begin
+      R := I - 1;
+      if (CompareRes = 0) then
+      begin
+        Result := True;
+        L := I; // forces end of while loop
+      end;
+    end;
+  end;
+  Index := L;
+end;
+
+function TQtComboStrings.IndexOf(const S: String): Integer;
+begin
+  Result := -1;
+  if FSorted then
+  begin
+    //Binary Search
+    if not Find(S, Result) then
+      Result := -1;
+  end else
+    Result := inherited IndexOf(S);
+end;
+
+procedure TQtComboStrings.Insert(Index: Integer; const S: String);
+begin
+  if FSorted and not FChanging then
+  begin
+    inherited Insert(Index, S);
+    Sort;
+  end else
+    inherited Insert(Index, S);
 end;
 
 procedure TQtComboStrings.Sort;

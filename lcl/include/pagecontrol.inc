@@ -112,7 +112,7 @@ end;
 
 function TPageControl.ChildClassAllowed(ChildClass: TClass): boolean;
 begin
-  Result:=(ChildClass<>nil) and (ChildClass.InheritsFrom(PageClass));
+  Result:=(ChildClass<>nil) and (ChildClass.InheritsFrom(GetPageClass));
   if Widgetset.GetLCLCapability(lcAllowChildControlsInNativeControls) = LCL_CAPABILITY_YES then Result := True;
 end;
 
@@ -165,11 +165,31 @@ begin
   if NextPage<>nil then ActivePage:=NextPage;
 end;
 
+function TPageControl.IndexOfTabAt(X, Y: Integer): Integer;
+begin
+  Result:=inherited IndexOfTabAt(X, Y);
+end;
+
+function TPageControl.IndexOfTabAt(P: TPoint): Integer;
+begin
+  Result:=inherited IndexOfTabAt(P);
+end;
+
+function TPageControl.IndexOfPageAt(X, Y: Integer): Integer;
+begin
+  Result:=inherited IndexOfPageAt(X, Y);
+end;
+
+function TPageControl.IndexOfPageAt(P: TPoint): Integer;
+begin
+  Result:=inherited IndexOfPageAt(P);
+end;
+
 // Convenience routine, to make the TPageControl more intuitive to use
 // A Lazarus addition
 function TPageControl.AddTabSheet: TTabSheet;
 begin
-  Result := TTabSheet.Create(Self);
+  Result := GetPageClass.Create(Self) as TTabSheet;
   Result.PageControl := Self;
 end;
 

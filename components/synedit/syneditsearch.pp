@@ -42,8 +42,13 @@ unit SynEditSearch;
 interface
 
 uses
-  Classes, SysUtils,
-  LCLIntf, LCLType, LCLProc, LazUTF8, SynRegExpr, SynEditMiscProcs, SynEditTypes;
+  Classes, SysUtils, RegExpr,
+  // LCL
+  LCLIntf, LCLType,
+  // LazUtils
+  LazUTF8, LazTracer,
+  // SynEdit
+  SynEditMiscProcs, SynEditTypes;
 
 procedure MakeCompTable;
 
@@ -957,7 +962,10 @@ begin
       else
         inc(y);
 
-      LineStr:=Lines[y];
+      if y >= Lines.Count then // in case Lines is NOT a synedit textbuffer
+        LineStr := ''
+      else
+        LineStr:=Lines[y];
       if ASupportUnicodeCase and (not fSensitive) then LineStr := UTF8LowerCase(LineStr);
       LineLen:=length(LineStr);
       Line:=PChar(LineStr);

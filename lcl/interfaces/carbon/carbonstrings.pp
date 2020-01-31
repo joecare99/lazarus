@@ -23,11 +23,13 @@ interface
 {$endif}
 
 uses
- // rtl+ftl
+  // rtl+ftl
   Classes, SysUtils,
- // LCL
-  LCLProc, LCLType, Graphics, Controls, StdCtrls, LazUtf8Classes,
- // LCL Carbon
+  // LCL
+  LCLProc, LCLType, Graphics, Controls, StdCtrls,
+  // LazUtils
+  LazUtf8Classes, TextStrings, LazStringUtils,
+  // LCL Carbon
   CarbonEdits, CarbonListViews;
 
 type
@@ -80,7 +82,7 @@ type
 
   { TCarbonMemoStrings }
 
-  TCarbonMemoStrings = class(TStrings)
+  TCarbonMemoStrings = class(TCustomMemoStrings)
   private
     FOwner: TCarbonMemo;      // Carbon memo control owning strings
   protected
@@ -462,7 +464,7 @@ begin
   try
     // don't need to copy Objects, VCL does not support them neither
     // preserve the last line ending
-    Text:=ConvertLineEndings(TheStrings.Text);
+    Text:=LineBreaksToSystemLineBreaks(TheStrings.Text);
   finally
     EndUpdate;
   end;

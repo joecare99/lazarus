@@ -17,6 +17,7 @@
 unit Gtk2WSControls;
 
 {$mode objfpc}{$H+}
+{$I gtk2defines.inc}
 
 interface
 
@@ -42,16 +43,16 @@ uses
 
 type
 
-  { TGtk2WSDragImageList }
+  { TGtk2WSDragImageListResolution }
 
-  TGtk2WSDragImageList = class(TWSDragImageList)
+  TGtk2WSDragImageListResolution = class(TWSDragImageListResolution)
   published
-    class function BeginDrag(const ADragImageList: TDragImageList; {%H-}Window: HWND; AIndex, X, Y: Integer): Boolean; override;
-    class function DragMove(const {%H-}ADragImageList: TDragImageList; X, Y: Integer): Boolean; override;
-    class procedure EndDrag(const {%H-}ADragImageList: TDragImageList); override;
-    class function HideDragImage(const {%H-}ADragImageList: TDragImageList;
+    class function BeginDrag(const ADragImageList: TDragImageListResolution; {%H-}Window: HWND; AIndex, X, Y: Integer): Boolean; override;
+    class function DragMove(const {%H-}ADragImageList: TDragImageListResolution; X, Y: Integer): Boolean; override;
+    class procedure EndDrag(const {%H-}ADragImageList: TDragImageListResolution); override;
+    class function HideDragImage(const {%H-}ADragImageList: TDragImageListResolution;
       {%H-}ALockedWindow: HWND; {%H-}DoUnLock: Boolean): Boolean; override;
-    class function ShowDragImage(const {%H-}ADragImageList: TDragImageList;
+    class function ShowDragImage(const {%H-}ADragImageList: TDragImageListResolution;
       {%H-}ALockedWindow: HWND; X, Y: Integer; {%H-}DoLock: Boolean): Boolean; override;
   end;
 
@@ -94,6 +95,7 @@ type
     class procedure SetBiDiMode(const AWinControl: TWinControl; UseRightToLeftAlign, {%H-}UseRightToLeftReading, {%H-}UseRightToLeftScrollBar : Boolean); override;
 
     class procedure PaintTo(const AWinControl: TWinControl; ADC: HDC; X, Y: Integer); override;
+    class procedure Repaint(const AWinControl: TWinControl); override;
     class procedure ShowHide(const AWinControl: TWinControl); override;
     class procedure ScrollBy(const AWinControl: TWinControl; DeltaX, DeltaY: integer); override;
   end;
@@ -261,10 +263,8 @@ var
   CS: PChar;
   Handle: HWND;
 begin
-  Result := False;
   if not WSCheckHandleAllocated(AWinControl, 'GetText')
-  then Exit;
-
+  then Exit(False);
   Result := true;
   Handle := AWinControl.Handle;
   case AWinControl.fCompStyle of
@@ -272,15 +272,12 @@ begin
       begin
         AText := StrPas(gtk_entry_get_text(PGtkEntry({%H-}PGtkCombo(Handle)^.entry)));
       end;
-
     csEdit: AText:= StrPas(gtk_entry_get_text({%H-}PgtkEntry(Handle)));
     csSpinEdit: AText:= StrPas(gtk_entry_get_text(@{%H-}PGtkSpinButton(Handle)^.entry));
-
-
     csMemo:
       begin
         CS := gtk_editable_get_chars(PGtkEditable(
-          GetWidgetInfo({%H-}Pointer(Handle), True)^.CoreWidget), 0, -1);
+          GetOrCreateWidgetInfo({%H-}Pointer(Handle))^.CoreWidget), 0, -1);
         AText := StrPas(CS);
         g_free(CS);
       end;
@@ -304,7 +301,7 @@ begin
   case AWinControl.fCompStyle of
     csMemo:
       begin
-        TextBuf := gtk_text_view_get_buffer(PGtkTextView(GetWidgetInfo({%H-}Pointer(Handle), True)^.CoreWidget));
+        TextBuf := gtk_text_view_get_buffer(PGtkTextView(GetOrCreateWidgetInfo({%H-}Pointer(Handle))^.CoreWidget));
         gtk_text_buffer_get_start_iter(TextBuf, @StartIter);
         gtk_text_buffer_get_end_iter(TextBuf, @EndIter);
         CS := gtk_text_buffer_get_text(TextBuf, @StartIter, @EndIter, False);
@@ -373,10 +370,10 @@ begin
     Result:=nil;
 end;
 
-{ TGtk2WSDragImageList }
+{ TGtk2WSDragImageListResolution }
 
-class function TGtk2WSDragImageList.BeginDrag(
-  const ADragImageList: TDragImageList; Window: HWND; AIndex, X, Y: Integer
+class function TGtk2WSDragImageListResolution.BeginDrag(
+  const ADragImageList: TDragImageListResolution; Window: HWND; AIndex, X, Y: Integer
   ): Boolean;
 var
   ABitmap: TBitmap;
@@ -429,27 +426,27 @@ begin
   ABitmap.Free;
 end;
 
-class function TGtk2WSDragImageList.DragMove(
-  const ADragImageList: TDragImageList; X, Y: Integer): Boolean;
+class function TGtk2WSDragImageListResolution.DragMove(
+  const ADragImageList: TDragImageListResolution; X, Y: Integer): Boolean;
 begin
   Result := Gtk2Widgetset.DragImageList_DragMove(X, Y);
 end;
 
-class procedure TGtk2WSDragImageList.EndDrag(
-  const ADragImageList: TDragImageList);
+class procedure TGtk2WSDragImageListResolution.EndDrag(
+  const ADragImageList: TDragImageListResolution);
 begin
   Gtk2Widgetset.DragImageList_EndDrag;
 end;
 
-class function TGtk2WSDragImageList.HideDragImage(
-  const ADragImageList: TDragImageList; ALockedWindow: HWND; DoUnLock: Boolean
+class function TGtk2WSDragImageListResolution.HideDragImage(
+  const ADragImageList: TDragImageListResolution; ALockedWindow: HWND; DoUnLock: Boolean
   ): Boolean;
 begin
   Result := Gtk2Widgetset.DragImageList_SetVisible(False);
 end;
 
-class function TGtk2WSDragImageList.ShowDragImage(
-  const ADragImageList: TDragImageList; ALockedWindow: HWND; X, Y: Integer;
+class function TGtk2WSDragImageListResolution.ShowDragImage(
+  const ADragImageList: TDragImageListResolution; ALockedWindow: HWND; X, Y: Integer;
   DoLock: Boolean): Boolean;
 begin
   Result := Gtk2Widgetset.DragImageList_DragMove(X, Y) and Gtk2Widgetset.DragImageList_SetVisible(True);
@@ -663,10 +660,11 @@ class procedure TGtk2WSWinControl.SetBounds(const AWinControl: TWinControl;
 var
   AForm: TCustomForm;
   Geometry: TGdkGeometry;
+  AHints: TGdkWindowHints;
+  AFixedWidthHeight: Boolean;
 begin
   if not WSCheckHandleAllocated(AWinControl, 'SetBounds')
   then Exit;
-
   ResizeHandle(AWinControl);
   InvalidateLastWFPResult(AWinControl, Rect(ALeft, ATop, AWidth, AHeight));
   if not AWinControl.Visible then // Gtk2WSForms.ShowHide will correct visibility
@@ -679,13 +677,37 @@ begin
     AForm.HandleObjectShouldBeVisible then
   begin
     // we must set fixed size, gtk_window_set_resizable does not work
-    // as expected for some reason.issue #20741
+    // as expected for some reason.issue #20741.
+    // Constraints fix issue #29563
+    AFixedWidthHeight := AForm.BorderStyle in [bsDialog, bsSingle, bsToolWindow];
+    FillChar(Geometry{%H-}, SizeOf(TGdkGeometry), 0);
     with Geometry do
     begin
-      min_width := AForm.Width;
-      max_width := AForm.Width;
-      min_height := AForm.Height;
-      max_height := AForm.Height;
+      if not AFixedWidthHeight and (AForm.Constraints.MinWidth > 0) then
+        min_width := AForm.Constraints.MinWidth
+      else
+      if AFixedWidthHeight then
+        min_width := AForm.Width;
+      if not AFixedWidthHeight and (AForm.Constraints.MaxWidth > 0) then
+        max_width := AForm.Constraints.MaxWidth
+      else
+      if AFixedWidthHeight then
+        max_width := AForm.Width;
+      if not AFixedWidthHeight and (AForm.Constraints.MinHeight > 0) then
+        min_height := AForm.Constraints.MinHeight
+      else
+        if AFixedWidthHeight then
+          min_height := AForm.Height;
+      if not AFixedWidthHeight and (AForm.Constraints.MaxHeight > 0) then
+        max_height := AForm.Constraints.MaxHeight
+      else
+        if AFixedWidthHeight then
+          max_height := AForm.Height;
+
+      if AForm.Constraints.MaxHeight = 0 then
+        max_height := 32767;
+      if AForm.Constraints.MaxWidth = 0 then
+        max_width := 32767;
 
       base_width := AForm.Width;
       base_height := AForm.Height;
@@ -695,15 +717,34 @@ begin
       max_aspect := 1;
       win_gravity := gtk_window_get_gravity({%H-}PGtkWindow(AForm.Handle));
     end;
-    //debugln('TGtk2WSWinControl.ConstraintsChange A ',GetWidgetDebugReport(Widget),' max=',dbgs(Geometry.max_width),'x',dbgs(Geometry.max_height));
-    if (AForm.BorderStyle in [bsDialog, bsSingle]) then
+    //debugln('TGtk2WSWinControl.SetBounds A maxw=',dbgs(Geometry.max_width),' maxh=',dbgs(Geometry.max_height),
+    //' base w=',dbgs(Geometry.base_width),' h=',dbgs(Geometry.base_height));
+    if AFixedWidthHeight then
       gtk_window_set_geometry_hints({%H-}PGtkWindow(AForm.Handle), nil, @Geometry,
         GDK_HINT_POS or GDK_HINT_MIN_SIZE or GDK_HINT_MAX_SIZE)
     else
     begin
       if AForm.BorderStyle <> bsNone then
-        gtk_window_set_geometry_hints({%H-}PGtkWindow(AForm.Handle), nil, @Geometry,
-          GDK_HINT_POS or GDK_HINT_BASE_SIZE);
+      begin
+        AHints := GDK_HINT_POS or GDK_HINT_BASE_SIZE;
+        if (AForm.Constraints.MinHeight > 0) or (AForm.Constraints.MinWidth > 0) then
+          AHints := AHints or GDK_HINT_MIN_SIZE;
+        if (AForm.Constraints.MaxHeight > 0) or (AForm.Constraints.MaxWidth > 0) then begin
+          AHints := AHints or GDK_HINT_MAX_SIZE;
+          { Work around for only one maximum specified; see TGtk2WSWinControl.ConstraintsChange }
+          if AForm.Constraints.MaxHeight = 0 then
+            Geometry.max_height := 32767;
+          if AForm.Constraints.MaxWidth = 0 then
+            Geometry.max_width := 32767;
+        end;
+        {$IFDEF HASX}
+        if (AHints and GDK_HINT_MIN_SIZE = 0) and (AHints and GDK_HINT_MAX_SIZE = 0) and
+          (Gtk2WidgetSet.GetWindowManager = 'openbox') then
+        else
+        {$ENDIF}
+          gtk_window_set_geometry_hints({%H-}PGtkWindow(AForm.Handle), nil, @Geometry,
+            AHints);
+      end;
       gtk_window_resize({%H-}PGtkWindow(AForm.Handle), AForm.Width, AForm.Height);
     end;
   end;
@@ -754,19 +795,14 @@ end;
 class procedure TGtk2WSWinControl.SetCursor(const AWinControl: TWinControl; const ACursor: HCursor);
 var
   WidgetInfo: PWidgetInfo;
-  NewCursor: HCURSOR;
 begin
   if not WSCheckHandleAllocated(AWinControl, 'SetCursor')
   then Exit;
 
-  if ACursor <> Screen.Cursors[crDefault] then
-    NewCursor := ACursor
-  else
-    NewCursor := 0;
   WidgetInfo := GetWidgetInfo({%H-}Pointer(AWinControl.Handle));
-  if WidgetInfo^.ControlCursor <> NewCursor then
+  if WidgetInfo^.ControlCursor <> ACursor then
   begin
-    WidgetInfo^.ControlCursor := NewCursor;
+    WidgetInfo^.ControlCursor := ACursor;
     TGtkPrivateWidgetClass(AWinControl.WidgetSetClass.WSPrivate).UpdateCursor(WidgetInfo);
   end;
 end;
@@ -981,7 +1017,7 @@ begin
 
     csMemo:
       begin
-        P:= GetWidgetInfo(P, True)^.CoreWidget;
+        P:= GetOrCreateWidgetInfo(P)^.CoreWidget;
         //debugln('TGtk2WSWinControl.SetText A ',dbgs(gtk_text_get_length(PGtkText(P))),' AText="',AText,'"');
         gtk_text_freeze(PGtkText(P));
         gtk_text_set_point(PGtkText(P), 0);
@@ -1113,6 +1149,13 @@ begin
   if not WSCheckHandleAllocated(AWinControl, 'PaintTo') then
     Exit;
   PaintWidget(GetFixedWidget({%H-}PGtkWidget(AWinControl.Handle)));
+end;
+
+class procedure TGtk2WSWinControl.Repaint(const AWinControl: TWinControl);
+begin
+  if not WSCheckHandleAllocated(AWinControl, 'Repaint')
+  then Exit;
+  gtk_widget_queue_draw({%H-}PGtkWidget(AWinControl.Handle));
 end;
 
 { TGtk2WSBaseScrollingWinControl }

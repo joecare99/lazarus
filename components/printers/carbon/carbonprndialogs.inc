@@ -1,12 +1,11 @@
 {%MainUnit ../printersdlgs.pp}
 
-
 const
   SExecute = 'Execute';
 
 { TPageSetupDialog }
 
-function TPageSetupDialog.Execute: Boolean;
+function TPageSetupDialog.DoExecute: Boolean;
 var
   CarbonPrinter: TCarbonPrinter;
 begin
@@ -27,7 +26,7 @@ end;
 
 { TPrinterSetupDialog }
 
-function TPrinterSetupDialog.Execute: Boolean;
+function TPrinterSetupDialog.DoExecute: Boolean;
 begin
   Result := False;
   if not Assigned(Printer) then Exit;
@@ -39,7 +38,7 @@ end;
 
 { TPrintDialog }
 
-function TPrintDialog.Execute: Boolean;
+function TPrintDialog.DoExecute: Boolean;
 var
   CarbonPrinter: TCarbonPrinter;
   DialogSettings: PMPrintSettings;

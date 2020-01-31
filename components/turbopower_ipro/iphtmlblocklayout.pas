@@ -188,7 +188,7 @@ begin
 
   if FBlockOwner is TIpHtmlNodeBody then
     RemoveLeadingLFs;
-  RemoveDuplicateLFs;
+  ProcessDuplicateLFs;
 
   if not RenderProps.IsEqualTo(Props) then
   begin
@@ -376,8 +376,6 @@ var
   WDelta, WMod : Integer;
 
   function CalcDelta: Integer;     // Returns dx
-  var
-    m : Integer;
   begin
     WDelta := 0;
     WMod := 0;
@@ -396,7 +394,9 @@ var
       haChar :
         if FTotWidth >= FTextWidth then
           Result := (FTotWidth - FTextWidth) div 2;
-      else //haJustify :
+      {
+      else
+        //haJustify :
         if iElem < FElementQueue.Count then begin
           m := iElem - FFirstWord - 2;
           if m > 0 then begin
@@ -404,6 +404,7 @@ var
             WMod := (FTotWidth - FTextWidth) mod m;
           end;
         end;
+        }
     end;
   end;
 
@@ -512,6 +513,10 @@ begin
     end;
     if (FCurProps = nil) or not BIsEqualTo(FCurProps) then begin
       FAl := self.Props.Alignment;      // was: FAl := Alignment
+      // wp: line was changed to "FAl := self.Props.Alignment" in order
+      // to fix horizontal text alignment of table cells (r50145).
+      // But with this change, something like "<p align="center"> does not work any more!
+      // Alignment within cells still seems to work correctly after user to old code.
       FVAL := VAlignment;
       FBaseOffset := FontBaseline;
       aPrefor := Preformatted;
@@ -521,7 +526,35 @@ begin
 end;
 
 procedure TIpNodeBlockLayouter.DoQueueElemWord(aCurElem: PIpHtmlElement);
+var
+  lAlign: TIpHtmlAlign;
+  node: TIpHtmlNode;
 begin
+  // wp: added to fix Align of <p> and <div> nodes in <tc>
+  if Assigned(aCurElem.Owner) then begin
+    lAlign := FAl;
+    node := aCurElem.Owner.ParentNode;
+    while Assigned(node) do begin
+      if (node is TIpHtmlNodeCore) then
+        lAlign := TIpHtmlNodeCore(node).Align
+      {
+      if (node is TIpHtmlNodeP) then
+        lAlign := TIpHtmlNodeP(node).Align
+      else
+      if (node is TIpHtmlNodeDIV) then
+        lAlign := TIpHtmlNodeDIV(node).Align
+        }
+      else
+        break;
+      if lAlign = haDefault then
+        node := node.ParentNode
+      else begin
+        FAl := lAlign;
+        break;
+      end;
+    end;
+  end;
+
   FIgnoreHardLF := False;
   if FLTrim and (aCurElem.IsBlank <> 0) then
     FxySize := SizeRec(0, 0)
@@ -801,6 +834,7 @@ var
   Prefor : Boolean;
   CurElem : PIpHtmlElement;
   wi: PWordInfo;
+  lfh: Integer;
 
   procedure InitInner;
   begin
@@ -826,6 +860,7 @@ var
     FBaseOffset := 0;
     FSoftBreak := False;
     FHyphenSpace := 0;
+    lfh := 0;
   end;
 
   procedure ContinueRow;
@@ -930,12 +965,20 @@ begin
               Break;
           etSoftLF :
             if not DoQueueElemSoftLF(WW) then
+            begin
+              if CurElem.LFHeight > 0 then
+                lfh := CurElem.LFHeight;
               Break;
+            end;
           etHardLF :
             if not DoQueueElemHardLF then
+            begin
+              if CurElem.LFHeight > 0 then
+                lfh := CurElem.LFHeight;
             //  raise EIpHtmlException.Create('TIpNodeBlockLayouter.LayoutQueue: FIgnoreHardLF is True after all.')
             //else
               Break;
+            end;
           etClearLeft, etClearRight, etClearBoth :
             if not DoQueueElemClear(CurElem) then
               Break;
@@ -972,7 +1015,7 @@ begin
       OutputQueueLine;
       if (not FExpBreak) and (FTextWidth=0) and (FVRemainL=0) and (FVRemainR=0) then
         break;
-      Inc(YYY, FMaxAscent + FMaxDescent);
+      Inc(YYY, FMaxAscent + FMaxDescent + lfh);
 
       // Calculate VRemainL and VRemainR
       FVRemainL := CalcVRemain(FVRemainL, FLIdent);
@@ -1244,6 +1287,13 @@ var
 
 begin
   P := FIpHtml.PagePtToScreen(aCurWord.WordRect2.TopLeft);
+
+  // We dont't want clipped lines at the top of the preview
+  if (FIpHtml.RenderDevice = rdPreview) and
+     (P.Y < 0) and (FIpHtml.PageViewRect.Top = FIpHtml.PageViewTop)
+  then
+    exit;
+
   {$IFDEF IP_LAZARUS}
   //if (LastOwner <> aCurWord.Owner) then LastPoint := P;
   saveCanvasProperties;
@@ -1262,19 +1312,22 @@ begin
   else
   {$ENDIF}
     FCanvas.Brush.Style := bsClear;
+
   //debugln(['TIpHtmlNodeBlock.RenderQueue ',aCurWord.AnsiWord]);
   FIpHtml.PageRectToScreen(aCurWord.WordRect2, R);
+
   {$IFDEF IP_LAZARUS}
   if aCurWord.Owner.ParentNode = aCurTabFocus then
     FCanvas.DrawFocusRect(R);
-  if FCanvas.Font.color=-1 then
-    FCanvas.Font.color:=clBlack;
+  if FCanvas.Font.color = -1 then
+    FCanvas.Font.color := clBlack;
   {$ENDIF}
   if aCurWord.AnsiWord <> NAnchorChar then
     FCanvas.TextRect(R, P.x, P.y, NoBreakToSpace(aCurWord.AnsiWord));
   {$IFDEF IP_LAZARUS}
-  restoreCanvasProperties;
+  RestoreCanvasProperties;
   {$ENDIF}
+
   FIpHtml.AddRect(aCurWord.WordRect2, aCurWord, FBlockOwner);
 end;
 
@@ -1286,6 +1339,7 @@ var
   R : TRect;
   P : TPoint;
   L0 : Boolean;
+  isVisible: Boolean;
 begin
   L0 := FBlockOwner.Level0;
   FCurProps := nil;
@@ -1298,7 +1352,8 @@ begin
   else
     CurTabFocus := nil;
   {$ENDIF}
-  for i := 0 to Pred(FElementQueue.Count) do begin
+
+  for i := 0 to pred(FElementQueue.Count) do begin
     CurWord := PIpHtmlElement(FElementQueue[i]);
     if (CurWord.Props <> nil) and (CurWord.Props <> FCurProps) then
       DoRenderFont(CurWord);
@@ -1307,7 +1362,15 @@ begin
     //DumpTIpHtmlProps(FCurProps);
     {$endif}
     //debugln(['TIpHtmlNodeBlock.RenderQueue ',i,' ',IntersectRect(R, CurWord.WordRect2, Owner.PageViewRect),' CurWord.WordRect2=',dbgs(CurWord.WordRect2),' Owner.PageViewRect=',dbgs(Owner.PageViewRect)]);
-    if IntersectRect(R, CurWord.WordRect2, FIpHtml.PageViewRect) then
+
+    isVisible := (CurWord.WordRect2.Top < FIpHtml.PageViewBottom);
+    // Make sure that the printer does not duplicate clipped lines.
+    if FIpHtml.RenderDevice = rdPrinter then
+      isVisible := isVisible and (CurWord.WordRect2.Top >= FIpHtml.PageViewTop);
+    isVisible := (isVisible or (CurWord.ElementType = etObject))
+      and IntersectRect(R, CurWord.WordRect2, FIpHtml.PageViewRect);
+
+    if isVisible then begin
       case CurWord.ElementType of
       etWord :
         DoRenderElemWord(CurWord, CurTabFocus);
@@ -1325,14 +1388,15 @@ begin
           FIpHtml.AddRect(CurWord.WordRect2, CurWord, FBlockOwner);
         end;
       end
+    end
     else
       case CurWord.ElementType of
       etWord,
       etObject,
       etSoftHyphen :
-        if (CurWord.WordRect2.Bottom <> 0)
-        and (CurWord.WordRect2.Top > FIpHtml.PageViewRect.Bottom)
-        and L0 then
+        if (CurWord.WordRect2.Bottom <> 0) and
+           (CurWord.WordRect2.Top > FIpHtml.PageViewRect.Bottom) and L0
+        then
           break;
       end;
   end;
@@ -1350,6 +1414,7 @@ begin
     FOwner.Enqueue;
   RenderQueue;
 end;
+
 
 { TIpNodeTableElemLayouter }
 

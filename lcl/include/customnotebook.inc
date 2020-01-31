@@ -14,6 +14,22 @@
 
 {off $DEFINE NOTEBOOK_DEBUG}
 
+const
+  TabControlOptionStr: Array[TCTabControlOption] of String = (
+      'nboShowCloseButtons', 'nboMultiLine', 'nboHidePageListPopup',
+      'nboKeyboardTabSwitch', 'nboShowAddTabButton', 'nboDoChangeOnSetIndex'
+    );
+
+function DbgS(Opt: TCTabControlOptions): String; overload;
+var
+  O: TCTabControlOption;
+begin
+  Result := '';
+  for O in Opt do Result := Result +  TabControlOptionStr[O] + ',';
+  if (Length(Result) > 0) then System.Delete(Result, Length(Result), 1);
+  Result := '[' + Result + ']';
+end;
+
 {------------------------------------------------------------------------------
   TNBPages Constructor
  ------------------------------------------------------------------------------}
@@ -45,43 +61,23 @@ begin
   end;
 end;
 
-{------------------------------------------------------------------------------
-  TNBPages Get
- ------------------------------------------------------------------------------}
 function TNBPages.Get(Index: Integer): String;
 begin
-  //DebugLn('TNBPages.Get Index=',Index);
-  if (Index<0) or (Index>=FPageList.Count) then
-    RaiseGDBException('TNBPages.Get Index out of bounds');
   Result := TCustomPage(FPageList[Index]).Caption;
 end;
 
-{------------------------------------------------------------------------------
-  TNBPages GetCount
- ------------------------------------------------------------------------------}
 function TNBPages.GetCount: Integer;
 begin
   Result := FPageList.Count;
 end;
 
-{------------------------------------------------------------------------------
-  TNBPages GetObject
- ------------------------------------------------------------------------------}
 function TNBPages.GetObject(Index: Integer): TObject;
 begin
-  if (Index<0) or (Index>=FPageList.Count) then
-    RaiseGDBException('TNBPages.GetObject Index out of bounds');
   Result := TObject(FPageList[Index]);
 end;
 
-{------------------------------------------------------------------------------
-  TNBPages Put
- ------------------------------------------------------------------------------}
 procedure TNBPages.Put(Index: Integer; const S: String);
 begin
-  if (Index<0) or (Index>=FPageList.Count) then
-    RaiseGDBException('TNBPages.Put Index out of bounds');
-  //debugln(['TNBPages.Put ',DbgSName(FNotebook),' ',Index,' S="',S,'"']);
   TCustomPage(FPageList[Index]).Caption := S;
 end;
 
@@ -154,7 +150,7 @@ begin
   NewOwner := FNotebook.Owner;
   if NewOwner = nil then
     NewOwner := FNotebook;
-  NewPage := FNotebook.PageClass.Create(NewOwner);
+  NewPage := FNotebook.GetPageClass.Create(NewOwner);
   with NewPage do
     Caption := S;
 
@@ -244,19 +240,13 @@ end;
  ------------------------------------------------------------------------------}
 constructor TCustomTabControl.Create(TheOwner: TComponent);
 begin
-  if PageClass=nil then PageClass := GetPageClass;
-
   inherited Create(TheOwner);
-
   fCompStyle := csNoteBook;
-
   FAccess := GetListClass.Create(Self);
-
   FImageListChangeLink := TChangeLink.Create;
   FImageListChangeLink.OnChange := @DoImageListChange;
-
+  FImageListChangeLink.OnDestroyResolutionHandle := @DoImageListDestroyResolutionHandle;
   FPageIndex := -1;
-
   ControlStyle := []; // do not add csAcceptsControls
   TabPosition := tpTop;
   TabStop := true;
@@ -337,39 +327,8 @@ begin
   FImageListChangeLink.Free;
   Pages.Clear;
   FreeAndNil(FAccess);
+  Application.RemoveAsyncCalls(Self);
   inherited Destroy;
-end;
-
-{------------------------------------------------------------------------------
-  function TCustomTabControl.TabIndexAtClientPos(ClientPos: TPoint): integer;
-
-  Returns the index of the page of the tab at the client position.
-  For example:
-    Index:=NoteBook1.TabIndexAtClientPos(
-               NoteBook1.ScreenToClient(Mouse.CursorPos));
- ------------------------------------------------------------------------------}
-function TCustomTabControl.TabIndexAtClientPos(ClientPos: TPoint): integer;
-var
-  i, VisiblePageInd: Integer;
-begin
-  if HandleAllocated then begin
-    Result:=TWSCustomTabControlClass(WidgetSetClass).GetTabIndexAtPos(Self, ClientPos);
-    // Result is the index in visible tabs because invisible tabs are removed
-    //  from the native control. Calculate the real tab index here.
-    VisiblePageInd:=-1;
-    for i:=0 to PageCount-1 do begin
-      if Page[i].TabVisible then
-        Inc(VisiblePageInd)
-      else begin
-        if VisiblePageInd < Result then
-          Inc(Result)
-        else
-          Break;
-      end;
-    end;
-  end
-  else
-    Result:=-1;
 end;
 
 function TCustomTabControl.TabRect(AIndex: Integer): TRect;
@@ -427,7 +386,7 @@ begin
   //debugln('TCustomTabControl.GetMinimumTabHeight A ',dbgs(Result));
 end;
 
-function TCustomTabControl.GetCapabilities: TNoteBookCapabilities;
+function TCustomTabControl.GetCapabilities: TCTabControlCapabilities;
 begin
   Result:=TWSCustomTabControlClass(WidgetSetClass).GetCapabilities;
 end;
@@ -445,15 +404,16 @@ begin
   Result := AIndex;
   if csDesigning in ComponentState then
     exit; //all pages are visible
+
+  // it is possible to show pages without visible tabs, but then, no tab index
+  // can be sendet back, issue #21723
+  if not Page[AIndex].TabVisible then
+    exit(-1);
+
   for i := 0 to AIndex - 1 do begin
     if not Page[i].TabVisible then
       dec(Result); //exclude invisible page
   end;
-end;
-
-function TCustomTabControl.IndexOfTabAt(X, Y: Integer): Integer;
-begin
-  Result := TabIndexAtClientPos(Point(X, Y));
 end;
 
 function TCustomTabControl.TabToPageIndex(AIndex: integer): integer;
@@ -542,6 +502,11 @@ begin
   PageIndex := IndexOf(AValue); // -1 for unpaged
 end;
 
+procedure TCustomTabControl.SetImageListAsync(Data: PtrInt);
+begin
+  DoImageListChange(Self);
+end;
+
 procedure TCustomTabControl.SetImages(const AValue: TCustomImageList);
 begin
   if FImages = AValue then Exit;
@@ -556,6 +521,14 @@ begin
     FImages.FreeNotification(Self);
     FImages.RegisterChanges(FImageListChangeLink);
   end;
+  DoImageListChange(Self);
+  UpdateTabProperties;
+end;
+
+procedure TCustomTabControl.SetImagesWidth(const aImagesWidth: Integer);
+begin
+  if FImagesWidth = aImagesWidth then Exit;
+  FImagesWidth := aImagesWidth;
   DoImageListChange(Self);
   UpdateTabProperties;
 end;
@@ -581,11 +554,15 @@ begin
   if (AValue < -1) or (AValue >= PageCount) then Exit;
   //debugln('TCustomTabControl.SetPageIndex A ',dbgsName(Self),' AValue=',dbgs(AValue),' fPageIndex=',dbgs(fPageIndex),' PageCount=',dbgs(PageCount),' HandleAllocated=',dbgs(HandleAllocated),' ',dbgs(ComponentState));
   if FPageIndex = AValue then exit;
-  if not CanChangePageIndex then exit;
+  if (nboDoChangeOnSetIndex in Options) and (not CanChangePageIndex) then exit;  //Delphi does not call CanChange either
   //debugln('TCustomTabControl.SetPageIndex B ',dbgsName(Self),' AValue=',dbgs(AValue),' fPageIndex=',dbgs(fPageIndex),' PageCount=',dbgs(PageCount),' HandleAllocated=',dbgs(HandleAllocated));
 
   InternalSetPageIndex(AValue);
-  if ([csDesigning, csLoading, csDestroying] * ComponentState = []) then
+
+  //debugln(['TCustomTabControl.SetPageIndex C ',dbgsName(Self)]);
+  //debugln(['  FOptions = ',DbgS(Foptions)]);
+
+  if ([csDesigning, csLoading, csDestroying] * ComponentState = []) and (nboDoChangeOnSetIndex in Options) then
     DoChange;
 end;
 
@@ -799,11 +776,13 @@ begin
   begin
     if Shift = [ssCtrl] then 
     begin
+      Key := 0;
       PageIndex := (PageIndex + 1) mod PageCount;
       Exit;
     end
     else if Shift = [ssCtrl, ssShift] then 
     begin
+      Key := 0;
       PageIndex := (PageIndex + PageCount - 1) mod PageCount;
       Exit;
     end;
@@ -847,6 +826,17 @@ begin
 end;
 
 {------------------------------------------------------------------------------
+  TCustomTabControl SetTabHeight
+ ------------------------------------------------------------------------------}
+procedure TCustomTabControl.SetTabHeight(AValue: Smallint);
+begin
+  if FTabHeight = AValue then Exit;
+  if not (nbcTabsSizeable in GetCapabilities) then Exit;
+  FTabHeight := AValue;
+  DoSendTabSize;
+end;
+
+{------------------------------------------------------------------------------
   TCustomTabControl SetTabPosition
  ------------------------------------------------------------------------------}
 procedure TCustomTabControl.SetTabPosition(tabPos: TTabPosition);
@@ -854,6 +844,17 @@ begin
   if fTabPosition = tabPos then exit;
   fTabPosition := tabPos;
   DoSendTabPosition;
+end;
+
+{------------------------------------------------------------------------------
+  TCustomTabControl SetTabWidth
+ ------------------------------------------------------------------------------}
+procedure TCustomTabControl.SetTabWidth(AValue: Smallint);
+begin
+  if FTabWidth = AValue then Exit;
+  if not (nbcTabsSizeable in GetCapabilities) then Exit;
+  FTabWidth := AValue;
+  DoSendTabSize;
 end;
 
 {------------------------------------------------------------------------------
@@ -887,10 +888,7 @@ end;
 
 function TCustomTabControl.GetListClass: TNBBasePagesClass;
 begin
-  if FUnPaged then // TODO move to inherited / not used / never set
-    Result := TNBNoPages
-  else
-    Result := TNBPages;
+  Result := TNBPages;
 end;
 
 class procedure TCustomTabControl.WSRegisterClass;
@@ -926,6 +924,57 @@ begin
     end;
   end;
   inherited ShowControl(APage);
+end;
+
+{------------------------------------------------------------------------------
+  function TCustomTabControl.IndexOfTabAt(X, Y: Integer): Integer;
+
+  Returns the index of the visible tab at the client position.
+ ------------------------------------------------------------------------------}
+function TCustomTabControl.IndexOfTabAt(X, Y: Integer): Integer;
+begin
+  Result := IndexOfTabAt(Point(X, Y));
+end;
+
+{------------------------------------------------------------------------------
+  function TCustomTabControl.IndexOfTabAt(P: TPoint): Integer;
+
+  Returns the index of the visible tab at the client position.
+  For example:
+    Index:=NoteBook1.IndexOfTabAt(
+               NoteBook1.ScreenToClient(Mouse.CursorPos));
+ ------------------------------------------------------------------------------}
+function TCustomTabControl.IndexOfTabAt(P: TPoint): Integer;
+begin
+  if HandleAllocated then
+    Result := TWSCustomTabControlClass(WidgetSetClass).GetTabIndexAtPos(Self, P)
+  else
+    Result := -1;
+end;
+
+{------------------------------------------------------------------------------
+  function TCustomTabControl.IndexOfPageAt(X, Y: Integer): Integer;
+
+  Returns the index of the page at the client position.
+ ------------------------------------------------------------------------------}
+function TCustomTabControl.IndexOfPageAt(X, Y: Integer): Integer;
+begin
+  Result := IndexOfPageAt(Point(X, Y));
+end;
+
+{------------------------------------------------------------------------------
+  function TCustomTabControl.IndexOfPageAt(X, Y: Integer): Integer;
+
+  Returns the index of the page at the client position.
+  For example:
+    Index:=NoteBook1.IndexOfPageAt(
+               NoteBook1.ScreenToClient(Mouse.CursorPos));
+ ------------------------------------------------------------------------------}
+function TCustomTabControl.IndexOfPageAt(P: TPoint): Integer;
+begin
+  Result := IndexOfTabAt(P);
+  if Result <> -1 then
+    Result := TabToPageIndex(Result);
 end;
 
 {------------------------------------------------------------------------------
@@ -979,6 +1028,19 @@ begin
   destPage := GetActivePageComponent;
   if destPage <> nil then
     Result := destPage.DialogChar(Message);
+end;
+
+procedure TCustomTabControl.DoAutoAdjustLayout(
+  const AMode: TLayoutAdjustmentPolicy; const AXProportion,
+  AYProportion: Double);
+begin
+  inherited DoAutoAdjustLayout(AMode, AXProportion, AYProportion);
+
+  if AMode in [lapAutoAdjustWithoutHorizontalScrolling, lapAutoAdjustForDPI] then
+  begin
+    if Assigned(Images) then
+      DoImageListChange(Self);
+  end;
 end;
 
 procedure TCustomTabControl.InternalSetPageIndex(AValue: Integer);
@@ -1046,9 +1108,24 @@ end;
   Makes sure Visible = true for page which has index FPageIndex
  ------------------------------------------------------------------------------}
 procedure TCustomTabControl.ShowCurrentPage;
+
+  function HasFocusedControl(APage: TCustomPage): Boolean;
+  var
+    i: Integer;
+    lForm: TCustomForm;
+  begin
+    Result := False;
+    lForm := GetParentForm(APage);
+    if not Assigned(lForm) or not lForm.Visible then Exit;
+    for i := 0 to APage.ControlCount - 1 do
+      if APage.Controls[i] = lForm.ActiveControl then
+        Exit(True);
+  end;
+
 var
   CurPage: TCustomPage;
 begin
+  CurPage := nil;
   if (FPageIndex >= 0) and (FPageIndex < PageCount) then
   begin
     CurPage := Page[FPageIndex];
@@ -1058,6 +1135,8 @@ begin
   if (FPageIndexOnLastChange >= 0) and (FPageIndexOnLastChange < PageCount) and
      (FPageIndexOnLastChange <> FPageIndex) then
   begin
+    if Assigned(CurPage) and HasFocusedControl(Page[FPageIndexOnLastChange]) then
+      CurPage.SetFocus;
     Page[FPageIndexOnLastChange].Visible := False;
   end;
 end;
@@ -1104,10 +1183,29 @@ begin
   TWSCustomTabControlClass(WidgetSetClass).SetTabPosition(Self, FTabPosition);
 end;
 
+procedure TCustomTabControl.DoSendTabSize;
+begin
+  if not HandleAllocated or (csLoading in ComponentState) then exit;
+  TWSCustomTabControlClass(WidgetSetClass).SetTabSize(Self, FTabWidth, FTabHeight);
+  DoSendTabPosition;
+  Invalidate;
+end;
+
 procedure TCustomTabControl.DoImageListChange(Sender: TObject);
 begin
   if HandleAllocated then
-    TWSCustomTabControlClass(WidgetSetClass).SetImageList(Self, Images);
+  begin
+    if Assigned(Images) then
+      TWSCustomTabControlClass(WidgetSetClass).SetImageList(Self, Images.ResolutionForPPI[ImagesWidth, Font.PixelsPerInch, 1].Resolution) // to-do: support scaling factor
+    else
+      TWSCustomTabControlClass(WidgetSetClass).SetImageList(Self, nil);
+  end;
 end;
 
+procedure TCustomTabControl.DoImageListDestroyResolutionHandle(
+  Sender: TCustomImageList; AWidth: Integer; AReferenceHandle: TLCLHandle);
+begin
+  TWSCustomTabControlClass(WidgetSetClass).SetImageList(Self, nil);
+  Application.QueueAsyncCall(@SetImageListAsync, 0);
+end;
 

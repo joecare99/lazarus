@@ -427,7 +427,7 @@ begin
       SendNotification(senrLineChange, TSynEditStringTrimmingList(Caller),
                        FPosY - 1, 1);
       SendNotification(senrEditAction, TSynEditStringTrimmingList(Caller),
-                       FPosY, 0, length(fSynStrings[FPosY-1]) + FPosX - 1, -FLen, '');
+                       FPosY, 0, length(fSynStrings[FPosY-1]) + FPosX, -FLen, '');
     end;
   end;
 end;
@@ -457,7 +457,7 @@ begin
       SendNotification(senrLineChange, TSynEditStringTrimmingList(Caller),
                        FPosY - 1, 1);
       SendNotification(senrEditAction, TSynEditStringTrimmingList(Caller),
-                       FPosY, 0, length(fSynStrings[FPosY-1]) + FPosX - 1, length(FText), FText);
+                       FPosY, 0, length(fSynStrings[FPosY-1]) + FPosX, length(FText), FText);
     end;
   end;
 end;
@@ -488,7 +488,7 @@ begin
       SendNotification(senrLineChange, TSynEditStringTrimmingList(Caller),
                        FPosY - 1, 1);
       SendNotification(senrEditAction, TSynEditStringTrimmingList(Caller),
-                       FPosY, 0, length(fSynStrings[FPosY-1]), length(FText), FText);
+                       FPosY, 0, 1+length(fSynStrings[FPosY-1]), length(FText), FText);
     end;
   end;
 end;
@@ -561,12 +561,12 @@ begin
   if (not fEnabled) then exit;
   if (fLockCount > 0) or (length(fSpaces) = 0) or
      (fLineIndex < 0) or (fLineIndex >= fSynStrings.Count) or
-     ( (fLineIndex = TSynEditCaret(Sender).LinePos - 1) and
+     ( (fLineIndex = ToIdx(TSynEditCaret(Sender).LinePos)) and
        ( (FTrimType in [settLeaveLine]) or
          ((FTrimType in [settEditLine]) and not FLineEdited) ))
   then begin
-    if (fLineIndex <> TSynEditCaret(Sender).LinePos - 1) then begin
-    {$IFDEF SynTrimDebug}debugln(['--- Trimmer -- CaretChnaged - Clearing 1 ', ' fLineIndex=', fLineIndex, ' fSpaces=',length(fSpaces), 'newCaretYPos=',TSynEditCaret(Sender).LinePos]);{$ENDIF}
+    if (fLineIndex <> ToIdx(TSynEditCaret(Sender).LinePos)) then begin
+    {$IFDEF SynTrimDebug}debugln(['--- Trimmer -- CaretChanged - Clearing 1 ', ' fLineIndex=', fLineIndex, ' fSpaces=',length(fSpaces), 'newCaretYPos=',TSynEditCaret(Sender).LinePos]);{$ENDIF}
       if fSpaces <> '' then IncViewChangeStamp;
       fLineIndex := TSynEditCaret(Sender).LinePos - 1;
       fSpaces := '';
@@ -579,7 +579,7 @@ begin
   if (fLineIndex <> TSynEditCaret(Sender).LinePos - 1) or
      (FTrimType = settIgnoreAll) then
   begin
-    {$IFDEF SynTrimDebug}debugln(['--- Trimmer -- CaretChnaged - Trimming,clear 1 ', ' fLineIndex=', fLineIndex, ' fSpaces=',length(fSpaces), 'newCaretYPos=',TSynEditCaret(Sender).LinePos]);{$ENDIF}
+    {$IFDEF SynTrimDebug}debugln(['--- Trimmer -- CaretChanged - Trimming,clear 1 ', ' fLineIndex=', fLineIndex, ' fSpaces=',length(fSpaces), 'newCaretYPos=',TSynEditCaret(Sender).LinePos]);{$ENDIF}
     MaybeAddUndoForget(FLineIndex+1, FSpaces);
     i := length(FSpaces);
     fSpaces := '';
@@ -596,7 +596,7 @@ begin
     else
       j := i - length(s) - 1;
     s := copy(FSpaces, j + 1, MaxInt);
-    {$IFDEF SynTrimDebug}debugln(['--- Trimmer -- CarteChnaged - Trimming,part to ',length(s),' ', ' fLineIndex=', fLineIndex, ' fSpaces=',length(fSpaces), 'newCaretYPos=',TSynEditCaret(Sender).LinePos]);{$ENDIF}
+    {$IFDEF SynTrimDebug}debugln(['--- Trimmer -- CaretChanged - Trimming,part to ',length(s),' ', ' fLineIndex=', fLineIndex, ' fSpaces=',length(fSpaces), 'newCaretYPos=',TSynEditCaret(Sender).LinePos]);{$ENDIF}
     FSpaces := copy(FSpaces, 1, j);
     i := length(s);
     MaybeAddUndoForget(FLineIndex+1, s);
@@ -775,7 +775,7 @@ var
 begin
   if (not fEnabled) then exit;
   FIsTrimming := True;
-  {$IFDEF SynTrimDebug}debugln(['--- Trimmer -- TrimAfterLock', ' fLineIndex=', fLineIndex, ' fSpaces=',length(fSpaces), '  Index=', Index, ' LockList=',fLockList.CommaText]);{$ENDIF}
+  {$IFDEF SynTrimDebug}debugln(['--- Trimmer -- TrimAfterLock', ' fLineIndex=', fLineIndex, ' fSpaces=',length(fSpaces), ' LockList=',fLockList.Count]);{$ENDIF}
   i := fLockList.IndexOf(fLineIndex);
   if i >= 0 then begin
     if fSpaces <> fLockList.Entries[i].TrimmedSpaces then
@@ -815,6 +815,8 @@ procedure TSynEditStringTrimmingList.ForceTrim;
 begin
   FlushNotificationCache;
   DoCaretChanged(fCaret); // Caret May be locked
+  if (fLockCount > 1) then
+    exit; // workaround for syncro edit
   TrimAfterLock;
 end;
 

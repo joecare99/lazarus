@@ -19,6 +19,7 @@
 unit Win32Int;
 
 {$mode objfpc}{$H+}{$T-}{$message warning Fix implicit pointer conversions}
+{$ModeSwitch advancedrecords}
 {$I win32defines.inc}
 
 interface
@@ -29,12 +30,17 @@ interface
 }
 uses
   Windows, // keep as first
-  ActiveX, Classes,
-  Translations, Controls, Buttons,
-  LCLIntf, LclProc, LazUTF8, LCLType, LMessages,
-  Forms, Dialogs, GraphMath, GraphType, InterfaceBase,
-  StdCtrls, SysUtils, Win32Def, Graphics, Menus, CommCtrl,
-  MultiMon, Themes{, Win32Debug};
+  Classes, SysUtils, RtlConsts, ActiveX, MultiMon, CommCtrl,
+  {$IF FPC_FULLVERSION>=30000}
+  character,
+  {$ENDIF}
+  // LCL
+  LCLPlatformDef, InterfaceBase, LCLIntf, LclProc, LCLType, LMessages,
+  Controls, Buttons, Forms, Dialogs, GraphMath, GraphType, StdCtrls,
+  Graphics, Menus, ComCtrls, Themes, Win32Def, Spin,
+  // LazUtils
+  LazUTF8, Translations;
+  {, Win32Debug}
 
 const
   // standard windows cursors
@@ -117,6 +123,7 @@ type
     // Assoc. windowproc also acts as handler for popup menus
     FAppHandle,
     FDockWndHandle: HWND;
+    FAppMinimizing: Boolean;
     FCommonControlsVersion: DWord;
 
     FMetrics: TNonClientMetrics;
@@ -147,6 +154,8 @@ type
     function CreateThemeServices: TThemeServices; override;
     function GetAppHandle: THandle; override;
     procedure SetAppHandle(const AValue: THandle); override;
+
+    property AppMinimizing: Boolean read FAppMinimizing; // true if application is minimizing itself
   public
     { Creates a callback of Lazarus message Msg for Sender }
     procedure SetCallback(Msg: LongInt; Sender: TObject); virtual;
@@ -199,6 +208,8 @@ type
     property CommonControlsVersion: DWord read FCommonControlsVersion;
     property OnAsyncSocketMsg: TSocketEvent read FOnAsyncSocketMsg write FOnAsyncSocketMsg;
     property DotsPatternBitmap: HBitmap read GetDotsPatternBitmap;
+    property Metrics: TNonClientMetrics read FMetrics;
+    property MetricsFailed: Boolean read FMetricsFailed;
   end;
 
   {$I win32listslh.inc}
@@ -265,12 +276,11 @@ type
   end;
 
 var
-  MouseDownCount: Integer;
-  MouseDownTime: QWord;
-  MouseDownPos: TPoint;
-  MouseDownWindow: HWND = 0;
+  LastMouse: TLastMouseInfo;
+  LastMouseTracking: TControl = nil;
   ComboBoxHandleSizeWindow: HWND = 0;
   IgnoreNextCharWindow: HWND = 0;  // ignore next WM_(SYS)CHAR message
+  IgnoreKeyUp: Boolean = True; // ignore KeyUp after application start; issue #30836
   // set to true, if we are redirecting a WM_MOUSEWHEEL message, to prevent recursion
   InMouseWheelRedirection: boolean = false;
   OnClipBoardRequest: TClipboardRequestEvent;
@@ -281,6 +291,43 @@ var
   MessageStackDepth: string = '';
 {$endif}
 
+// Multi Dpi support (not yet in FCL); ToDo: move to FCL
+type
+  TGetDpiForMonitor = function(hmonitor: HMONITOR; dpiType: TMonitorDpiType; out dpiX: UINT; out dpiY: UINT): HRESULT; stdcall;
+var
+  GetDpiForMonitor: TGetDpiForMonitor;
+  g_pfnGetDpiForMonitor: TGetDpiForMonitor = nil;
+  g_fShellScalingInitDone: Boolean = False;
+
+function InitShellScalingStubs: Boolean;
+var
+  hShcore: Windows.HMODULE;
+begin
+  if not g_fShellScalingInitDone then
+  begin
+    hShcore := GetModuleHandle('Shcore');
+    if hShcore<>0 then
+      Pointer(g_pfnGetDpiForMonitor) := GetProcAddress(hShcore, 'GetDpiForMonitor')
+    else
+      Pointer(g_pfnGetDpiForMonitor) := nil;
+
+    g_fShellScalingInitDone := True;
+  end;
+
+  Result := (Pointer(g_pfnGetDpiForMonitor)<>nil) and (@g_pfnGetDpiForMonitor <> nil);
+end;
+
+function xGetDpiForMonitor(hmonitor: HMONITOR; dpiType: TMonitorDpiType;
+  out dpiX: UINT; out dpiY: UINT): HRESULT; stdcall;
+begin
+  if InitShellScalingStubs then
+    Exit(g_pfnGetDpiForMonitor(hmonitor, dpiType, dpiX, dpiY));
+
+  dpiX := 0;
+  dpiY := 0;
+  Result := S_FALSE;
+end;
+
 {$I win32listsl.inc}
 {$I win32callback.inc}
 {$I win32object.inc}
@@ -289,11 +336,8 @@ var
 
 
 initialization
-  { initialize mousedownclick to far before double click time }
-  if GetTickCount64 > 5000 then
-    MouseDownTime := GetTickCount64 - 5000
-  else
-    MouseDownTime := 0;
+  Pointer(GetDpiForMonitor) := @xGetDpiForMonitor;
+
   SystemCharSetIsUTF8:=true;
 
   MMenuItemInfoSize := sizeof(MENUITEMINFO);

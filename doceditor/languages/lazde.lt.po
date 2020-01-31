@@ -1,12 +1,13 @@
+# Valdas Jankunas <zmuogs@gmail.com>, 2017.
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Last-Translator: Valdas Jankunas <zmuogs@gmail.com>\n"
-"PO-Revision-Date: 2012-08-06 22:22+0300\n"
+"PO-Revision-Date: 2017-07-07 23:30+0200\n"
 "Project-Id-Version: \n"
 "Language-Team: Lithuanian <kde-i18n-lt@kde.org>\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Lokalize 1.5\n"
+"X-Generator: Lokalize 2.0\n"
 "MIME-Version: 1.0\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "Language: lt\n"
@@ -29,7 +30,7 @@ msgstr "Parinkite naują aprašo failą"
 
 #: lazdemsg.sadditionalparams
 msgid "Additional parameters for fpdoc"
-msgstr ""
+msgstr "Papildomi „fpdoc“ skirti parametrai"
 
 #: lazdemsg.sbuild
 msgctxt "lazdemsg.sbuild"
@@ -74,6 +75,7 @@ msgid "Create cont&ent file"
 msgstr "Sukurti &turinio failą"
 
 #: lazdemsg.sdataforelement
+#, object-pascal-format
 msgid "Documentation for element \"%s\":"
 msgstr "Elemento „%s“ dokumentacija:"
 
@@ -82,14 +84,17 @@ msgid "&Delete"
 msgstr "&Pašalinti"
 
 #: lazdemsg.sdeletemodule
+#, object-pascal-format
 msgid "Are you sure you want to delete module \"%s\" ?"
 msgstr "Ar iš tikro norite pašalinti modulį „%s“?"
 
 #: lazdemsg.sdeletepackage
+#, object-pascal-format
 msgid "Are you sure you want to delete package \"%s\" ?"
 msgstr "Ar iš tikro norite pašalinti paketą „%s“?"
 
 #: lazdemsg.sdeletetopic
+#, object-pascal-format
 msgid "Are you sure you want to delete topic \"%s\" ?"
 msgstr "Ar iš tikro norite pašalinti temą „%s“?"
 
@@ -106,26 +111,32 @@ msgid "Change description file"
 msgstr "Keisti aprašo failą"
 
 #: lazdemsg.serrfpdoc
+#, object-pascal-format
 msgid "Building failed with exit code %d. Please check log."
 msgstr "Darymas nepavyko. Grąžintas klaidos kodas yra %d. Daugiau informacijos rasite žurnale."
 
 #: lazdemsg.serrnomoduleforelement
+#, object-pascal-format
 msgid "No module found to insert element \"%s\""
 msgstr "Nepavyko rasti modulio, kuriuo būtų galima įterpti elementą „%s“"
 
 #: lazdemsg.serrnonodeformodule
+#, object-pascal-format
 msgid "No node found for module \"%s\""
 msgstr "Nepavyko rasti mazgo, skirto moduliui „%s“"
 
 #: lazdemsg.serrnonodeforpackage
+#, object-pascal-format
 msgid "No node found for package \"%s\""
 msgstr "Nepavyko rasti mazgo, skirto paketui „%s“"
 
 #: lazdemsg.serrnonodefortopic
+#, object-pascal-format
 msgid "No parent node found to insert topic \"%s\""
 msgstr "Nepavyko rasti viršesnio mazgo, kad būtų galima įterpti temą „%s“"
 
 #: lazdemsg.serrnopackageformodule
+#, object-pascal-format
 msgid "No package found to insert module \"%s\""
 msgstr "Nepavyko rasti paketo, kad būtų galima įterpti modulį „%s“"
 
@@ -134,10 +145,12 @@ msgid "Errors"
 msgstr "Klaidos"
 
 #: lazdemsg.serrunknowndomelement
+#, object-pascal-format
 msgid "Unknwon DOM element as parent for selected element: \"%s\""
 msgstr "Elementas, kuris yra viršesnis parinktajam, yra nežinomas DOM elementas: „%s“"
 
 #: lazdemsg.sfilemodified
+#, object-pascal-format
 msgid "Document \"%s\" was modified, would you like to save it?"
 msgstr "Dokumente „%s“ yra daryta keitimų. Įrašyti pakeistąjį dokumentą?"
 
@@ -166,10 +179,8 @@ msgid " in package "
 msgstr " pakete "
 
 #: lazdemsg.sfortopic
-#, fuzzy
-#| msgid " in topic"
 msgid " in topic "
-msgstr " temoje "
+msgstr "temoje"
 
 #: lazdemsg.shideprotectedmethods
 msgid "&Hide protected methods"
@@ -235,7 +246,7 @@ msgstr "Kintamasis"
 #: lazdemsg.shintinsertbulletedlist
 msgctxt "lazdemsg.shintinsertbulletedlist"
 msgid "Insert bulleted list"
-msgstr ""
+msgstr "Įterpti suženklintąjį sąrašą"
 
 #: lazdemsg.shintinsertelement
 msgctxt "lazdemsg.shintinsertelement"
@@ -255,7 +266,7 @@ msgstr "Naujas modulis"
 #: lazdemsg.shintinsertnumberedlist
 msgctxt "lazdemsg.shintinsertnumberedlist"
 msgid "Insert numbered list"
-msgstr ""
+msgstr "Įterpti sunumeruotą sąrašą"
 
 #: lazdemsg.shintinsertpackage
 msgctxt "lazdemsg.shintinsertpackage"
@@ -277,10 +288,8 @@ msgid "New topic"
 msgstr "Nauja tema"
 
 #: lazdemsg.shintmenunewfromfile
-#, fuzzy
-#| msgid "New from file..."
 msgid "New from file ..."
-msgstr "Naujas, pagal failą..."
+msgstr "Naujas, pagal failą…"
 
 #: lazdemsg.shinttoolbaradd
 msgid "Add"
@@ -310,11 +319,11 @@ msgstr "Importuoti turinio failą"
 #: lazdemsg.sinsertbulletedlist
 msgctxt "lazdemsg.sinsertbulletedlist"
 msgid "Insert bulleted list"
-msgstr ""
+msgstr "Įterpti suženklintąjį sąrašą"
 
 #: lazdemsg.sinsertexamplecode
 msgid "Insert example code"
-msgstr ""
+msgstr "Įterpti pavyzdžio kodą"
 
 #: lazdemsg.sinsertlink
 msgctxt "lazdemsg.sinsertlink"
@@ -324,7 +333,7 @@ msgstr "Įterpti saitą"
 #: lazdemsg.sinsertnumberedlist
 msgctxt "lazdemsg.sinsertnumberedlist"
 msgid "Insert numbered list"
-msgstr ""
+msgstr "Įterpti sunumeruotą sąrašą"
 
 #: lazdemsg.sinsertprintshortlink
 msgid "Insert short description link"
@@ -337,7 +346,7 @@ msgstr "Įterpti lentelę"
 
 #: lazdemsg.sitemscount
 msgid "Items count"
-msgstr ""
+msgstr "Elementų kiekis"
 
 #: lazdemsg.slazdoceditor
 msgid "Lazarus Documentation Editor"
@@ -349,11 +358,11 @@ msgstr " saitas į "
 
 #: lazdemsg.slinktarget
 msgid "Link target"
-msgstr ""
+msgstr "Susieti tikslą"
 
 #: lazdemsg.slinktext
 msgid "Link text"
-msgstr ""
+msgstr "Susieti tekstą"
 
 #: lazdemsg.sload
 msgid "&Load"
@@ -364,6 +373,7 @@ msgid "Make new document from source file"
 msgstr "Kurti naują dokumentą pagal pirminio kodo failą"
 
 #: lazdemsg.smarkselection
+#, object-pascal-format
 msgid "Mark selection %s"
 msgstr "Pažymėti išranką %s"
 
@@ -474,10 +484,8 @@ msgid "&Help"
 msgstr "Žin&ynas"
 
 #: lazdemsg.smenuhelpabout
-#, fuzzy
-#| msgid "&About..."
 msgid "&About ..."
-msgstr "&Apie..."
+msgstr "&Apie…"
 
 #: lazdemsg.smenuinsert
 msgid "&Insert"
@@ -485,7 +493,7 @@ msgstr "Į&terpti"
 
 #: lazdemsg.smenuinsertbulletedlist
 msgid "Bulleted list"
-msgstr ""
+msgstr "Suženklintasis sąrašas"
 
 #: lazdemsg.smenuinsertelement
 msgid "&Element"
@@ -497,7 +505,7 @@ msgstr "&Saitą"
 
 #: lazdemsg.smenuinsertlist
 msgid "List"
-msgstr ""
+msgstr "Sąrašas"
 
 #: lazdemsg.smenuinsertmodule
 msgid "&Module"
@@ -505,7 +513,7 @@ msgstr "&Modulį"
 
 #: lazdemsg.smenuinsertnumberedlist
 msgid "Numbered list"
-msgstr ""
+msgstr "Numeruotas sąrašas"
 
 #: lazdemsg.smenuinsertpackage
 msgctxt "lazdemsg.smenuinsertpackage"
@@ -575,7 +583,7 @@ msgstr "Nauja tema"
 
 #: lazdemsg.snodename
 msgid "Node name"
-msgstr ""
+msgstr "Mazgo pavadinimas"
 
 #: lazdemsg.snoelement
 msgid "No element selected"
@@ -676,8 +684,9 @@ msgid "&Save"
 msgstr "Į&rašyti"
 
 #: lazdemsg.ssavebeforebuildquestion
+#, object-pascal-format
 msgid "You have unsaved changes in \"%s\".%sThey should be saved in order to be visible in built documentation. Save them?"
-msgstr ""
+msgstr "„%s“ yra neįrašytų pakitimų.%sTam, kad pakitimai būtų matomi darytoje dokumentacijoje, juos būtina įrašyti. Ar įrašyti?"
 
 #: lazdemsg.sseealso
 msgid "See Also"
@@ -692,10 +701,8 @@ msgid "Select output file name"
 msgstr "Parinkite išvesties failo pavadinimą"
 
 #: lazdemsg.sselectsometext
-#, fuzzy
-#| msgid "Select some text"
 msgid "Select some text."
-msgstr "Pažymėkite kažkiek teksto"
+msgstr "Pažymėti kažkiek teksto."
 
 #: lazdemsg.sshortdescription
 msgid "Short"
@@ -706,33 +713,35 @@ msgid "Show p&rivate methods"
 msgstr "Rodyti &privačius metodus"
 
 #: lazdemsg.sskelerrorwithfile
+#, object-pascal-format
 msgid "makeskel reported an error (%d). Try to load produced file anyway ?"
 msgstr "Programa „makeskel“ pranešė apie klaidą (%d). Vis tiek bandyti įkelti sukurtąjį failą?"
 
 #: lazdemsg.sskelerrorwithoutfile
-#, fuzzy,badformat
+#, object-pascal-format
 msgid "makeskel reported an error (%d) and produced no file."
-msgstr "Programa „makeskel“ pranešė apie klaidą bei nesukūrė failo."
+msgstr "Programa „makeskel“ pranešė apie klaidą (%d) bei nesukūrė failo."
 
 #: lazdemsg.ssourcescapt
 msgid "Sources"
 msgstr "Pradiniai kodai"
 
 #: lazdemsg.sstartnodenotfound
+#, object-pascal-format
 msgid "Start element \"%s\" could not be found"
 msgstr "Pradžios elementas „%s“ nerastas"
 
 #: lazdemsg.stablecols
 msgid "Columns"
-msgstr ""
+msgstr "Stulpeliai"
 
 #: lazdemsg.stableheader
 msgid "Use header row"
-msgstr ""
+msgstr "Naudoti antraštės eilutę"
 
 #: lazdemsg.stablerows
 msgid "Rows"
-msgstr ""
+msgstr "Eilutės"
 
 #: lazdemsg.stargetos
 msgid "Target OS"

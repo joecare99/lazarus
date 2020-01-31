@@ -31,8 +31,11 @@ unit APIWizard;
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Dialogs, StdCtrls, ExtCtrls, LCLproc, ComCtrls,
-  LazFileUtils, LazUTF8, LazUTF8Classes;
+  Classes, SysUtils,
+  // LCL
+  Forms, Controls, Dialogs, StdCtrls, ExtCtrls, LCLproc, ComCtrls,
+  // LazUtils
+  LazFileUtils, LazStringUtils, LazUTF8, LazUTF8Classes;
 
 type
 
@@ -74,6 +77,7 @@ type
     awGtk,
     awGtk2,
     awGtk3,
+    awMUI,
     awNoGui,
     awQt,
     awWin32,
@@ -105,6 +109,7 @@ const
     'gtk',
     'gtk2',
     'gtk3',
+    'mui',
     'nogui',
     'qt',
     'win32',

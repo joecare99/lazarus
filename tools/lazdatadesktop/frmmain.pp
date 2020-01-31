@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 }
@@ -22,12 +22,18 @@
 {
   Adding support for new connection types requires implementing a Data Dictionary for your connection type
   see fcl-db/src/datadict for many implementations.
-  When done so, add the unit to the uses clause in the implementation, and register it in RegisterDDEngines
+  When done so, add the unit to the uses clause in the implementation, register it in RegisterDDEngines
+  and likely add a connection callback to RegisterConnectionCallBacks.
 }
 
-{ MS-SQL server connectop}
-{$IFDEF VER3_1_1}
+{ MS-SQL server connection}
+{$IF FPC_FULLVERSION>30001}
 {$DEFINE HAVEMSSQLCONN}
+{$ENDIF}
+
+{ MySQL 5.6 and 5.7 connections }
+{$IF FPC_FULLVERSION>30100}
+{$DEFINE HAVEMYSQL5657CONN}
 {$ENDIF}
 
 unit frmmain;
@@ -37,10 +43,14 @@ unit frmmain;
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Dialogs, Menus, ActnList, StdActns,
-  ComCtrls, IniPropStorage, LCLType, ExtCtrls, LCLProc, Translations,
-  dicteditor, fraconnection, ddfiles, fpdatadict, lazdatadeskstr,
-  FileUtil, LazFileUtils, LazUTF8;
+  Classes, SysUtils, fpdatadict,
+  // LCL
+  Forms, Controls, Dialogs, Menus, ActnList, StdActns, ComCtrls, ExtCtrls,
+  IniPropStorage, LCLType, LCLProc,
+  // LazUtils
+  FileUtil, LazFileUtils, LazUTF8, Translations,
+  // LazDataDesktop
+  dicteditor, fraconnection, ddfiles, lazdatadeskstr;
 
 type
   TEngineMenuItem = Class(TMenuItem)
@@ -310,6 +320,10 @@ uses
   fpddmysql50, // MySQL 5.0
   fpddmysql51, // MySQL 5.1
   fpddmysql55, // MySQL 5.5
+  {$ifdef HAVEMYSQL5657CONN}
+  fpddmysql56, // MySQL 5.6
+  fpddmysql57, // MySQL 5.7
+  {$endif HAVEMYSQL5657CONN}
   fpddoracle,  // Oracle
   fpddpq,      // PostgreSQL
   {$endif}
@@ -356,6 +370,7 @@ begin
   MenuItem2.Caption:= sld_Menuedit;
   MIDataDict.Caption:= sld_Menudictionary;
   MIConnection.Caption:= sld_Menuconnections;
+  MView.Caption:= sld_View;
   MIImport.Caption:= sld_Menudictionaryimport;
   MICloseSep.Caption:= sld_Separator;
   MISep.Caption:= sld_Separator;
@@ -418,6 +433,7 @@ begin
   //
   TSRecent.Caption:= sld_Dictionaries;
   TSConnections.Caption:= sld_Connections;
+  TSAll.Caption:= sld_ConnectionsDictionaries;
   LVDicts.Column[0].Caption:= sld_Recentlv1;
   LVDicts.Column[1].Caption:= sld_Recentlv2;
   LVDicts.Column[2].Caption:= sld_Recentlv3;
@@ -577,6 +593,10 @@ begin
   RegisterMySQL50DDEngine;
   RegisterMySQL51DDEngine;
   RegisterMySQL55DDEngine;
+{$ifdef HAVEMYSQL5657CONN}
+  RegisterMySQL56DDEngine;
+  RegisterMySQL57DDEngine;
+{$endif}
   RegisterOracleDDEngine;
   RegisterPostgreSQLDDengine;
 {$endif}
@@ -609,6 +629,10 @@ begin
     MaybeRegisterConnectionStringCallback('TSQLDBMySql5DDEngine',@GetSQLConnectionDlg);
     MaybeRegisterConnectionStringCallback('TSQLDBMySql51DDEngine',@GetSQLConnectionDlg);
     MaybeRegisterConnectionStringCallback('TSQLDBMySql55DDEngine',@GetSQLConnectionDlg);
+{$ifdef HAVEMYSQL5657CONN}
+    MaybeRegisterConnectionStringCallback('TSQLDBMySql56DDEngine',@GetSQLConnectionDlg);
+    MaybeRegisterConnectionStringCallback('TSQLDBMySql57DDEngine',@GetSQLConnectionDlg);
+{$ENDIF}
     MaybeRegisterConnectionStringCallback('TSQLDBODBCDDEngine',@GetSQLConnectionDlg);
     MaybeRegisterConnectionStringCallback('TSQLDBPOSTGRESQLDDEngine',@GetSQLConnectionDlg);
     MaybeRegisterConnectionStringCallback('TSQLDBFBDDEngine',@GetSQLConnectionDlg);
@@ -1884,14 +1908,7 @@ begin
   LangID1 := Application.GetOptionValue('language');
   LangID2 := '';
   if Trim(LangId1) = '' then
-  begin
     LazGetLanguageIDs(LangID1,LangID2);
-    if LangID2 = 'pt' then
-    begin
-       LangID1 := 'pb';
-       LangID2 := '';
-    end;
-  end;
   TranslateUnitResourceStrings('sdb_consts',basedir+
                'components/dbexport/languages/sdb_consts'+ext, LangID1,LangID2);
   TranslateUnitResourceStrings('ldd_consts',basedir+

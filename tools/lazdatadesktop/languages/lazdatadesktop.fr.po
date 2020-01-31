@@ -3,13 +3,13 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Project-Id-Version: \n"
 "POT-Creation-Date: 2015-04-14 07:54+0100\n"
-"PO-Revision-Date: 2015-12-19 15:58+0100\n"
-"Last-Translator: Vasseur Gilles <gillesvasseur58@gmail.com>\n"
-"Language-Team: Vasseur Gilles <gillesvasseur58@gmail.com>\n"
+"PO-Revision-Date: 2019-02-07 09:05+0100\n"
+"Last-Translator: h.mira@free.fr\n"
+"Language-Team: http://lazarus.developpez.com/\n"
 "MIME-Version: 1.0\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Language: fr\n"
-"X-Generator: Poedit 1.8.6\n"
+"X-Generator: Poedit 2.2.1\n"
 
 #: lazdatadeskstr.eoaddterminator
 msgid "Add terminator"
@@ -37,7 +37,11 @@ msgstr "Ignorer les clés étrangères"
 
 #: lazdatadeskstr.eouseoldinwhereparams
 msgid "Use OLD prefix in where parameters"
-msgstr "Utiliser le préfixe ANCIEN pour les paramètres WHERE"
+msgstr "Utiliser l'ANCIEN préfixe pour les paramètres WHERE"
+
+#: lazdatadeskstr.sabortscript
+msgid "Abort the script"
+msgstr "Interrompre le script"
 
 #: lazdatadeskstr.sclose
 msgid "Close result"
@@ -64,7 +68,7 @@ msgstr "Taille"
 
 #: lazdatadeskstr.scoltype
 msgid "Type"
-msgstr "Type "
+msgstr "Type"
 
 #: lazdatadeskstr.sconfirmclose
 msgid "Confirm close"
@@ -75,12 +79,13 @@ msgid "Enter a descriptive name for the connection"
 msgstr "Entrez un nom descriptif pour la connexion"
 
 #: lazdatadeskstr.sconnectionnameexists
+#, object-pascal-format
 msgid ""
 "There is already a connection named \"%s\"\n"
-"Would you like to override the connection data ?\n"
+"Would you like to override the connection data ?"
 msgstr ""
 "Il existe déjà une connexion nommée \"%s\"\n"
-"Souhaitez-vous remplacer les données de connexion?\n"
+"Souhaitez-vous remplacer les données de connexion?"
 
 #: lazdatadeskstr.screatecode
 msgid "Create code"
@@ -91,14 +96,16 @@ msgid "Would you like to create a new connection for this database ?"
 msgstr "Voulez-vous créer une nouvelle connexion pour cette base de données ?"
 
 #: lazdatadeskstr.sddmodified
+#, object-pascal-format
 msgid ""
 "Data dictionary \"%s\" has changed.\n"
-"What do you want to do with the changes?\n"
+"What do you want to do with the changes?"
 msgstr ""
 "Le dictionnaire de données \"%s\" a changé.\n"
-"Que voulez-vous faire avec les changements?\n"
+"Que voulez-vous faire des changements ?"
 
 #: lazdatadeskstr.sdeleteobject
+#, object-pascal-format
 msgid "Delete this %s"
 msgstr "Supprimer : %s"
 
@@ -123,9 +130,29 @@ msgstr "Ignorer les changements"
 msgid "Engine"
 msgstr "Moteur"
 
+#: lazdatadeskstr.serrcommitnotsupported
+msgid "COMMIT Not supported yet"
+msgstr "COMMIT non implémenté à ce jour"
+
+#: lazdatadeskstr.serrinscript
+msgid "Error in SQL script"
+msgstr "Erreur dans le script SQL"
+
+#: lazdatadeskstr.serrinscriptchoice
+msgid ""
+"An error occurred in the SQL script.\n"
+"How would you like to continue ?"
+msgstr ""
+"Une erreur est survenue dans le script SQL.\n"
+"Comment souhaitez-vous poursuivre ?"
+
 #: lazdatadeskstr.serrnoengine
 msgid "No database engine !"
 msgstr "Aucun moteur de base de données !"
+
+#: lazdatadeskstr.serrorexecutingsql
+msgid "Error executing SQL statement:"
+msgstr "Erreur à l'exécution du script SQL :"
 
 #: lazdatadeskstr.serrselectfields
 msgid "No fields selected. Please select some fields"
@@ -133,15 +160,36 @@ msgstr "Aucun champ sélectionné. Veuillez sélectionner certains champs"
 
 #: lazdatadeskstr.serrselecttable
 msgid "No table selected. Please select a table"
-msgstr "Aucune table sélectionnée. Veuillez sélectionner une table"
+msgstr "Aucune table sélectionnée. Veuillez en sélectionner une"
+
+#: lazdatadeskstr.serrunknowndirective
+#, object-pascal-format
+msgid "Unknown directive: %s (args: %s)"
+msgstr "Directive inconnue : %s (params : %s)"
 
 #: lazdatadeskstr.serrunknowntype
+#, object-pascal-format
 msgid "Unknown object type: %d"
 msgstr "Type d'objet inconnu : %d"
 
 #: lazdatadeskstr.sexecute
 msgid "Execute SQL"
 msgstr "Exécuter SQL"
+
+#: lazdatadeskstr.sexecutingsqlstatement
+#, object-pascal-format
+msgid "%s : Executing SQL statement:"
+msgstr "%s : Exécution de l'instruction SQL :"
+
+#: lazdatadeskstr.sexecutingsqlstatementcount
+#, object-pascal-format
+msgid "%s : Executing script SQL statement nr. %d:"
+msgstr "%s : Exécution de l'instruction n° %d du script SQL :"
+
+#: lazdatadeskstr.sexecutiontime
+#, object-pascal-format
+msgid "Execution time: %s"
+msgstr "Temps d'exécution : %s"
 
 #: lazdatadeskstr.sexport
 msgid "Export data"
@@ -370,7 +418,7 @@ msgstr "&Enregistrer"
 
 #: lazdatadeskstr.sld_actionsaveas
 msgid "Save &as"
-msgstr "Enregistrer sous..."
+msgstr "Enregistrer &sous"
 
 #: lazdatadeskstr.sld_actionsaveash
 msgid "Save data dictionary as"
@@ -411,9 +459,14 @@ msgctxt "lazdatadeskstr.sld_connections"
 msgid "Connections"
 msgstr "Connexions"
 
+#: lazdatadeskstr.sld_connectionsdictionaries
+msgid "Connections/Dictionaries"
+msgstr "Connexions/Dictionnaires"
+
 #: lazdatadeskstr.sld_connecttoadatabase
-msgid "Connect to a database"
-msgstr "Se connecter à une base de données"
+#, object-pascal-format
+msgid "Connect to a database of type %s"
+msgstr "Se connecter à une base de données de type %s"
 
 #: lazdatadeskstr.sld_createfulltablecreationsql
 msgid "Create full table creation SQL"
@@ -426,7 +479,7 @@ msgstr "Créer la table"
 #: lazdatadeskstr.sld_database
 msgctxt "lazdatadeskstr.sld_database"
 msgid "Database"
-msgstr "Base de données "
+msgstr "Base de données"
 
 #: lazdatadeskstr.sld_delete
 msgctxt "lazdatadeskstr.sld_delete"
@@ -436,6 +489,10 @@ msgstr "&Supprimer"
 #: lazdatadeskstr.sld_dictionaries
 msgid "Dictionaries"
 msgstr "Dictionnaires"
+
+#: lazdatadeskstr.sld_firststart
+msgid "First start of database desktop"
+msgstr "Premier démarrage du bureau de la base"
 
 #: lazdatadeskstr.sld_fromconnection
 msgid "From connection"
@@ -473,6 +530,10 @@ msgstr "&Champs de clé"
 msgid "Lazarus Database Desktop"
 msgstr "Bureau de base de données Lazarus"
 
+#: lazdatadeskstr.sld_legacyview
+msgid "Legacy List View"
+msgstr "Vue de l'héritage"
+
 #: lazdatadeskstr.sld_linelength
 msgid "Line Length"
 msgstr "Longueur de la ligne"
@@ -504,8 +565,8 @@ msgstr "&OK"
 
 #: lazdatadeskstr.sld_opendatadictionaryfilter
 msgctxt "lazdatadeskstr.sld_opendatadictionaryfilter"
-msgid "Data dictionary files|*.fpd|Ini files|*.ini|All files|*.*"
-msgstr "Fichiers dictionnaires de données | * .fpd | fichiers INI | * .ini | Tous les fichiers |. * *"
+msgid "Data dictionary files (fdd)|*.fdd|Ini files|*.ini|All files|*.*"
+msgstr "Fichiers dictionnaires de données (fdd)|*.fdd |fichiers INI|*.ini |Tous les fichiers |*.*"
 
 #: lazdatadeskstr.sld_opendatadictionarytitle
 msgid "Open data dictionary"
@@ -535,8 +596,8 @@ msgstr "Dernier utilisé"
 
 #: lazdatadeskstr.sld_savefileasfilter
 msgctxt "lazdatadeskstr.sld_savefileasfilter"
-msgid "Data dictionary files|*.fpd|Ini files|*.ini|All files|*.*"
-msgstr "Fichiers dictionnaires de données | * .fpd | fichiers INI | * .ini | Tous les fichiers |. * *"
+msgid "Data dictionary files (fdd)|*.fdd|Ini files|*.ini|All files|*.*"
+msgstr "Fichiers dictionnaires de données (fdd)|*.fdd |fichiers INI|*.ini |Tous les fichiers |*.*"
 
 #: lazdatadeskstr.sld_savefileastitle
 msgid "Save file as"
@@ -566,13 +627,37 @@ msgstr "Choisir/Mettre à jour/Insérer des champs"
 msgid "-"
 msgstr "-"
 
+#: lazdatadeskstr.sld_startempty
+msgid "Thanks, I know what to do"
+msgstr "Merci. Je sais quoi faire"
+
+#: lazdatadeskstr.sld_startnewconnection
+msgid "Create new connection"
+msgstr "Créer une nouvelle connexion"
+
+#: lazdatadeskstr.sld_startnewdict
+msgid "Start new dictionary"
+msgstr "Démarrer un nouveau dictionnaire"
+
+#: lazdatadeskstr.sld_succesconnecting
+msgid "Connection established successfully!"
+msgstr "Connexion établie avec succès !"
+
 #: lazdatadeskstr.sld_table
 msgid "Ta&ble"
 msgstr "Ta&ble"
 
 #: lazdatadeskstr.sld_tableandfields
 msgid "Tables and &Fields"
-msgstr "Tables and &Champs"
+msgstr "Tables et &Champs"
+
+#: lazdatadeskstr.sld_testconnection
+msgid "Test connection"
+msgstr "Vérifier la connexion"
+
+#: lazdatadeskstr.sld_unknowntype
+msgid "Unknown type"
+msgstr "Type inconnu"
 
 #: lazdatadeskstr.sld_update
 msgid "&Update"
@@ -586,15 +671,21 @@ msgstr "Mettre à jour les tables existantes"
 msgid "Username"
 msgstr "Nom d'utilisateur"
 
+#: lazdatadeskstr.sld_view
+msgid "View"
+msgstr "Vue"
+
 #: lazdatadeskstr.sload
 msgid "Load SQL"
 msgstr "Charger du code SQL"
 
 #: lazdatadeskstr.snamefor
+#, object-pascal-format
 msgid "Enter a name for the new %s"
 msgstr "Entrer un nom pour le nouveau %s"
 
 #: lazdatadeskstr.snew
+#, object-pascal-format
 msgid "New %s"
 msgstr "Nouveau %s"
 
@@ -615,6 +706,7 @@ msgid "Enter a name for the new domain:"
 msgstr "Entrer un nom pour le nouveau domaine :"
 
 #: lazdatadeskstr.snewfield
+#, object-pascal-format
 msgid "Create new field in table %s"
 msgstr "Créer un champ pour la table %s"
 
@@ -623,6 +715,7 @@ msgid "Enter a name for the new field:"
 msgstr "Entrer un nom pour le nouveau champ :"
 
 #: lazdatadeskstr.snewforeignkey
+#, object-pascal-format
 msgid "Create new foreign key in table %s"
 msgstr "Créer une clé étrangère pour la table %s"
 
@@ -631,6 +724,7 @@ msgid "Enter a name for the new foreign key:"
 msgstr "Entrer un nom pour la nouvelle clé étrangère :"
 
 #: lazdatadeskstr.snewindex
+#, object-pascal-format
 msgid "Create new index on table %s"
 msgstr "Créer un index pour la table %s"
 
@@ -639,8 +733,9 @@ msgid "Enter a name for the new index:"
 msgstr "Entrer un nom pour le nouvel index :"
 
 #: lazdatadeskstr.snewobject
+#, object-pascal-format
 msgid "Create new %s"
-msgstr "Créer un nouveau%s"
+msgstr "Créer un nouveau %s"
 
 #: lazdatadeskstr.snewsequence
 msgid "Create new sequence"
@@ -665,7 +760,7 @@ msgstr "Suivant"
 #: lazdatadeskstr.snodedatabase
 msgctxt "lazdatadeskstr.snodedatabase"
 msgid "Database"
-msgstr "Base de données "
+msgstr "Base de données"
 
 #: lazdatadeskstr.snodedatadictionary
 msgid "Data dictionary"
@@ -690,7 +785,7 @@ msgstr "Index"
 
 #: lazdatadeskstr.snodeindexfields
 msgid "Index fields: "
-msgstr "Champs index : "
+msgstr "Champs d'index : "
 
 #: lazdatadeskstr.snodeindexoptions
 msgid "Index options: "
@@ -720,11 +815,33 @@ msgstr "Paramètre"
 msgid "Previous"
 msgstr "Précédent"
 
+#: lazdatadeskstr.sql_noconnectionsfound
+msgid ""
+"No connections or data dictionaries were found.\n"
+" Start by creating a new connection or data dictionary."
+msgstr ""
+"Connexions ou dictionnaires de données introuvables.\n"
+" Commencez par créer une connexion ou un dictionnaire de données."
+
 #: lazdatadeskstr.squery
 msgid "Run query"
 msgstr "Exécuter la requête"
 
+#: lazdatadeskstr.sreadyforsql
+msgid "Ready to execute SQL statements"
+msgstr "Prêt à exécuter des instructions SQL"
+
+#: lazdatadeskstr.srecordsfetched
+#, object-pascal-format
+msgid "Records fetched: %d"
+msgstr "Enregistrements récupérés : %d"
+
+#: lazdatadeskstr.sretrystatement
+msgid "Retry the statement"
+msgstr "Réessayer le script"
+
 #: lazdatadeskstr.srowsaffected
+#, object-pascal-format
 msgid "Query executed successfully: %d rows affected."
 msgstr "Requête exécutée avec succès : %d lignes affectées."
 
@@ -735,6 +852,21 @@ msgstr "Enregistrer du code SQL"
 #: lazdatadeskstr.ssavedata
 msgid "Save changes"
 msgstr "Enregistrer les modifications"
+
+#: lazdatadeskstr.sscriptaborted
+#, object-pascal-format
+msgid "Script was aborted after %d statements"
+msgstr "Le script a été interrompu après %d instructions"
+
+#: lazdatadeskstr.sscriptcompleted
+#, object-pascal-format
+msgid "Executed %d statements from script"
+msgstr "%d instructions exécutées à partir du script"
+
+#: lazdatadeskstr.sscripterrorcount
+#, object-pascal-format
+msgid "%d script statements resulted in errors"
+msgstr "%d instructions de script ayant provoqué des erreurs"
 
 #: lazdatadeskstr.sselectdbfdir
 msgid "Select a directory with DBF files"
@@ -748,19 +880,44 @@ msgstr "Objet sélectionné"
 msgid "Sequence"
 msgstr "Séquence"
 
+#: lazdatadeskstr.ssqlerrorcode
+#, object-pascal-format
+msgid "SQL Error code: %d"
+msgstr "Code d'erreur SQL : %d"
+
+#: lazdatadeskstr.ssqlexecutedok
+#, object-pascal-format
+msgid "%s : Statement executed succesfully."
+msgstr "%s : instruction exécutée avec succès."
+
 #: lazdatadeskstr.ssqlfilters
 msgid "SQL files|*.sql|All files|*.*"
 msgstr "Fichiers SQL |*.sql|Tous les fichiers|*.*"
+
+#: lazdatadeskstr.ssqlstatus
+#, object-pascal-format
+msgid "SQL State: %s"
+msgstr "État SQL : %s"
+
+#: lazdatadeskstr.sstopnoerror
+msgid "Continue, ignore all errors"
+msgstr "Continuer en ignorant toutes les erreurs"
+
+#: lazdatadeskstr.sstoponnexterror
+msgid "Continue, stop on the next error"
+msgstr "Continuer et arrêter à la prochaine erreur"
 
 #: lazdatadeskstr.stable
 msgid "Table"
 msgstr "Table"
 
 #: lazdatadeskstr.sunknownconnection
+#, object-pascal-format
 msgid "Unknown connection: %s"
 msgstr "Connexion inconnue : %s"
 
 #: lazdatadeskstr.sunknowndictionary
+#, object-pascal-format
 msgid "Unknown data dictionary: %s"
 msgstr "Dictionnaire de données inconnu : %s"
 

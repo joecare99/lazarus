@@ -14,8 +14,8 @@
 
   A copy of the GNU General Public License is available on the World Wide Web
   at <http://www.gnu.org/copyleft/gpl.html>. You can also obtain it by writing
-  to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
-  MA 02111-1307, USA.
+  to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
+  Boston, MA 02110-1335, USA.
 }
 unit frmmain;
 
@@ -455,21 +455,22 @@ procedure TMainForm.ShowOptions;
 
 begin
   With TOptionsForm.Create(Self) do
-    begin
-    ShowOnStartUp:=FShowOnStartUp;
-    ShowOnMessage:=FShowOnmessage;
-    NewMessageAtBottom:=FAtBottom;
-    NewMessageVisible:=FKeepVisible;
-    CleanLogOnNewProcess := FCleanLog;
-
-    If (ShowModal=mrOk) then
-      begin
-      FShowOnStartUp:=ShowOnStartUp;
-      FShowOnmessage:=ShowOnMessage;
-      FAtBottom:=NewMessageAtBottom;
-      FKeepVisible:=NewMessageVisible;
-      SaveSettings;
-      end;
+    try
+      ShowOnStartUp:=FShowOnStartUp;
+      ShowOnMessage:=FShowOnmessage;
+      NewMessageAtBottom:=FAtBottom;
+      NewMessageVisible:=FKeepVisible;
+      CleanLogOnNewProcess := FCleanLog;
+      If (ShowModal=mrOk) then
+        begin
+        FShowOnStartUp:=ShowOnStartUp;
+        FShowOnmessage:=ShowOnMessage;
+        FAtBottom:=NewMessageAtBottom;
+        FKeepVisible:=NewMessageVisible;
+        SaveSettings;
+        end;
+    finally
+       Free;
     end;
 end;
 

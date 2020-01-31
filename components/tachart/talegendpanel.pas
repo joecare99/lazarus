@@ -34,6 +34,9 @@ type
     property Chart: TChart read FChart write SetChart;
   published
     property Align;
+    property Anchors;
+    property BorderSpacing;
+    property Visible;
   end;
 
 procedure Register;

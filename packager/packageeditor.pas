@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -32,22 +32,23 @@ unit PackageEditor;
 interface
 
 uses
-  // LCL FCL
-  Classes, SysUtils, Forms, Controls, StdCtrls, ComCtrls, Buttons, Graphics,
-  LCLType, LCLProc, Menus, Dialogs, FileUtil, LazFileUtils, LazFileCache, ExtCtrls,
-  contnrs,
-  // IDEIntf CodeTools
-  CodeToolManager,
+  // RTL, FCL
+  Classes, SysUtils, contnrs,
+  // LCL
+  Forms, Controls, StdCtrls, ComCtrls, Buttons, Graphics, Menus, Dialogs,
+  ExtCtrls, LCLType, LCLProc,
   TreeFilterEdit,
-  IDEImagesIntf, MenuIntf, LazIDEIntf, ProjectIntf, CodeToolsStructs,
-  FormEditingIntf, PackageIntf, IDEHelpIntf, IDEOptionsIntf,
-  IDEExternToolIntf,
-  NewItemIntf, IDEWindowIntf,
+  // LazUtils
+  FileUtil, LazFileUtils, LazFileCache, AvgLvlTree,
+  // IDEIntf
+  IDEImagesIntf, MenuIntf, LazIDEIntf, ProjectIntf,
+  FormEditingIntf, PackageDependencyIntf, PackageIntf, IDEHelpIntf, IDEOptionsIntf,
+  NewItemIntf, IDEWindowIntf, IDEDialogs, ComponentReg, IDEOptEditorIntf,
   // IDE
-  IDEDialogs, IDEProcs, LazarusIDEStrConsts, IDEDefs, CompilerOptions,
-  ComponentReg, UnitResources, EnvironmentOpts, DialogProcs, InputHistory,
-  PackageDefs, AddToPackageDlg, PkgVirtualUnitEditor, MissingPkgFilesDlg,
-  PackageSystem, CleanPkgDeps, MainBase;
+  MainBase, IDEProcs, LazarusIDEStrConsts, IDEDefs, CompilerOptions,
+  EnvironmentOpts, DialogProcs, InputHistory, PackageDefs, AddToPackageDlg,
+  AddPkgDependencyDlg, AddFPMakeDependencyDlg, ProjPackChecks, PkgVirtualUnitEditor,
+  MissingPkgFilesDlg, PackageSystem, CleanPkgDeps, ImgList;
   
 const
   PackageEditorMenuRootName = 'PackageEditor';
@@ -57,10 +58,10 @@ var
   // General actions for the Files and Required packages root nodes.
   // Duplicates actions found under the "Add" button.
   PkgEditMenuAddDiskFile: TIDEMenuCommand;
-  PkgEditMenuAddDiskFiles: TIDEMenuCommand;
   PkgEditMenuAddNewFile: TIDEMenuCommand;
   PkgEditMenuAddNewComp: TIDEMenuCommand;
   PkgEditMenuAddNewReqr: TIDEMenuCommand;
+  PkgEditMenuAddNewFPMakeReqr: TIDEMenuCommand;
 
   // selected files
   PkgEditMenuOpenFile: TIDEMenuCommand;
@@ -181,12 +182,18 @@ type
     );
   TPEFlags = set of TPEFlag;
 
+  TIDEPackageOptsDlgAction = (
+    iodaRead,
+    iodaWrite,
+    iodaRestore
+    );
+
   { TPackageEditorForm }
 
   TPackageEditorForm = class(TBasePackageEditor,IFilesEditorInterface)
     MenuItem1: TMenuItem;
+    mnuAddFPMakeReq: TMenuItem;
     mnuAddDiskFile: TMenuItem;
-    mnuAddDiskFiles: TMenuItem;
     mnuAddNewFile: TMenuItem;
     mnuAddNewComp: TMenuItem;
     mnuAddNewReqr: TMenuItem;
@@ -232,6 +239,8 @@ type
     UsePopupMenu: TPopupMenu;
     ItemsPopupMenu: TPopupMenu;
     MorePopupMenu: TPopupMenu;
+    PropsPageControl: TPageControl;
+    CommonOptionsTabSheet: TTabSheet;
     procedure AddToProjectClick(Sender: TObject);
     procedure AddToUsesPkgSectionCheckBoxChange(Sender: TObject);
     procedure ApplyDependencyButtonClick(Sender: TObject);
@@ -250,6 +259,7 @@ type
     procedure DisableI18NForLFMCheckBoxChange(Sender: TObject);
     procedure EditVirtualUnitMenuItemClick(Sender: TObject);
     procedure ExpandDirectoryMenuItemClick(Sender: TObject);
+    procedure FilterEditKeyDown(Sender: TObject; var Key: Word; {%H-}Shift: TShiftState);
     procedure FindInFilesMenuItemClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
@@ -263,7 +273,7 @@ type
       State: TDragState; var Accept: Boolean);
     procedure ItemsTreeViewKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure mnuAddDiskFileClick(Sender: TObject);
-    procedure mnuAddDiskFilesClick(Sender: TObject);
+    procedure mnuAddFPMakeReqClick(Sender: TObject);
     procedure mnuAddNewCompClick(Sender: TObject);
     procedure mnuAddNewReqrClick(Sender: TObject);
     procedure mnuAddNewFileClick(Sender: TObject);
@@ -315,8 +325,7 @@ type
     FShowDirectoryHierarchy: boolean;
     FSortAlphabetically: boolean;
     FDirSummaryLabel: TLabel;
-    FSingleSelectedFile: TPkgFile;
-    FSingleSelectedDep: TPkgDependency;
+    FOptionsShownOfFile: TPkgFile;
     FFirstNodeData: array[TPENodeType] of TPENodeData;
     fUpdateLock: integer;
     fForcedFlags: TPEFlags;
@@ -328,9 +337,10 @@ type
     procedure SetShowDirectoryHierarchy(const AValue: boolean);
     procedure SetSortAlphabetically(const AValue: boolean);
     procedure SetupComponents;
+    procedure CreatePackageFileEditors;
     function OnTreeViewGetImageIndex({%H-}Str: String; Data: TObject; var {%H-}AIsEnabled: Boolean): Integer;
-    procedure ShowAddDialogEx(AType: TAddToPkgType);
-    procedure UpdateNodeImage(TVNode: TTreeNode; NodeData: TPENodeData);
+    procedure UpdateNodeImage(TVNode: TTreeNode);
+    procedure UpdateNodeImage(TVNode: TTreeNode; NodeData: TPENodeData; Item: TObject);
     procedure UpdatePending;
     function CanUpdate(Flag: TPEFlag; Immediately: boolean): boolean;
     procedure UpdateTitle(Immediately: boolean = false);
@@ -348,21 +358,27 @@ type
     procedure ExtendIncPathForNewIncludeFile(const AnIncludeFile: string;
       var IgnoreIncPaths: TFilenameToStringTree);
     function CanBeAddedToProject: boolean;
+    function PassesFilter(rec: PIDEOptionsGroupRec): Boolean;
+    procedure TraverseSettings(AOptions: TAbstractPackageFileIDEOptions; anAction: TIDEPackageOptsDlgAction);
+    procedure FileOptionsToGui;
+    procedure GuiToFileOptions(Restore: boolean);
+    procedure FileOptionsChange(Sender: TObject);
   protected
     fFlags: TPEFlags;
-    fLastDlgPage: TAddToPkgType;
+    FCompileDesignTimePkg: boolean;
     procedure SetLazPackage(const AValue: TLazPackage); override;
     property IdleConnected: boolean read FIdleConnected write SetIdleConnected;
   public
     constructor Create(TheOwner: TComponent); override;
     destructor Destroy; override;
-    procedure DoCompile(CompileClean, CompileRequired: boolean);
+    function CanCloseEditor: TModalResult; override;
+    procedure DoCompile(CompileClean, CompileRequired, WarnIDEPkg: boolean);
     procedure DoFindInFiles;
     procedure DoFixFilesCase;
     procedure DoShowMissingFiles;
     procedure DoMoveCurrentFile(Offset: integer);
     procedure DoMoveDependency(Offset: integer);
-    procedure DoPublishProject;
+    procedure DoPublishPackage;
     procedure DoEditVirtualUnit;
     procedure DoExpandCollapseDirectory(ExpandIt: Boolean);
     procedure DoUseUnitsInDirectory(Use: boolean);
@@ -370,7 +386,12 @@ type
     procedure DoSave(SaveAs: boolean);
     procedure DoSortFiles;
     function DoOpenPkgFile(PkgFile: TPkgFile): TModalResult;
-    function ShowAddDialog(var DlgPage: TAddToPkgType): TModalResult;
+    function ShowNewCompDialog: TModalResult;
+    function ShowAddDepDialog: TModalResult;
+    function ShowAddFPMakeDepDialog: TModalResult;
+    function PkgNameToFormName(const PkgName: string): string;
+    function GetSingleSelectedDependency: TPkgDependency;
+    function GetSingleSelectedFile: TPkgFile;
   public
     // IFilesEditorInterface
     function FilesEditTreeView: TTreeView;
@@ -561,10 +582,10 @@ begin
   PkgEditMenuSectionFile:=RegisterIDEMenuSection(PackageEditorMenuFilesRoot,'File');
   AParent:=PkgEditMenuSectionFile;
   PkgEditMenuAddDiskFile:=RegisterIDEMenuCommand(AParent,'Add disk file',lisPckEditAddFilesFromFileSystem);
-  PkgEditMenuAddDiskFiles:=RegisterIDEMenuCommand(AParent,'Add disk files',lisAddFilesInDirectory);
   PkgEditMenuAddNewFile:=RegisterIDEMenuCommand(AParent,'New file',lisA2PNewFile);
-  PkgEditMenuAddNewComp:=RegisterIDEMenuCommand(AParent,'New component',lisA2PNewComponent);
+  PkgEditMenuAddNewComp:=RegisterIDEMenuCommand(AParent,'New component',lisMenuNewComponent);
   PkgEditMenuAddNewReqr:=RegisterIDEMenuCommand(AParent,'New requirement',lisProjAddNewRequirement);
+  PkgEditMenuAddNewFPMakeReqr:=RegisterIDEMenuCommand(AParent,'New FPMake requirement',lisProjAddNewFPMakeRequirement);
   //
   PkgEditMenuOpenFile:=RegisterIDEMenuCommand(AParent,'Open File',lisOpen);
   PkgEditMenuRemoveFile:=RegisterIDEMenuCommand(AParent,'Remove File',lisPckEditRemoveFile);
@@ -594,7 +615,7 @@ begin
   // register the section for operations on all files
   PkgEditMenuSectionFiles:=RegisterIDEMenuSection(PackageEditorMenuRoot,'Files');
   AParent:=PkgEditMenuSectionFiles;
-  PkgEditMenuFindInFiles:=RegisterIDEMenuCommand(AParent,'Find in files',srkmecFindInFiles);
+  PkgEditMenuFindInFiles:=RegisterIDEMenuCommand(AParent,'Find in files',srkmecFindInFiles + ' ...');
   PkgEditMenuSortFiles:=RegisterIDEMenuCommand(AParent,'Sort Files Permanently',lisPESortFiles);
   PkgEditMenuFixFilesCase:=RegisterIDEMenuCommand(AParent,'Fix Files Case',lisPEFixFilesCase);
   PkgEditMenuShowMissingFiles:=RegisterIDEMenuCommand(AParent, 'Show Missing Files', lisPEShowMissingFiles);
@@ -628,13 +649,31 @@ begin
   PkgEditMenuViewPackageSource:=RegisterIDEMenuCommand(AParent,'View Package Source',lisPckEditViewPackageSource);
 end;
 
+function DependencyAsString(ADependency: TPkgDependency): string;
+// A display text for a dependency including min/max versions + other info.
+// ToDo: Modify Dependency.AsString output to replace this function,
+//       or create a new method for the task.
+var
+  aFilename: String;
+begin
+  Result:=ADependency.AsString;
+  if ADependency.DefaultFilename<>'' then begin
+    aFilename:=ADependency.MakeFilenameRelativeToOwner(ADependency.DefaultFilename);
+    if ADependency.PreferDefaultFilename then
+      Result:=Result+' in '+aFilename // like the 'in' keyword in uses section
+    else
+      Result:=Format(lisPckEditDefault, [Result, aFilename]);
+  end;
+  if ADependency.DependencyType=pdtFPMake then
+    Result:=Result+' '+lisPckEditFPMakePackage;
+end;
+
 { TPENodeData }
 
-constructor TPENodeData.Create(aTyp: TPENodeType; aName: string;
-  aRemoved: boolean);
+constructor TPENodeData.Create(aTyp: TPENodeType; aName: string; aRemoved: boolean);
 begin
   Typ:=aTyp;
-  Name:=aName;;
+  Name:=aName;
   Removed:=aRemoved;
 end;
 
@@ -642,7 +681,7 @@ end;
 
 procedure TPackageEditorForm.PublishClick(Sender: TObject);
 begin
-  DoPublishProject;
+  DoPublishPackage;
 end;
 
 procedure TPackageEditorForm.ReAddMenuItemClick(Sender: TObject);
@@ -666,13 +705,13 @@ begin
         PkgFile:=TPkgFile(Item);
         AFilename:=PkgFile.GetFullFilename;
         if PkgFile.FileType in PkgFileRealUnitTypes then begin
-          if not CheckAddingUnitFilename(LazPackage,d2ptUnit,
+          if not CheckAddingPackageUnit(LazPackage,d2ptUnit,
             PackageEditors.OnGetIDEFileInfo,AFilename) then exit;
         end else if PkgFile.FileType=pftVirtualUnit then begin
-          if not CheckAddingUnitFilename(LazPackage,d2ptVirtualUnit,
+          if not CheckAddingPackageUnit(LazPackage,d2ptVirtualUnit,
             PackageEditors.OnGetIDEFileInfo,AFilename) then exit;
         end else begin
-          if not CheckAddingUnitFilename(LazPackage,d2ptFile,
+          if not CheckAddingPackageUnit(LazPackage,d2ptFile,
             PackageEditors.OnGetIDEFileInfo,AFilename) then exit;
         end;
         PkgFile.Filename:=AFilename;
@@ -682,7 +721,7 @@ begin
         Dependency:=TPkgDependency(Item);
         // Re-add dependency
         fForcedFlags:=[pefNeedUpdateRemovedFiles,pefNeedUpdateRequiredPkgs];
-        if CheckAddingDependency(LazPackage,Dependency,false,true)<>mrOk then exit;
+        if CheckAddingPackageDependency(LazPackage,Dependency,false,true)<>mrOk then exit;
         LazPackage.RemoveRemovedDependency(Dependency);
         PackageGraph.AddDependencyToPackage(LazPackage,Dependency);
       end;
@@ -694,13 +733,15 @@ begin
 end;
 
 type
-  PackageSelType = (pstFile, pstDir, pstDep, pstFilesNode, pstReqPackNode,
-                    pstRemFile, pstRemDep);
+  PackageSelType = (pstFile, pstDir, pstDep, pstFPMake, pstFilesNode,
+                     pstReqPackNode, pstRemFile, pstRemDep);
   PackageSelTypes = set of PackageSelType;
 
 procedure TPackageEditorForm.ItemsPopupMenuPopup(Sender: TObject);
 var
   UserSelection: PackageSelTypes;
+  SingleSelectedFile: TPkgFile;
+  SingleSelectedDep: TPkgDependency;
 
   procedure CollectSelected;
   var
@@ -712,15 +753,15 @@ var
     i: Integer;
   begin
     UserSelection := [];
-    FSingleSelectedFile := Nil;
-    FSingleSelectedDep := Nil;
+    SingleSelectedFile := Nil;
+    SingleSelectedDep := Nil;
     for i := 0 to ItemsTreeView.SelectionCount-1 do begin
       TVNode := ItemsTreeView.Selections[i];
       if GetNodeDataItem(TVNode,NodeData,Item) then begin
         if Item is TPkgFile then begin
           CurFile := TPkgFile(Item);
           if ItemsTreeView.SelectionCount=1 then
-            FSingleSelectedFile := CurFile;
+            SingleSelectedFile := CurFile;
           if NodeData.Removed then
             Include(UserSelection, pstRemFile)
           else
@@ -728,7 +769,9 @@ var
         end else if Item is TPkgDependency then begin
           CurDependency := TPkgDependency(Item);
           if (ItemsTreeView.SelectionCount=1) and Assigned(CurDependency.RequiredPackage) then
-            FSingleSelectedDep:=CurDependency;
+            SingleSelectedDep:=CurDependency;
+          if CurDependency.DependencyType=pdtFPMake then
+            Include(UserSelection, pstFPMake);
           if NodeData.Removed then
             Include(UserSelection, pstRemDep)
           else
@@ -758,17 +801,17 @@ var
     VirtualFileExists: Boolean;
     NewMenuItem: TIDEMenuCommand;
   begin
-    if Assigned(FSingleSelectedFile) then
+    if Assigned(SingleSelectedFile) then
     begin
       PkgEditMenuSectionFileType.Clear;
-      VirtualFileExists:=(FSingleSelectedFile.FileType=pftVirtualUnit)
-                      and FileExistsCached(FSingleSelectedFile.GetFullFilename);
+      VirtualFileExists:=(SingleSelectedFile.FileType=pftVirtualUnit)
+                      and FileExistsCached(SingleSelectedFile.GetFullFilename);
       for CurPFT:=Low(TPkgFileType) to High(TPkgFileType) do begin
         NewMenuItem:=RegisterIDEMenuCommand(PkgEditMenuSectionFileType,
                         'SetFileType'+IntToStr(ord(CurPFT)),
                         GetPkgFileTypeLocalizedName(CurPFT),
                         @ChangeFileTypeMenuItemClick);
-        if CurPFT=FSingleSelectedFile.FileType then
+        if CurPFT=SingleSelectedFile.FileType then
         begin
           // menuitem to keep the current type
           NewMenuItem.Enabled:=true;
@@ -779,7 +822,7 @@ var
         else if (not (CurPFT in PkgFileUnitTypes)) then
           // all other files can be changed into all non unit types
           NewMenuItem.Enabled:=true
-        else if FilenameIsPascalUnit(FSingleSelectedFile.Filename) then
+        else if FilenameIsPascalUnit(SingleSelectedFile.Filename) then
           // a pascal file can be changed into anything
           NewMenuItem.Enabled:=true
         else
@@ -797,7 +840,7 @@ begin
   //debugln(['TPackageEditorForm.FilesPopupMenuPopup START ',ItemsPopupMenu.Items.Count]);
   PackageEditorMenuFilesRoot.MenuItem:=ItemsPopupMenu.Items;
   //debugln(['TPackageEditorForm.FilesPopupMenuPopup START after connect ',ItemsPopupMenu.Items.Count]);
-  PackageEditorMenuRoot.BeginUpdate;
+  //PackageEditorMenuRoot.BeginUpdate;
   try
     CollectSelected;
     Writable := not LazPackage.ReadOnly;
@@ -809,17 +852,17 @@ begin
       // Files root node
       SetItem(PkgEditMenuAddDiskFile, @mnuAddDiskFileClick, UserSelection=[pstFilesNode],
               Writable);
-      SetItem(PkgEditMenuAddDiskFiles, @mnuAddDiskFilesClick, UserSelection=[pstFilesNode],
-              Writable);
       SetItem(PkgEditMenuAddNewFile, @mnuAddNewFileClick, UserSelection=[pstFilesNode],
               Writable);
       SetItem(PkgEditMenuAddNewComp, @mnuAddNewCompClick, UserSelection=[pstFilesNode],
               Writable);
       SetItem(PkgEditMenuAddNewReqr, @mnuAddNewReqrClick, UserSelection=[pstReqPackNode],
               Writable);
+      SetItem(PkgEditMenuAddNewFPMakeReqr, @mnuAddFPMakeReqClick, UserSelection=[pstReqPackNode],
+              Writable);
       // selected files
       SetItem(PkgEditMenuOpenFile, @OpenFileMenuItemClick,
-              UserSelection*[pstFilesNode,pstReqPackNode]=[]);
+              UserSelection*[pstFilesNode,pstReqPackNode,pstFPMake]=[]);
       SetItem(PkgEditMenuReAddFile, @ReAddMenuItemClick, UserSelection=[pstRemFile]);
       SetItem(PkgEditMenuCopyMoveToDirectory, @CopyMoveToDirMenuItemClick,
               (UserSelection=[pstFile]) and LazPackage.HasDirectory);
@@ -827,7 +870,7 @@ begin
               RemoveBitBtn.Enabled);
       AddFileTypeMenuItem;
       SetItem(PkgEditMenuEditVirtualUnit, @EditVirtualUnitMenuItemClick,
-              Assigned(FSingleSelectedFile) and (FSingleSelectedFile.FileType=pftVirtualUnit),
+              Assigned(SingleSelectedFile) and (SingleSelectedFile.FileType=pftVirtualUnit),
               Writable);
     end;
 
@@ -847,24 +890,24 @@ begin
     if PkgEditMenuSectionDependency.Visible then
     begin
       SetItem(PkgEditMenuRemoveDependency, @RemoveBitBtnClick,
-              UserSelection=[pstDep], Writable);
+              pstdep in UserSelection, Writable);
       SetItem(PkgEditMenuReAddDependency,@ReAddMenuItemClick,
-              UserSelection=[pstRemDep], Writable);
+              pstRemDep in UserSelection, Writable);
       SetItem(PkgEditMenuDepStoreFileNameDefault, @SetDepDefaultFilenameMenuItemClick,
-              Assigned(FSingleSelectedDep), Writable);
+              Assigned(SingleSelectedDep), Writable);
       SetItem(PkgEditMenuDepStoreFileNamePreferred, @SetDepPreferredFilenameMenuItemClick,
-              Assigned(FSingleSelectedDep), Writable);
+              Assigned(SingleSelectedDep), Writable);
       SetItem(PkgEditMenuDepClearStoredFileName, @ClearDependencyFilenameMenuItemClick,
-              Assigned(FSingleSelectedDep), Writable);
+              Assigned(SingleSelectedDep), Writable);
       SetItem(PkgEditMenuCleanDependencies, @CleanDependenciesMenuItemClick,
               Assigned(LazPackage.FirstRequiredDependency), Writable);
     end;
 
   finally
-    PackageEditorMenuRoot.EndUpdate;
+    //PackageEditorMenuRoot.EndUpdate;
+    SingleSelectedFile := Nil;
+    SingleSelectedDep := Nil;
   end;
-  FSingleSelectedFile := Nil;
-  FSingleSelectedDep := Nil;
   //debugln(['TPackageEditorForm.FilesPopupMenuPopup END ',ItemsPopupMenu.Items.Count]); PackageEditorMenuRoot.WriteDebugReport('  ',true);
 end;
 
@@ -904,25 +947,14 @@ var
   TargetTVType: TTreeViewInsertMarkType;
 begin
   //debugln(['TPackageEditorForm.ItemsTreeViewDragOver ',DbgSName(Source),' State=',ord(State),' FromSelf=',Source=ItemsTreeView]);
-
-  if not PackageEditors.OnDragOverTreeView(Sender, Source, X, Y,
-    TargetTVNode, TargetTVType)
-  then begin
-    ItemsTreeView.SetInsertMark(nil,tvimNone);
-    Accept:=false;
-    exit;
-  end;
-
-  if State=dsDragLeave then
-    ItemsTreeView.SetInsertMark(nil,tvimNone)
+  Accept:=PackageEditors.OnDragOverTreeView(Sender,Source,X,Y,TargetTVNode,TargetTVType);
+  if Accept and (State<>dsDragLeave) then
+    ItemsTreeView.SetInsertMark(TargetTVNode,TargetTVType)
   else
-    ItemsTreeView.SetInsertMark(TargetTVNode,TargetTVType);
-  Accept:=true;
+    ItemsTreeView.SetInsertMark(nil,tvimNone);
 end;
 
 procedure TPackageEditorForm.MorePopupMenuPopup(Sender: TObject);
-var
-  Writable: Boolean;
 
   procedure SetItem(Item: TIDEMenuCommand; AnOnClick: TNotifyEvent;
                     aShow: boolean = true; AEnable: boolean = true);
@@ -933,9 +965,13 @@ var
     Item.Enabled:=AEnable;
   end;
 
+var
+  Writable, CanPublish: Boolean;
+  pcos: TParsedCompilerOptString;
+  CurrentPath: String;
 begin
   PackageEditorMenuRoot.MenuItem:=MorePopupMenu.Items;
-  PackageEditorMenuRoot.BeginUpdate;
+  //PackageEditorMenuRoot.BeginUpdate;
   try
     Writable:=(not LazPackage.ReadOnly);
 
@@ -950,8 +986,16 @@ begin
     SetItem(PkgEditMenuSaveAs,@SaveAsClick,true,true);
     SetItem(PkgEditMenuRevert,@RevertClick,true,
             (not LazPackage.IsVirtual) and FileExistsUTF8(LazPackage.Filename));
-    SetItem(PkgEditMenuPublish,@PublishClick,true,
-            (not LazPackage.Missing) and LazPackage.HasDirectory);
+    CanPublish:=(not LazPackage.Missing) and LazPackage.HasDirectory;
+    for pcos in [pcosUnitPath,pcosIncludePath] do
+    begin
+      CurrentPath:=LazPackage.CompilerOptions.ParsedOpts.GetParsedValue(pcos);
+      CurrentPath:=CreateRelativeSearchPath(CurrentPath,LazPackage.DirectoryExpanded);
+      //debugln(['TPackageEditorForm.MorePopupMenuPopup Unit=',CurrentPath]);
+      if Pos('..',CurrentPath)>0 then
+        CanPublish:=false;
+    end;
+    SetItem(PkgEditMenuPublish,@PublishClick,true,CanPublish);
 
     // under section PkgEditMenuSectionCompile
     SetItem(PkgEditMenuCompile,@CompileBitBtnClick,true,CompileBitBtn.Enabled);
@@ -963,7 +1007,7 @@ begin
     // under section PkgEditMenuSectionMisc
     SetItem(PkgEditMenuViewPackageSource,@ViewPkgSourceClick);
   finally
-    PackageEditorMenuRoot.EndUpdate;
+    //PackageEditorMenuRoot.EndUpdate;
   end;
 end;
 
@@ -1040,30 +1084,19 @@ begin
     Key := VK_UNKNOWN;
 end;
 
-procedure TPackageEditorForm.ShowAddDialogEx(AType: TAddToPkgType);
+procedure TPackageEditorForm.mnuAddFPMakeReqClick(Sender: TObject);
 begin
-  if LazPackage=nil then exit;
-  BeginUpdate;
-  try
-    ShowAddDialog(AType);
-  finally
-    EndUpdate;
-  end;
-end;
-
-procedure TPackageEditorForm.mnuAddDiskFilesClick(Sender: TObject);
-begin
-  ShowAddDialogEx(d2ptFiles);
+  ShowAddFPMakeDepDialog
 end;
 
 procedure TPackageEditorForm.mnuAddNewCompClick(Sender: TObject);
 begin
-  ShowAddDialogEx(d2ptNewComponent);
+  ShowNewCompDialog;
 end;
 
 procedure TPackageEditorForm.mnuAddNewReqrClick(Sender: TObject);
 begin
-  ShowAddDialogEx(d2ptRequiredPkg);
+  ShowAddDepDialog;
 end;
 
 procedure TPackageEditorForm.mnuAddNewFileClick(Sender: TObject);
@@ -1113,13 +1146,15 @@ begin
 end;
 
 procedure TPackageEditorForm.ClearDependencyFilenameMenuItemClick(Sender: TObject);
+var
+  CurDependency: TPkgDependency;
 begin
-  Assert(Assigned(FSingleSelectedDep) and Assigned(FSingleSelectedDep.RequiredPackage),
-    'ClearDependencyFilenameMenuItemClick: FSingleSelectedDep=nil');
+  CurDependency:=GetSingleSelectedDependency;
+  if CurDependency=nil then exit;
   if (LazPackage=nil) or LazPackage.ReadOnly then exit;
-  if FSingleSelectedDep.DefaultFilename='' then exit;
-  FSingleSelectedDep.DefaultFilename:='';
-  FSingleSelectedDep.PreferDefaultFilename:=false;
+  if CurDependency.DefaultFilename='' then exit;
+  CurDependency.DefaultFilename:='';
+  CurDependency.PreferDefaultFilename:=false;
   LazPackage.Modified:=true;
   UpdateRequiredPkgs;
 end;
@@ -1132,10 +1167,10 @@ end;
 procedure TPackageEditorForm.MoveUpBtnClick(Sender: TObject);
 begin
   if SortAlphabetically then exit;
-  if Assigned(FSingleSelectedFile) then
+  if Assigned(GetSingleSelectedFile) then
     DoMoveCurrentFile(-1)
-  else if Assigned(FSingleSelectedDep) then
-    DoMoveDependency(-1)
+  else if Assigned(GetSingleSelectedDependency) then
+    DoMoveDependency(-1);
 end;
 
 procedure TPackageEditorForm.OnIdle(Sender: TObject; var Done: Boolean);
@@ -1148,9 +1183,9 @@ end;
 procedure TPackageEditorForm.MoveDownBtnClick(Sender: TObject);
 begin
   if SortAlphabetically then exit;
-  if Assigned(FSingleSelectedFile) then
+  if Assigned(GetSingleSelectedFile) then
     DoMoveCurrentFile(1)
-  else if Assigned(FSingleSelectedDep) then
+  else if Assigned(GetSingleSelectedDependency) then
     DoMoveDependency(1)
 end;
 
@@ -1204,33 +1239,8 @@ end;
 
 procedure TPackageEditorForm.PackageEditorFormCloseQuery(Sender: TObject;
   var CanClose: boolean);
-var
-  MsgResult: Integer;
 begin
-  //debugln(['TPackageEditorForm.PackageEditorFormCloseQuery ',Caption]);
-  if (LazPackage<>nil) and (not (lpfDestroying in LazPackage.Flags)) then
-  begin
-    if (not LazPackage.ReadOnly) and LazPackage.Modified then
-    begin
-      MsgResult:=MessageDlg(lisPkgMangSavePackage,
-        Format(lisPckEditPackageHasChangedSavePackage, [LazPackage.IDAsString, LineEnding]),
-        mtConfirmation,[mbYes,mbNo,mbAbort],0);
-      case MsgResult of
-        mrYes:
-          MsgResult:=PackageEditors.SavePackage(LazPackage,false);
-        mrNo:
-          LazPackage.UserIgnoreChangeStamp:=LazPackage.ChangeStamp;
-      end;
-      if MsgResult=mrAbort then CanClose:=false;
-      LazPackage.Modified:=false; // clear modified flag, so that it will be closed
-    end;
-    if CanClose and not MainIDE.IDEIsClosing then
-    begin
-      EnvironmentOptions.LastOpenPackages.Remove(LazPackage.Filename);
-      MainIDE.SaveEnvironment;
-    end;
-  end;
-  //debugln(['TPackageEditorForm.PackageEditorFormCloseQuery CanClose=',CanClose,' ',Caption]);
+  CanClose:=CanCloseEditor=mrOK;
   if CanClose then
     Application.ReleaseComponent(Self);
 end;
@@ -1242,9 +1252,11 @@ var
   CurStr: string;
   CurObject: TObject;
   TxtH: Integer;
-  CurIcon: TCustomBitmap;
   IconWidth: Integer;
   IconHeight: Integer;
+  IL: TCustomImageList;
+  II: TImageIndex;
+  Res: TScaledImageListResolution;
 begin
   //DebugLn('TPackageEditorForm.RegisteredListBoxDrawItem START');
   if LazPackage=nil then exit;
@@ -1261,14 +1273,17 @@ begin
         CurStr:=CurComponent.ComponentClass.ClassName;
       TxtH:=TextHeight(CurStr);
       FillRect(ARect);
-      CurIcon:=CurComponent.Icon;
+      IL:=CurComponent.Images;
+      II:=CurComponent.ImageIndex;
       //DebugLn('TPackageEditorForm.RegisteredListBoxDrawItem ',DbgSName(CurIcon),' ',CurComponent.ComponentClass.ClassName);
-      if CurIcon<>nil then begin
-        IconWidth:=CurIcon.Width;
-        IconHeight:=CurIcon.Height;
-        Draw(ARect.Left+(25-IconWidth) div 2,
+      if (IL<>nil) and (II>=0) then begin
+        Res := IL.ResolutionForControl[0, Self];
+        IconWidth:=Res.Width;
+        IconHeight:=Res.Height;
+        Res.Draw(RegisteredListBox.Canvas,
+             ARect.Left+(25-IconWidth) div 2,
              ARect.Top+(ARect.Bottom-ARect.Top-IconHeight) div 2,
-             CurIcon);
+             II);
       end;
       TextOut(ARect.Left+25,
               ARect.Top+(ARect.Bottom-ARect.Top-TxtH) div 2,
@@ -1392,7 +1407,7 @@ begin
       fForcedFlags:=fForcedFlags+[pefNeedUpdateRemovedFiles];
     if PkgCount>0 then
       fForcedFlags:=fForcedFlags+[pefNeedUpdateRemovedFiles,pefNeedUpdateRequiredPkgs];
-    LazPackage.Modified:=True; // This will update also other possible editors.
+    LazPackage.Modified:=True;
 
   finally
     EndUpdate;
@@ -1407,6 +1422,16 @@ end;
 procedure TPackageEditorForm.ExpandDirectoryMenuItemClick(Sender: TObject);
 begin
   DoExpandCollapseDirectory(True);
+end;
+
+procedure TPackageEditorForm.FilterEditKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if Key = VK_RETURN then
+  begin
+    OpenFileMenuItemClick(Nil);
+    Key := VK_UNKNOWN;
+  end;
 end;
 
 procedure TPackageEditorForm.FindInFilesMenuItemClick(Sender: TObject);
@@ -1634,19 +1659,19 @@ procedure TPackageEditorForm.ApplyDependencyButtonClick(Sender: TObject);
 var
   Flags: TPkgDependencyFlags;
   MinVers, MaxVers: TPkgVersion;
+  CurDependency: TPkgDependency;
 begin
-  if LazPackage=nil then exit;
-  if FSingleSelectedDep=nil then exit;
-  if LazPackage.FindDependencyByName(FSingleSelectedDep.PackageName)<>FSingleSelectedDep
+  CurDependency:=GetSingleSelectedDependency;
+  if (LazPackage=nil) or (CurDependency=nil)
   then exit;
 
   MinVers:=TPkgVersion.Create;
   MaxVers:=TPkgVersion.Create;
   try
     // Assign relevant data to temp variables
-    Flags:=FSingleSelectedDep.Flags;
-    MinVers.Assign(FSingleSelectedDep.MinVersion);
-    MaxVers.Assign(FSingleSelectedDep.MinVersion);
+    Flags:=CurDependency.Flags;
+    MinVers.Assign(CurDependency.MinVersion);
+    MaxVers.Assign(CurDependency.MinVersion);
 
     // read minimum version
     if UseMinVersionCheckBox.Checked then begin
@@ -1677,10 +1702,13 @@ begin
       Exclude(Flags, pdfMaxVersion);
 
     // Assign changes back to the dependency
-    FSingleSelectedDep.Flags := Flags;
-    FSingleSelectedDep.MinVersion.Assign(MinVers);
-    FSingleSelectedDep.MaxVersion.Assign(MaxVers);
-    LazPackage.ModifySilently;
+    CurDependency.Flags := Flags;
+    CurDependency.MinVersion.Assign(MinVers);
+    CurDependency.MaxVersion.Assign(MaxVers);
+
+    UpdateNodeImage(ItemsTreeView.Selected);
+    //fForcedFlags:=[pefNeedUpdateRequiredPkgs];
+    LazPackage.Modified:=True;
   finally
     MaxVers.Free;
     MinVers.Free;
@@ -1706,7 +1734,7 @@ begin
     CurFile.HasRegisterProc:=CallRegisterProcCheckBox.Checked;
     if not NodeData.Removed then
       LazPackage.ModifySilently;
-    UpdateNodeImage(TVNode, NodeData);
+    UpdateNodeImage(TVNode, NodeData, Item);
   end;
 end;
 
@@ -1774,12 +1802,12 @@ begin
   if MessageDlg(lisPckEditCompileEverything,
     lisPckEditReCompileThisAndAllRequiredPackages,
     mtConfirmation,[mbYes,mbNo],0)<>mrYes then exit;
-  DoCompile(true,true);
+  DoCompile(true,true,true);
 end;
 
 procedure TPackageEditorForm.CompileCleanClick(Sender: TObject);
 begin
-  DoCompile(true,false);
+  DoCompile(true,false,true);
 end;
 
 procedure TPackageEditorForm.CopyMoveToDirMenuItemClick(Sender: TObject);
@@ -1789,7 +1817,7 @@ end;
 
 procedure TPackageEditorForm.CompileBitBtnClick(Sender: TObject);
 begin
-  DoCompile(false,false);
+  DoCompile(false,false,true);
 end;
 
 procedure TPackageEditorForm.CreateMakefileClick(Sender: TObject);
@@ -1837,8 +1865,9 @@ end;
 
 procedure TPackageEditorForm.SetLazPackage(const AValue: TLazPackage);
 begin
-  if (FLazPackage=AValue) and
-     not(Assigned(AValue) and (Name<>PackageEditorWindowPrefix+AValue.Name))//force editor name change when package name changed!
+  //force editor name change when package name changed!
+  if (FLazPackage=Nil)
+  and ( (AValue=Nil) or (Name=PkgNameToFormName(AValue.Name)) )
   then
     exit;
   if FLazPackage<>nil then
@@ -1854,9 +1883,8 @@ begin
   end;
   EnvironmentOptions.LastOpenPackages.Add(FLazPackage.Filename);
   MainIDE.SaveEnvironment;
-  Name:=PackageEditorWindowPrefix+LazPackage.Name;
   FLazPackage.Editor:=Self;
-  // update components
+  // set Name and update components.
   UpdateAll(true);
 end;
 
@@ -1869,7 +1897,7 @@ procedure TPackageEditorForm.SetupComponents;
     Result.Caption := ACaption;
     Result.Hint := AHint;
     if AImageName <> '' then
-      Result.ImageIndex := IDEImages.LoadImage(16, AImageName);
+      Result.ImageIndex := IDEImages.LoadImage(AImageName);
     Result.ShowHint := True;
     Result.OnClick := AOnClick;
     Result.AutoSize := True;
@@ -1885,20 +1913,20 @@ procedure TPackageEditorForm.SetupComponents;
   end;
 
 begin
-  ImageIndexFiles           := IDEImages.LoadImage(16, 'pkg_files');
-  ImageIndexRemovedFiles    := IDEImages.LoadImage(16, 'pkg_removedfiles');
-  ImageIndexRequired        := IDEImages.LoadImage(16, 'pkg_required');
-  ImageIndexRemovedRequired := IDEImages.LoadImage(16, 'pkg_removedrequired');
-  ImageIndexUnit            := IDEImages.LoadImage(16, 'pkg_unit');
-  ImageIndexRegisterUnit    := IDEImages.LoadImage(16, 'pkg_registerunit');
-  ImageIndexLFM             := IDEImages.LoadImage(16, 'pkg_lfm');
-  ImageIndexLRS             := IDEImages.LoadImage(16, 'pkg_lrs');
-  ImageIndexInclude         := IDEImages.LoadImage(16, 'pkg_include');
-  ImageIndexIssues          := IDEImages.LoadImage(16, 'pkg_issues');
-  ImageIndexText            := IDEImages.LoadImage(16, 'pkg_text');
-  ImageIndexBinary          := IDEImages.LoadImage(16, 'pkg_binary');
-  ImageIndexConflict        := IDEImages.LoadImage(16, 'pkg_conflict');
-  ImageIndexDirectory       := IDEImages.LoadImage(16, 'pkg_files');
+  ImageIndexFiles           := IDEImages.LoadImage('pkg_files');
+  ImageIndexRemovedFiles    := IDEImages.LoadImage('pkg_removedfiles');
+  ImageIndexRequired        := IDEImages.LoadImage('pkg_required');
+  ImageIndexRemovedRequired := IDEImages.LoadImage('pkg_removedrequired');
+  ImageIndexUnit            := IDEImages.LoadImage('pkg_unit');
+  ImageIndexRegisterUnit    := IDEImages.LoadImage('pkg_registerunit');
+  ImageIndexLFM             := IDEImages.LoadImage('pkg_lfm');
+  ImageIndexLRS             := IDEImages.LoadImage('pkg_lrs');
+  ImageIndexInclude         := IDEImages.LoadImage('pkg_include');
+  ImageIndexIssues          := IDEImages.LoadImage('pkg_issues');
+  ImageIndexText            := IDEImages.LoadImage('pkg_text');
+  ImageIndexBinary          := IDEImages.LoadImage('pkg_binary');
+  ImageIndexConflict        := IDEImages.LoadImage('pkg_conflict');
+  ImageIndexDirectory       := IDEImages.LoadImage('pkg_files');
 
   ItemsTreeView.Images := IDEImages.Images_16;
   ToolBar.Images := IDEImages.Images_16;
@@ -1914,7 +1942,7 @@ begin
   RemoveBitBtn  := CreateToolButton('RemoveBitBtn', lisRemove, lisPckEditRemoveSelectedItem, 'laz_delete', @RemoveBitBtnClick);
   CreateDivider;
   OptionsBitBtn := CreateToolButton('OptionsBitBtn', lisOptions, lisPckEditEditGeneralOptions, 'pkg_properties', @OptionsBitBtnClick);
-  HelpBitBtn    := CreateToolButton('HelpBitBtn', GetButtonCaption(idButtonHelp), lisMenuOnlineHelp, 'menu_help', @HelpBitBtnClick);
+  HelpBitBtn    := CreateToolButton('HelpBitBtn', GetButtonCaption(idButtonHelp), lisMenuOnlineHelp, 'btn_help', @HelpBitBtnClick);
   MoreBitBtn    := CreateToolButton('MoreBitBtn', lisMoreSub, lisPkgEdMoreFunctionsForThePackage, '', nil);
   MoreBitBtn.Style:=tbsButtonDrop;
 
@@ -1923,22 +1951,22 @@ begin
   MoreBitBtn.DropdownMenu := MorePopupMenu;
 
   mnuAddDiskFile.Caption := lisPckEditAddFilesFromFileSystem;
-  mnuAddDiskFiles.Caption := lisAddFilesInDirectory;
   mnuAddNewFile.Caption := lisA2PNewFile;
-  mnuAddNewComp.Caption := lisA2PNewComponent;
+  mnuAddNewComp.Caption := lisMenuNewComponent;
   mnuAddNewReqr.Caption := lisProjAddNewRequirement;
+  mnuAddFPMakeReq.Caption := lisProjAddNewFPMakeRequirement;
 
   // Buttons on FilterPanel
-  OpenButton.LoadGlyphFromResourceName(HInstance, 'laz_open');
+  IDEImages.AssignImage(OpenButton, 'laz_open');
   OpenButton.Hint:=lisOpenFile2;
   SortAlphabeticallyButton.Hint:=lisPESortFilesAlphabetically;
-  SortAlphabeticallyButton.LoadGlyphFromResourceName(HInstance, 'pkg_sortalphabetically');
+  IDEImages.AssignImage(SortAlphabeticallyButton, 'pkg_sortalphabetically');
   DirectoryHierarchyButton.Hint:=lisPEShowDirectoryHierarchy;
-  DirectoryHierarchyButton.LoadGlyphFromResourceName(HInstance, 'pkg_hierarchical');
+  IDEImages.AssignImage(DirectoryHierarchyButton, 'pkg_hierarchical');
 
   // Up / Down buttons
-  MoveUpBtn.LoadGlyphFromResourceName(HInstance, 'arrow_up');
-  MoveDownBtn.LoadGlyphFromResourceName(HInstance, 'arrow_down');
+  IDEImages.AssignImage(MoveUpBtn, 'arrow_up');
+  IDEImages.AssignImage(MoveDownBtn, 'arrow_down');
   MoveUpBtn.Hint:=lisMoveSelectedUp;
   MoveDownBtn.Hint:=lisMoveSelectedDown;
 
@@ -1952,12 +1980,13 @@ begin
   ItemsTreeView.EndUpdate;
 
   PropsGroupBox.Caption:=lisPckEditFileProperties;
+  CommonOptionsTabSheet.Caption:=lisPckEditCommonOptions;
 
   CallRegisterProcCheckBox.Caption:=lisPckEditRegisterUnit;
   CallRegisterProcCheckBox.Hint:=Format(lisPckEditCallRegisterProcedureOfSelectedUnit, ['"', '"']);
 
   AddToUsesPkgSectionCheckBox.Caption:=lisPkgMangUseUnit;
-  AddToUsesPkgSectionCheckBox.Hint:=lisPkgMangAddUnitToUsesClauseOfPackageDisableThisOnlyForUnit;
+  AddToUsesPkgSectionCheckBox.Hint:=lisPkgMangAddUnitToUsesClause;
 
   DisableI18NForLFMCheckBox.Caption:=lisPckDisableI18NOfLfm;
   DisableI18NForLFMCheckBox.Hint:=lisPckWhenTheFormIsSavedTheIDECanStoreAllTTranslateString;
@@ -1972,30 +2001,44 @@ begin
   with FDirSummaryLabel do
   begin
     Name:='DirSummaryLabel';
-    Parent:=PropsGroupBox;
+    Parent:=CommonOptionsTabSheet;
   end;
+
+  CreatePackageFileEditors;
 end;
 
 procedure TPackageEditorForm.SetDependencyDefaultFilename(AsPreferred: boolean);
 var
   NewFilename: String;
+  CurDependency: TPkgDependency;
 begin
   if LazPackage=nil then exit;
-  if FSingleSelectedDep=nil then exit;
-  if LazPackage.FindDependencyByName(FSingleSelectedDep.PackageName)<>FSingleSelectedDep
-  then exit;
-  if LazPackage.ReadOnly then exit;
-  if FSingleSelectedDep.RequiredPackage=nil then exit;
-  NewFilename:=FSingleSelectedDep.RequiredPackage.Filename;
-  if (NewFilename=FSingleSelectedDep.DefaultFilename)
-  and (FSingleSelectedDep.PreferDefaultFilename=AsPreferred) then
+  CurDependency:=GetSingleSelectedDependency;
+  if CurDependency=nil then begin
+    debugln(['Info: [TPackageEditorForm.SetDependencyDefaultFilename] CurDependency=nil']);
     exit;
+  end;
+  if LazPackage.ReadOnly then begin
+    debugln(['Info: [TPackageEditorForm.SetDependencyDefaultFilename] ReadOnly']);
+    exit;
+  end;
+  if CurDependency.RequiredPackage=nil then begin
+    debugln(['Info: [TPackageEditorForm.SetDependencyDefaultFilename] RequiredPackage=nil']);
+    exit;
+  end;
+  NewFilename:=CurDependency.RequiredPackage.Filename;
+  if (NewFilename=CurDependency.DefaultFilename)
+  and (CurDependency.PreferDefaultFilename=AsPreferred) then begin
+    debugln(['Info: [TPackageEditorForm.SetDependencyDefaultFilename] PreferDefaultFilename=AsPreferred']);
+    exit;
+  end;
   BeginUpdate;
   try
-    FSingleSelectedDep.DefaultFilename:=NewFilename;
-    FSingleSelectedDep.PreferDefaultFilename:=AsPreferred;
+    CurDependency.DefaultFilename:=NewFilename;
+    CurDependency.PreferDefaultFilename:=AsPreferred;
     LazPackage.Modified:=true;
     UpdateRequiredPkgs;
+    debugln(['Info: TPackageEditorForm.SetDependencyDefaultFilename ',CurDependency.PackageName,' DefaultFilename:=',NewFilename,' AsPreferred=',AsPreferred]);
   finally
     EndUpdate;
   end;
@@ -2036,7 +2079,7 @@ procedure TPackageEditorForm.UpdateAll(Immediately: boolean);
 begin
   if csDestroying in ComponentState then exit;
   if LazPackage=nil then exit;
-  Name:=PackageEditorWindowPrefix+LazPackage.Name;
+  Name:=PkgNameToFormName(LazPackage.Name);
   if fForcedFlags<>[] then
     fFlags:=fFlags+fForcedFlags  // Flags forcing a partial update
   else
@@ -2095,10 +2138,9 @@ begin
   end;
 end;
 
-
-function TPackageEditorForm.ShowAddDialog(var DlgPage: TAddToPkgType): TModalResult;
+function TPackageEditorForm.ShowNewCompDialog: TModalResult;
 var
-  IgnoreUnitPaths, IgnoreIncPaths: TFilenameToStringTree;
+  IgnoreUnitPaths: TFilenameToStringTree;
 
   function PkgDependsOn(PkgName: string): boolean;
   begin
@@ -2106,131 +2148,119 @@ var
     Result:=PackageGraph.FindDependencyRecursively(LazPackage.FirstRequiredDependency,PkgName)<>nil;
   end;
 
-  procedure AddUnit(AddParams: TAddToPkgResult);
-  var
-    NewLFMFilename: String;
-    NewLRSFilename: String;
-  begin
-    NewLFMFilename:='';
-    NewLRSFilename:='';
-    // add lfm file
-    if AddParams.AutoAddLFMFile then begin
-      NewLFMFilename:=ChangeFileExt(AddParams.UnitFilename,'.lfm');
-      if FileExistsUTF8(NewLFMFilename)
-      and (LazPackage.FindPkgFile(NewLFMFilename,true,false)=nil) then
-        LazPackage.AddFile(NewLFMFilename,'',pftLFM,[],cpNormal)
-      else
-        NewLFMFilename:='';
-    end;
-    // add lrs file
-    if AddParams.AutoAddLRSFile then begin
-      NewLRSFilename:=ChangeFileExt(AddParams.UnitFilename,'.lrs');
-      if FileExistsUTF8(NewLRSFilename)
-      and (LazPackage.FindPkgFile(NewLRSFilename,true,false)=nil) then
-        LazPackage.AddFile(NewLRSFilename,'',pftLRS,[],cpNormal)
-      else
-        NewLRSFilename:='';
-    end;
-    ExtendUnitIncPathForNewUnit(AddParams.UnitFilename,NewLRSFilename,
-                                IgnoreUnitPaths);
-    // add unit file
-    with AddParams do
-      LazPackage.AddFile(UnitFilename,Unit_Name,FileType,PkgFileFlags,cpNormal);
-    FreeAndNil(FNextSelectedPart);
-    FNextSelectedPart:=TPENodeData.Create(penFile,AddParams.UnitFilename,false);
-    PackageEditors.DeleteAmbiguousFiles(LazPackage,AddParams.UnitFilename);
-  end;
-
-  procedure AddVirtualUnit(AddParams: TAddToPkgResult);
-  begin
-    with AddParams do
-      LazPackage.AddFile(UnitFilename,Unit_Name,FileType,PkgFileFlags,cpNormal);
-    FreeAndNil(FNextSelectedPart);
-    FNextSelectedPart:=TPENodeData.Create(penFile,AddParams.UnitFilename,false);
-    PackageEditors.DeleteAmbiguousFiles(LazPackage,AddParams.UnitFilename);
-  end;
-
   procedure AddNewComponent(AddParams: TAddToPkgResult);
   begin
-    ExtendUnitIncPathForNewUnit(AddParams.UnitFilename,'',IgnoreUnitPaths);
+    ExtendUnitIncPathForNewUnit(AddParams.UnitFilename, '', IgnoreUnitPaths);
     // add file
     with AddParams do
-      LazPackage.AddFile(UnitFilename,Unit_Name,FileType,PkgFileFlags,cpNormal);
-    FreeAndNil(FNextSelectedPart);
-    FNextSelectedPart:=TPENodeData.Create(penFile,AddParams.UnitFilename,false);
-    // add dependency
-    if (AddParams.Dependency<>nil)
-    and (not PkgDependsOn(AddParams.Dependency.PackageName)) then
-      PackageGraph.AddDependencyToPackage(LazPackage,AddParams.Dependency);
-    if (AddParams.IconFile<>'')
-    and (not PkgDependsOn('LCL')) then
-      PackageGraph.AddDependencyToPackage(LazPackage,PackageGraph.LCLPackage);
-    PackageEditors.DeleteAmbiguousFiles(LazPackage,AddParams.UnitFilename);
+    begin
+      Assert(FilenameIsAbsolute(UnitFilename), 'AddNewComponent: Filename is relative.');
+      // This file can also replace an existing file.
+      if LazPackage.FindPkgFile(UnitFilename,true,false)=nil then
+        LazPackage.AddFile(UnitFilename, Unit_Name, FileType, PkgFileFlags, cpNormal)
+      else
+        LazPackage.Modified:=True;
+      FreeAndNil(FNextSelectedPart);
+      FNextSelectedPart:=TPENodeData.Create(penFile, UnitFilename, false);
+      PackageEditors.DeleteAmbiguousFiles(LazPackage, UnitFilename);
+    end;
     // open file in editor
     PackageEditors.CreateNewFile(Self,AddParams);
   end;
 
-  procedure AddRequiredPkg(AddParams: TAddToPkgResult);
-  begin
-    // add dependency
-    fForcedFlags:=[pefNeedUpdateRequiredPkgs];
-    PackageGraph.AddDependencyToPackage(LazPackage,AddParams.Dependency);
-    FreeAndNil(FNextSelectedPart);
-    FNextSelectedPart:=TPENodeData.Create(penDependency,
-                                        AddParams.Dependency.PackageName,false);
-  end;
-
-  procedure AddFile(AddParams: TAddToPkgResult);
-  begin
-    // add file
-    with AddParams do begin
-      if (CompareFileExt(UnitFilename,'.inc',false)=0)
-      or (CompareFileExt(UnitFilename,'.lrs',false)=0) then
-        ExtendIncPathForNewIncludeFile(UnitFilename,IgnoreIncPaths);
-      LazPackage.AddFile(UnitFilename,Unit_Name,FileType,PkgFileFlags,cpNormal);
-    end;
-    FreeAndNil(FNextSelectedPart);
-    FNextSelectedPart:=TPENodeData.Create(penFile,AddParams.UnitFilename,false);
-  end;
-
 var
-  AddParams: TAddToPkgResult;
-  OldParams: TAddToPkgResult;
+  AddParams, OldParams: TAddToPkgResult;
 begin
   if LazPackage.ReadOnly then begin
     UpdateButtons;
     exit(mrCancel);
   end;
 
-  Result:=ShowAddToPackageDlg(LazPackage,AddParams,PackageEditors.OnGetIDEFileInfo,
-    PackageEditors.OnGetUnitRegisterInfo,DlgPage);
-  fLastDlgPage:=DlgPage;
+  Result:=ShowAddToPackageDlg(LazPackage, AddParams);
   if Result<>mrOk then exit;
 
   PackageGraph.BeginUpdate(false);
   IgnoreUnitPaths:=nil;
-  IgnoreIncPaths:=nil;
   try
     while AddParams<>nil do begin
-      case AddParams.AddType of
-        d2ptUnit:         AddUnit(AddParams);
-        d2ptVirtualUnit:  AddVirtualUnit(AddParams);
-        d2ptNewComponent: AddNewComponent(AddParams);
-        d2ptRequiredPkg:  AddRequiredPkg(AddParams);
-        d2ptFile:         AddFile(AddParams);
-      end;
+      AddNewComponent(AddParams);
       OldParams:=AddParams;
       AddParams:=AddParams.Next;
       OldParams.Next:=nil;
       OldParams.Free;
     end;
     AddParams.Free;
-    Assert(LazPackage.Modified, 'ShowAddDialog: LazPackage.Modified = False');
+    Assert(LazPackage.Modified, 'TPackageEditorForm.ShowAddDialog: LazPackage.Modified = False');
   finally
     IgnoreUnitPaths.Free;
-    IgnoreIncPaths.Free;
     PackageGraph.EndUpdate;
   end;
+end;
+
+function TPackageEditorForm.ShowAddDepDialog: TModalResult;
+var
+  Deps: TPkgDependencyList;
+  i: Integer;
+begin
+  if LazPackage.ReadOnly then begin
+    UpdateButtons;
+    exit(mrCancel);
+  end;
+  Result:=ShowAddPkgDependencyDlg(LazPackage, Deps);
+  try
+    if (Result<>mrOk) or (Deps.Count=0) then exit;
+    PackageGraph.BeginUpdate(false);
+    try
+      // add all dependencies
+      fForcedFlags := [pefNeedUpdateRequiredPkgs];
+      FreeAndNil(FNextSelectedPart);
+      for i := 0 to Deps.Count-1 do
+        PackageGraph.AddDependencyToPackage(LazPackage, Deps[i]);
+      FNextSelectedPart := TPENodeData.Create(penDependency,
+                                            Deps[Deps.Count-1].PackageName, false);
+      Assert(LazPackage.Modified, 'TPackageEditorForm.ShowAddDepDialog: LazPackage.Modified = False');
+    finally
+      PackageGraph.EndUpdate;
+    end;
+  finally
+    Deps.Free;
+  end;
+end;
+
+function TPackageEditorForm.ShowAddFPMakeDepDialog: TModalResult;
+var
+  Deps: TPkgDependencyList;
+  i: Integer;
+begin
+  if LazPackage.ReadOnly then begin
+    UpdateButtons;
+    exit(mrCancel);
+  end;
+  Result:=ShowAddFPMakeDependencyDlg(LazPackage, Deps);
+  try
+    if (Result<>mrOk) or (Deps.Count=0) then exit;
+    PackageGraph.BeginUpdate(false);
+    try
+      // add all dependencies
+      fForcedFlags := [pefNeedUpdateRequiredPkgs];
+      FreeAndNil(FNextSelectedPart);
+      for i := 0 to Deps.Count-1 do
+        PackageGraph.AddDependencyToPackage(LazPackage, Deps[i]);
+      FNextSelectedPart := TPENodeData.Create(penDependency,
+                                            Deps[Deps.Count-1].PackageName, false);
+      Assert(LazPackage.Modified, 'TPackageEditorForm.ShowAddFPMakeDepDialog: LazPackage.Modified = False');
+    finally
+      PackageGraph.EndUpdate;
+    end;
+  finally
+    Deps.Free;
+  end;
+
+end;
+
+function TPackageEditorForm.PkgNameToFormName(const PkgName: string): string;
+begin
+  Result:=PackageEditorWindowPrefix+StringReplace(PkgName,'.','_',[rfReplaceAll]);
 end;
 
 procedure TPackageEditorForm.BeginUpdate;
@@ -2241,7 +2271,7 @@ end;
 procedure TPackageEditorForm.EndUpdate;
 begin
   if fUpdateLock=0 then
-    RaiseException('');
+    RaiseGDBException('');
   dec(fUpdateLock);
   if fUpdateLock=0 then
     IdleConnected:=true;
@@ -2260,13 +2290,31 @@ begin
   Caption:=NewCaption;
 end;
 
-procedure TPackageEditorForm.UpdateNodeImage(TVNode: TTreeNode; NodeData: TPENodeData);
+procedure TPackageEditorForm.UpdateNodeImage(TVNode: TTreeNode);
 var
-  ena: Boolean;
-  ImgIndex: Integer;
+  NodeData: TPENodeData;
+  Item: TObject;
 begin
-  ena := True;                   // String param is not used.
-  ImgIndex:=OnTreeViewGetImageIndex('', NodeData, ena);
+  if GetNodeDataItem(TVNode, NodeData, Item) then
+    UpdateNodeImage(TVNode, NodeData, Item);
+end;
+
+procedure TPackageEditorForm.UpdateNodeImage(TVNode: TTreeNode;
+  NodeData: TPENodeData; Item: TObject);
+var
+  PkgDependency: TPkgDependency;
+  ImgIndex: Integer;
+  Ena: Boolean;
+begin
+  Assert(Assigned(Item), 'TPackageEditorForm.UpdateNodeImage: Item = Nil.');
+  if Item is TPkgDependency then begin
+    PkgDependency:=TPkgDependency(Item);
+    // Try to load the package again. Min/max version may have changed.
+    PkgDependency.LoadPackageResult := lprUndefined;
+    PackageGraph.OpenDependency(PkgDependency, False);
+  end;
+  Ena := True;                      // Neither Ena nor the String param are used.
+  ImgIndex := OnTreeViewGetImageIndex('', NodeData, Ena);
   TVNode.ImageIndex:=ImgIndex;
   TVNode.SelectedIndex:=ImgIndex;
 end;
@@ -2480,7 +2528,7 @@ procedure TPackageEditorForm.UpdateRequiredPkgs(Immediately: boolean);
 var
   CurDependency: TPkgDependency;
   RequiredBranch, RemovedBranch: TTreeFilterBranch;
-  CurNodeText, aFilename, OldFilter: String;
+  OldFilter: String;
   NodeData: TPENodeData;
 begin
   if not CanUpdate(pefNeedUpdateRequiredPkgs,Immediately) then exit;
@@ -2494,20 +2542,12 @@ begin
   CurDependency:=LazPackage.FirstRequiredDependency;
   FilterEdit.SelectedPart:=nil;
   while CurDependency<>nil do begin
-    CurNodeText:=CurDependency.AsString;
-    if CurDependency.DefaultFilename<>'' then begin
-      aFilename:=CurDependency.MakeFilenameRelativeToOwner(CurDependency.DefaultFilename);
-      if CurDependency.PreferDefaultFilename then
-        CurNodeText:=CurNodeText+' in '+aFilename // like the 'in' keyword in uses section
-      else
-        CurNodeText:=Format(lisPckEditDefault, [CurNodeText, aFilename]);
-    end;
     NodeData:=CreateNodeData(penDependency,CurDependency.PackageName,false);
     if (FNextSelectedPart<>nil) and (FNextSelectedPart.Typ=penDependency)
     and (FNextSelectedPart.Name=NodeData.Name)
     then
       FilterEdit.SelectedPart:=NodeData;
-    RequiredBranch.AddNodeData(CurNodeText, NodeData);
+    RequiredBranch.AddNodeData(DependencyAsString(CurDependency), NodeData);
     CurDependency:=CurDependency.NextRequiresDependency;
   end;
   if (FNextSelectedPart<>nil) and (FNextSelectedPart.Typ=penDependency) then
@@ -2526,7 +2566,7 @@ begin
     RemovedBranch.ClearNodeData;
     while CurDependency<>nil do begin
       NodeData:=CreateNodeData(penDependency,CurDependency.PackageName,true);
-      RemovedBranch.AddNodeData(CurDependency.AsString, NodeData);
+      RemovedBranch.AddNodeData(DependencyAsString(CurDependency), NodeData);
       CurDependency:=CurDependency.NextRequiresDependency;
     end;
     RemovedBranch.InvalidateBranch;
@@ -2582,8 +2622,8 @@ type
   end;
 
 var
-  CurFile: TPkgFile;
-  CurDependency: TPkgDependency;
+  CurFile, SingleSelectedFile: TPkgFile;
+  CurDependency, SingleSelectedDep: TPkgDependency;
   CurComponent: TPkgComponent;
   CurLine, CurFilename: string;
   i, j: Integer;
@@ -2601,23 +2641,24 @@ var
   OnlyFilesWithUnitsSelected: Boolean;
   aVisible: Boolean;
   TVNode: TTreeNode;
-  SingleSelectedDirectory: TTreeNode;
+  SingleSelectedDirectory, SingleSelectedNode: TTreeNode;
   SingleSelectedRemoved: Boolean;
-  SingleSelected: TTreeNode;
   FileCount: integer;
   HasRegisterProcCount: integer;
   AddToUsesPkgSectionCount: integer;
 begin
   if not CanUpdate(pefNeedUpdateProperties,Immediately) then exit;
 
+  GuiToFileOptions(False);
+
   FPlugins.Clear;
 
   // check selection
-  FSingleSelectedDep:=nil;
-  FSingleSelectedFile:=nil;
+  SingleSelectedNode:=nil;
+  SingleSelectedDep:=nil;
+  SingleSelectedFile:=nil;
   SingleSelectedDirectory:=nil;
   SingleSelectedRemoved:=false;
-  SingleSelected:=nil;
   SelFileCount:=0;
   SelDepCount:=0;
   SelHasRegisterProc:=mubNone;
@@ -2632,8 +2673,8 @@ begin
       if Item is TPkgFile then begin
         CurFile:=TPkgFile(Item);
         inc(SelFileCount);
-        FSingleSelectedFile:=CurFile;
-        SingleSelected:=TVNode;
+        SingleSelectedFile:=CurFile;
+        SingleSelectedNode:=TVNode;
         SingleSelectedRemoved:=NodeData.Removed;
         MergeMultiBool(SelHasRegisterProc,CurFile.HasRegisterProc);
         if CurFile.FileType in PkgFileUnitTypes then begin
@@ -2659,40 +2700,40 @@ begin
       end else if Item is TPkgDependency then begin
         inc(SelDepCount);
         CurDependency:=TPkgDependency(Item);
-        FSingleSelectedDep:=CurDependency;
-        SingleSelected:=TVNode;
+        SingleSelectedDep:=CurDependency;
+        SingleSelectedNode:=TVNode;
         SingleSelectedRemoved:=NodeData.Removed;
       end;
     end else if IsDirectoryNode(TVNode) or (TVNode=FFilesNode) then begin
       inc(SelDirCount);
       SingleSelectedDirectory:=TVNode;
-      SingleSelected:=TVNode;
+      SingleSelectedNode:=TVNode;
     end;
   end;
 
   if (SelFileCount+SelDepCount+SelDirCount>1) then begin
     // it is a multi selection
-    FSingleSelectedFile:=nil;
-    FSingleSelectedDep:=nil;
+    SingleSelectedFile:=nil;
+    SingleSelectedDep:=nil;
     SingleSelectedDirectory:=nil;
-    SingleSelected:=nil;
+    SingleSelectedNode:=nil;
   end;
   OnlyFilesSelected:=(SelFileCount>0) and (SelDepCount=0) and (SelDirCount=0);
   OnlyFilesWithUnitsSelected:=OnlyFilesSelected and (SelUnitCount>0);
 
   //debugln(['TPackageEditorForm.UpdatePEProperties SelFileCount=',SelFileCount,' SelDepCount=',SelDepCount,' SelDirCount=',SelDirCount,' SelUnitCount=',SelUnitCount]);
-  //debugln(['TPackageEditorForm.UpdatePEProperties FSingleSelectedFile=',FSingleSelectedFile<>nil,' FSingleSelectedDependency=',FSingleSelectedDep<>nil,' SingleSelectedDirectory=',SingleSelectedDirectory<>nil]);
+  //debugln(['TPackageEditorForm.UpdatePEProperties FSingleSelectedFile=',SingleSelectedFile<>nil,' FSingleSelectedDependency=',SingleSelectedDep<>nil,' SingleSelectedDirectory=',SingleSelectedDirectory<>nil]);
 
   DisableAlign;
   try
     // move up/down (only single selection)
     aVisible:=(not (SortAlphabetically or SingleSelectedRemoved))
-       and ((FSingleSelectedFile<>nil) or (FSingleSelectedDep<>nil));
-    MoveUpBtn.Enabled  :=aVisible and Assigned(SingleSelected.GetPrevVisibleSibling);
-    MoveDownBtn.Enabled:=aVisible and Assigned(SingleSelected.GetNextVisibleSibling);
+       and ((SingleSelectedFile<>nil) or (SingleSelectedDep<>nil));
+    MoveUpBtn.Enabled  :=aVisible and Assigned(SingleSelectedNode.GetPrevVisibleSibling);
+    MoveDownBtn.Enabled:=aVisible and Assigned(SingleSelectedNode.GetNextVisibleSibling);
 
     // Min/Max version of dependency (only single selection)
-    aVisible:=FSingleSelectedDep<>nil;
+    aVisible:=SingleSelectedDep<>nil;
     UseMinVersionCheckBox.Visible:=aVisible;
     MinVersionEdit.Visible:=aVisible;
     UseMaxVersionCheckBox.Visible:=aVisible;
@@ -2728,15 +2769,15 @@ begin
       PropsGroupBox.Enabled:=true;
       PropsGroupBox.Caption:=lisPckEditFileProperties;
     end
-    else if FSingleSelectedDep<>nil then begin
+    else if SingleSelectedDep<>nil then begin
       PropsGroupBox.Enabled:=not SingleSelectedRemoved;
       PropsGroupBox.Caption:=lisPckEditDependencyProperties;
-      UseMinVersionCheckBox.Checked:=pdfMinVersion in FSingleSelectedDep.Flags;
-      MinVersionEdit.Text:=FSingleSelectedDep.MinVersion.AsString;
-      MinVersionEdit.Enabled:=pdfMinVersion in FSingleSelectedDep.Flags;
-      UseMaxVersionCheckBox.Checked:=pdfMaxVersion in FSingleSelectedDep.Flags;
-      MaxVersionEdit.Text:=FSingleSelectedDep.MaxVersion.AsString;
-      MaxVersionEdit.Enabled:=pdfMaxVersion in FSingleSelectedDep.Flags;
+      UseMinVersionCheckBox.Checked:=pdfMinVersion in SingleSelectedDep.Flags;
+      MinVersionEdit.Text:=SingleSelectedDep.MinVersion.AsString;
+      MinVersionEdit.Enabled:=pdfMinVersion in SingleSelectedDep.Flags;
+      UseMaxVersionCheckBox.Checked:=pdfMaxVersion in SingleSelectedDep.Flags;
+      MaxVersionEdit.Text:=SingleSelectedDep.MaxVersion.AsString;
+      MaxVersionEdit.Enabled:=pdfMaxVersion in SingleSelectedDep.Flags;
       UpdateApplyDependencyButton;
     end
     else if SingleSelectedDirectory<>nil then begin
@@ -2750,8 +2791,70 @@ begin
     else begin
       PropsGroupBox.Enabled:=false;
     end;
+
+    if SingleSelectedFile<>nil then begin
+      for i := 2 to PropsPageControl.PageCount -1 do
+        PropsPageControl.pages[i].Visible := True;
+      FileOptionsToGui;
+      PropsPageControl.ShowTabs := PropsPageControl.PageCount > 1;
+    end else begin
+      for i := 2 to PropsPageControl.PageCount -1 do
+        PropsPageControl.pages[i].Visible := False;
+      PropsPageControl.ShowTabs := False;
+    end;
   finally
     EnableAlign;
+  end;
+end;
+
+function TPackageEditorForm.GetSingleSelectedDependency: TPkgDependency;
+var
+  i: Integer;
+  TVNode: TTreeNode;
+  NodeData: TPENodeData;
+  Item: TObject;
+begin
+  Result:=nil;
+  for i:=0 to ItemsTreeView.SelectionCount-1 do begin
+    TVNode:=ItemsTreeView.Selections[i];
+    if not GetNodeDataItem(TVNode,NodeData,Item) then continue;
+    if Item is TPkgFile then begin
+      Result:=nil;
+      break;
+    end else if Item is TPkgDependency then begin
+      if Result<>nil then begin
+        // not single selected
+        Result:=nil;
+        break;
+      end;
+      Result:=TPkgDependency(Item);
+    end;
+  end;
+end;
+
+function TPackageEditorForm.GetSingleSelectedFile: TPkgFile;
+var
+  i: Integer;
+  TVNode: TTreeNode;
+  NodeData: TPENodeData;
+  Item: TObject;
+begin
+  Result:=nil;
+  for i:=0 to ItemsTreeView.SelectionCount-1 do begin
+    TVNode:=ItemsTreeView.Selections[i];
+    if not GetNodeDataItem(TVNode,NodeData,Item) then continue;
+    if Item is TPkgFile then begin
+      if Result<>nil then begin
+        // not single selected
+        Result:=nil;
+        break;
+      end;
+      Result:=TPkgFile(Item);
+      break;
+    end else if Item is TPkgDependency then begin
+      Result:=nil;
+      break;
+    end;
   end;
 end;
 
@@ -2759,48 +2862,29 @@ procedure TPackageEditorForm.UpdateApplyDependencyButton(Immediately: boolean);
 var
   DependencyChanged: Boolean;
   AVersion: TPkgVersion;
-  i: Integer;
-  TVNode: TTreeNode;
-  NodeData: TPENodeData;
-  Item: TObject;
+  CurDependency: TPkgDependency;
 begin
   if not CanUpdate(pefNeedUpdateApplyDependencyButton,Immediately) then exit;
-
-  FSingleSelectedDep:=nil;
-  for i:=0 to ItemsTreeView.SelectionCount-1 do begin
-    TVNode:=ItemsTreeView.Selections[i];
-    if not GetNodeDataItem(TVNode,NodeData,Item) then continue;
-    if Item is TPkgFile then begin
-      FSingleSelectedDep:=nil;
-      break;
-    end else if Item is TPkgDependency then begin
-      if FSingleSelectedDep<>nil then begin
-        FSingleSelectedDep:=nil;
-        break;
-      end;
-      FSingleSelectedDep:=TPkgDependency(Item);
-    end;
-  end;
-
+  CurDependency:=GetSingleSelectedDependency;
   DependencyChanged:=false;
-  if (FSingleSelectedDep<>nil) then begin
+  if (CurDependency<>nil) then begin
     // check min version
-    if UseMinVersionCheckBox.Checked<>(pdfMinVersion in FSingleSelectedDep.Flags) then
+    if UseMinVersionCheckBox.Checked<>(pdfMinVersion in CurDependency.Flags) then
       DependencyChanged:=true;
     if UseMinVersionCheckBox.Checked then begin
       AVersion:=TPkgVersion.Create;
       if AVersion.ReadString(MinVersionEdit.Text)
-      and (AVersion.Compare(FSingleSelectedDep.MinVersion)<>0) then
+      and (AVersion.Compare(CurDependency.MinVersion)<>0) then
         DependencyChanged:=true;
       AVersion.Free;
     end;
     // check max version
-    if UseMaxVersionCheckBox.Checked<>(pdfMaxVersion in FSingleSelectedDep.Flags) then
+    if UseMaxVersionCheckBox.Checked<>(pdfMaxVersion in CurDependency.Flags) then
       DependencyChanged:=true;
     if UseMaxVersionCheckBox.Checked then begin
       AVersion:=TPkgVersion.Create;
       if AVersion.ReadString(MaxVersionEdit.Text)
-      and (AVersion.Compare(FSingleSelectedDep.MaxVersion)<>0) then
+      and (AVersion.Compare(CurDependency.MaxVersion)<>0) then
         DependencyChanged:=true;
       AVersion.Free;
     end;
@@ -2977,15 +3061,12 @@ begin
       exit;
     end;
     // add path
-    with LazPackage.CompilerOptions do
-      OtherUnitFiles:=MergeSearchPaths(OtherUnitFiles,ShortDirectory);
+    LazPackage.CompilerOptions.MergeToUnitPaths(ShortDirectory);
   end;
-  if IncPathPos<1 then begin
+  if IncPathPos<1 then
     // the unit is in unitpath, but the include file not in the incpath
     // -> auto extend the include path
-    with LazPackage.CompilerOptions do
-      IncludePath:=MergeSearchPaths(IncludePath,ShortIncDirectory);
-  end;
+    LazPackage.CompilerOptions.MergeToIncludePaths(ShortIncDirectory);
 end;
 
 procedure TPackageEditorForm.ExtendIncPathForNewIncludeFile(
@@ -3021,8 +3102,7 @@ begin
     exit;
   end;
   // add path
-  with LazPackage.CompilerOptions do
-    IncludePath:=MergeSearchPaths(IncludePath,ShortDirectory);
+  LazPackage.CompilerOptions.MergeToIncludePaths(ShortDirectory);
 end;
 
 function TPackageEditorForm.ExtendUnitSearchPath(NewUnitPaths: string): boolean;
@@ -3088,14 +3168,34 @@ end;
 
 procedure TPackageEditorForm.DoSave(SaveAs: boolean);
 begin
+  GuiToFileOptions(False);
   PackageEditors.SavePackage(LazPackage,SaveAs);
   UpdateTitle;
   UpdateButtons;
   UpdateStatusBar;
 end;
 
-procedure TPackageEditorForm.DoCompile(CompileClean, CompileRequired: boolean);
+procedure TPackageEditorForm.DoCompile(CompileClean, CompileRequired,
+  WarnIDEPkg: boolean);
+var
+  MsgResult: Integer;
 begin
+  if WarnIDEPkg and not FCompileDesignTimePkg
+      and (LazPackage.PackageType=lptDesignTime) then
+  begin
+    MsgResult:=IDEQuestionDialog(dlgMsgWinColorUrgentWarning,
+        Format(lisPackageIsDesigntimeOnlySoItShouldOnlyBeCompiledInt, [
+          LazPackage.Name, #13]),
+        mtWarning, [mrYes, lisCompileWithProjectSettings,
+        mrYesToAll, lisCompileAndDoNotAskAgain, mrCancel]);
+    case MsgResult of
+    mrYes: ;
+    mrYesToAll:
+      FCompileDesignTimePkg:=true; // store setting only while running the IDE
+                                   // when IDE restarts, ask again
+    else exit;
+    end;
+  end;
   CompileBitBtn.Enabled:=False;
   PackageEditors.CompilePackage(LazPackage,CompileClean,CompileRequired);
   UpdateTitle;
@@ -3118,19 +3218,22 @@ begin
   UpdateAll(false);
 end;
 
-procedure TPackageEditorForm.DoPublishProject;
+procedure TPackageEditorForm.DoPublishPackage;
 begin
   PackageEditors.PublishPackage(LazPackage);
 end;
 
 procedure TPackageEditorForm.DoEditVirtualUnit;
+var
+  PkgFile: TPkgFile;
 begin
   if LazPackage=nil then exit;
-  if (FSingleSelectedFile=nil)
-  or (FSingleSelectedFile.FileType<>pftVirtualUnit)
-  or (LazPackage.IndexOfPkgFile(FSingleSelectedFile)<0)
+  PkgFile:=GetSingleSelectedFile;
+  if (PkgFile=nil)
+  or (PkgFile.FileType<>pftVirtualUnit)
+  or (LazPackage.IndexOfPkgFile(PkgFile)<0)
   then exit;
-  if ShowEditVirtualPackageDialog(FSingleSelectedFile)=mrOk then
+  if ShowEditVirtualPackageDialog(PkgFile)=mrOk then
     UpdateFiles;
 end;
 
@@ -3190,9 +3293,11 @@ procedure TPackageEditorForm.DoMoveCurrentFile(Offset: integer);
 var
   OldIndex, NewIndex: Integer;
   FilesBranch: TTreeFilterBranch;
+  PkgFile: TPkgFile;
 begin
-  if (LazPackage=nil) or (FSingleSelectedFile=nil) then exit;
-  OldIndex:=LazPackage.IndexOfPkgFile(FSingleSelectedFile);
+  PkgFile:=GetSingleSelectedFile;
+  if (LazPackage=nil) or (PkgFile=nil) then exit;
+  OldIndex:=LazPackage.IndexOfPkgFile(PkgFile);
   if OldIndex<0 then exit;
   NewIndex:=OldIndex+Offset;
   if (NewIndex<0) or (NewIndex>=LazPackage.FileCount) then exit;
@@ -3209,17 +3314,18 @@ var
   OldIndex, NewIndex: Integer;
   RequiredBranch: TTreeFilterBranch;
   Moved: Boolean;
+  CurDependency: TPkgDependency;
 begin
-  if (LazPackage=nil) or (FSingleSelectedDep=nil) then exit;
+  CurDependency:=GetSingleSelectedDependency;
+  if (LazPackage=nil) or (CurDependency=nil) then exit;
   if Offset<0 then
-    Moved := LazPackage.MoveRequiredDependencyUp(FSingleSelectedDep)
+    Moved := LazPackage.MoveRequiredDependencyUp(CurDependency)
   else
-    Moved := LazPackage.MoveRequiredDependencyDown(FSingleSelectedDep);
+    Moved := LazPackage.MoveRequiredDependencyDown(CurDependency);
   if not Moved then exit;
   LazPackage.ModifySilently;
   RequiredBranch:=FilterEdit.GetExistingBranch(FRequiredPackagesNode);
-  OldIndex:=RequiredBranch.Items.IndexOf(FSingleSelectedDep.PackageName);
-  Assert(OldIndex<>-1, 'TPackageEditorForm.DoMoveDependency: "'+FSingleSelectedDep.PackageName+'" not found in FilterBranch.');
+  OldIndex:=RequiredBranch.Items.IndexOf(DependencyAsString(CurDependency));
   NewIndex:=OldIndex+Offset;
   RequiredBranch.Move(OldIndex,NewIndex);
   UpdatePEProperties;
@@ -3259,6 +3365,215 @@ end;
 destructor TPackageEditorForm.Destroy;
 begin
   inherited Destroy;
+end;
+
+function TPackageEditorForm.CanCloseEditor: TModalResult;
+var
+  MsgResult: Integer;
+begin
+  Result:=mrOK;
+  //debugln(['TPackageEditorForm.CanCloseEditor ',Caption]);
+  if (LazPackage<>nil) and (not (lpfDestroying in LazPackage.Flags)) then
+  begin
+    if (not LazPackage.ReadOnly) and LazPackage.Modified then
+    begin
+      MsgResult:=MessageDlg(lisPkgMangSavePackage,
+        Format(lisPckEditPackageHasChangedSavePackage, [LazPackage.IDAsString, LineEnding]),
+        mtConfirmation,[mbYes,mbNo,mbAbort],0);
+      case MsgResult of
+        mrYes:
+          MsgResult:=PackageEditors.SavePackage(LazPackage,false);
+        mrNo:
+          LazPackage.UserIgnoreChangeStamp:=LazPackage.ChangeStamp;
+      end;
+      if MsgResult=mrAbort then
+        Result:=mrAbort
+      else
+        LazPackage.Modified:=false; // clear modified flag, so that it will be closed
+    end;
+    if (Result=mrOK) and not MainIDE.IDEIsClosing then
+    begin
+      EnvironmentOptions.LastOpenPackages.Remove(LazPackage.Filename);
+      MainIDE.SaveEnvironment;
+    end;
+  end;
+  //debugln(['TPackageEditorForm.CanCloseEditor Result=',dbgs(Result),' ',Caption]);
+end;
+
+procedure TPackageEditorForm.TraverseSettings(AOptions: TAbstractPackageFileIDEOptions;
+  anAction: TIDEPackageOptsDlgAction);
+
+  procedure Traverse(Control: TWinControl);
+  var
+    i: Integer;
+  begin
+    if Control <> nil then
+    begin
+      if Control is TAbstractIDEOptionsEditor then
+        with TAbstractIDEOptionsEditor(Control) do
+        begin
+          case anAction of
+          iodaRead: ReadSettings(AOptions);
+          iodaWrite: WriteSettings(AOptions);
+          iodaRestore: RestoreSettings(AOptions);
+          end;
+        end;
+      for i := 0 to Control.ControlCount -1 do
+        if Control.Controls[i] is TWinControl then
+        begin
+          Traverse(TWinControl(Control.Controls[i]));
+        end;
+    end;
+  end;
+
+begin
+  Traverse(PropsPageControl);
+end;
+
+procedure TPackageEditorForm.CreatePackageFileEditors;
+
+var
+  Instance: TAbstractIDEOptionsEditor;
+  i, j: integer;
+  Rec: PIDEOptionsGroupRec;
+  AGroupCaption: string;
+  ACaption: string;
+  ItemTabSheet: TTabSheet;
+begin
+  IDEEditorGroups.Resort;
+
+  for i := 0 to IDEEditorGroups.Count - 1 do
+  begin
+    Rec := IDEEditorGroups[i];
+    //DebugLn(['TPackageEditorForm.CreatePackageFileEditors ',Rec^.GroupClass.ClassName]);
+    if PassesFilter(Rec) then
+    begin
+      if Rec^.GroupClass<>nil then
+        AGroupCaption := Rec^.GroupClass.GetGroupCaption
+      else
+        AGroupCaption := '';
+
+      for j := 0 to Rec^.Items.Count - 1 do
+      begin
+        ItemTabSheet := PropsPageControl.AddTabSheet;
+        ItemTabSheet.Align := alClient;
+
+        Instance := Rec^.Items[j]^.EditorClass.Create(Self);
+//        Instance.OnLoadIDEOptions := @LoadIDEOptions;
+//        Instance.OnSaveIDEOptions := @SaveIDEOptions;
+        // In principle the parameter should be a TAbstractOptionsEditorDialog,
+        // but in this case this is not available, so pass nil.
+        // Better would be to change the structure of the classes to avoid this
+        // problem.
+        Instance.Setup(Nil);
+        Instance.OnChange := @FileOptionsChange;
+        Instance.Tag := Rec^.Items[j]^.Index;
+        Instance.Parent := ItemTabSheet;
+        Instance.Rec := Rec^.Items[j];
+        ACaption := Instance.GetTitle;
+        if AGroupCaption <> ACaption then
+          ACaption := AGroupCaption + ' - ' + ACaption;
+        ItemTabSheet.Caption := ACaption;
+      end;
+    end;
+  end;
+end;
+
+procedure TPackageEditorForm.FileOptionsToGui;
+type
+  TStage = (sBefore, sRead, sAfter);
+var
+  i: integer;
+  Rec: PIDEOptionsGroupRec;
+  Instance: TAbstractPackageFileIDEOptions;
+  InstanceList: TFPList;
+  stag: TStage;
+  PkgFile: TPkgFile;
+begin
+  PkgFile:=GetSingleSelectedFile;
+  if not Assigned(PkgFile) then exit;
+  FOptionsShownOfFile := PkgFile;
+  for stag:=low(TStage) to High(TStage) do
+  begin
+    InstanceList:=TFPList.Create;
+    for i := 0 to IDEEditorGroups.Count - 1 do
+    begin
+      Rec := IDEEditorGroups[i];
+      if not PassesFilter(Rec) then
+        Continue;
+      Instance := TAbstractPackageFileIDEOptions(TAbstractPackageFileIDEOptionsClass(Rec^.GroupClass).GetInstance(LazPackage, FOptionsShownOfFile));
+      if (InstanceList.IndexOf(Instance)<0) and Assigned(Instance) then
+      begin
+        InstanceList.Add(Instance);
+        case stag of
+        sBefore:
+          Instance.DoBeforeRead;
+        sRead:
+          TraverseSettings(Instance,iodaRead);
+        sAfter:
+          Instance.DoAfterRead;
+        end;
+      end;
+    end;
+    if stag=sRead then
+      TraverseSettings(nil,iodaRead); // load settings that does not belong to any group
+    InstanceList.Free;
+  end;
+end;
+
+procedure TPackageEditorForm.GuiToFileOptions(Restore: boolean);
+type
+  TStage = (sBefore, sWrite, sAfter);
+var
+  i: integer;
+  Rec: PIDEOptionsGroupRec;
+  Instance: TAbstractPackageFileIDEOptions;
+  stag: TStage;
+begin
+  if Assigned(FOptionsShownOfFile) then
+  begin
+    for stag:=low(TStage) to High(TStage) do
+    begin
+      for i := 0 to IDEEditorGroups.Count - 1 do
+      begin
+        Rec := IDEEditorGroups[i];
+        if not PassesFilter(Rec) then
+          Continue;
+        Instance := TAbstractPackageFileIDEOptions(TAbstractPackageFileIDEOptionsClass(Rec^.GroupClass).GetInstance(LazPackage, FOptionsShownOfFile));
+        if Assigned(Instance) then
+        begin
+          case stag of
+          sBefore:
+            Instance.DoBeforeWrite(Restore);
+          sWrite:
+            if Restore then
+              TraverseSettings(Instance,iodaRestore)
+            else
+              TraverseSettings(Instance,iodaWrite);
+          sAfter:
+            Instance.DoAfterWrite(Restore);
+          end;
+        end;
+      end;
+
+      // save settings that do not belong to any group
+      if stag=sWrite then
+        if Restore then
+          TraverseSettings(nil,iodaRestore)
+        else
+          TraverseSettings(nil,iodaWrite);
+    end;
+  end;
+end;
+
+procedure TPackageEditorForm.FileOptionsChange(Sender: TObject);
+begin
+  LazPackage.Modified := True;
+end;
+
+function TPackageEditorForm.PassesFilter(rec: PIDEOptionsGroupRec): Boolean;
+begin
+  Result := (Rec^.GroupClass.InheritsFrom(TAbstractPackageFileIDEOptions)) and (Rec^.Items <> nil);
 end;
 
 { TPackageEditors }
@@ -3386,8 +3701,13 @@ begin
   Result:=mrCancel;
   if PackageGraph.OpenDependency(Dependency,false)=lprSuccess then
   begin
-    APackage:=Dependency.RequiredPackage;
-    if Assigned(OnOpenPackage) then Result:=OnOpenPackage(Sender,APackage);
+    if Dependency.DependencyType=pdtLazarus then
+    begin
+      APackage:=Dependency.RequiredPackage;
+      if Assigned(OnOpenPackage) then Result:=OnOpenPackage(Sender,APackage);
+    end
+    else
+      ShowMessage('It is not possible to open FPMake packages.');
   end;
 end;
 
@@ -3446,9 +3766,24 @@ begin
 end;
 
 function TPackageEditors.ShouldNotBeInstalled(APackage: TLazPackage): boolean;
+var
+  Dep: TPkgDependency;
+  CurPkg: TLazPackage;
 begin
-  Result:=APackage.Missing
-     or ((APackage.FindUnitWithRegister=nil) and (APackage.Provides.Count=0));
+  if APackage.Missing then
+    exit(true)
+  else if (APackage.FindUnitWithRegister<>nil) or (APackage.Provides.Count>0) then
+    exit(false);
+  Dep:=APackage.FirstRequiredDependency;
+  while Dep<>nil do begin
+    CurPkg:=Dep.RequiredPackage;
+    if (CurPkg<>nil) then begin
+      if (CurPkg.FindUnitWithRegister<>nil) or (CurPkg.Provides.Count>0) then
+        exit(false);
+    end;
+    Dep:=Dep.NextRequiresDependency;
+  end;
+  Result:=true;
 end;
 
 function TPackageEditors.InstallPackage(APackage: TLazPackage): TModalResult;
@@ -3457,8 +3792,8 @@ begin
     if IDEQuestionDialog(lisNotAnInstallPackage,
       Format(lisThePackageDoesNotHaveAnyRegisterProcedureWhichTypi,
              [APackage.Name, LineEnding+LineEnding]),
-      mtWarning,
-      [mrIgnore, lisInstallItILikeTheFat, mrCancel, lisCancel], '')<>mrIgnore
+      mtWarning, [mrIgnore, lisInstallItILikeTheFat,
+                  mrCancel, lisCancel], '') <> mrIgnore
     then exit(mrCancel);
   end;
   if Assigned(OnInstallPackage) then

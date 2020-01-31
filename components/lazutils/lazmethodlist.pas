@@ -1,6 +1,15 @@
+{
+ *****************************************************************************
+  This file is part of LazUtils.
+
+  See the file COPYING.modifiedLGPL.txt, included in this distribution,
+  for details about the license.
+ *****************************************************************************
+}
 unit LazMethodList;
 
 {$mode objfpc}{$H+}
+{$modeswitch advancedrecords}
 
 interface
 
@@ -11,6 +20,19 @@ type
   { TMethodList - array of TMethod }
 
   TMethodList = class
+  private type
+    TItemsEnumerator = record
+    private
+      Owner: TMethodList;
+      Index: Integer;
+      Reverse: Boolean;
+      function GetCurrent: TMethod;
+    public
+      procedure Init(AOwner: TMethodList; AReverse: Boolean);
+      function MoveNext: Boolean;
+      function GetEnumerator: TItemsEnumerator;
+      property Current: TMethod read GetCurrent;
+    end;
   private
     FAllowDuplicates: boolean;
     FItems: ^TMethod;
@@ -33,18 +55,73 @@ type
     procedure Move(OldIndex, NewIndex: integer);
     procedure RemoveAllMethodsOfObject(const AnObject: TObject);
     procedure CallNotifyEvents(Sender: TObject); // calls from Count-1 downto 0, all methods must be TNotifyEvent
+    function GetReversedEnumerator: TItemsEnumerator;
+    function GetEnumerator: TItemsEnumerator;
   public
     property Items[Index: integer]: TMethod read GetItems write SetItems; default;
     property AllowDuplicates: boolean read FAllowDuplicates write SetAllowDuplicates; // default false, changed in Lazarus 1.3
   end;
 
+function CompareMethods(const m1, m2: TMethod): boolean; inline;
+
+
 implementation
+
+function CompareMethods(const m1, m2: TMethod): boolean;
+begin
+{$PUSH}  {$BOOLEVAL ON}
+// With a full evaluation of the boolean expression the generated code will not
+// contain conditional statements, which is more efficient on modern processors
+  Result:=(m1.Code=m2.Code) and (m1.Data=m2.Data);
+{$POP}
+end;
+
+{ TMethodList.TItemsEnumerator }
+
+function TMethodList.TItemsEnumerator.GetCurrent: TMethod;
+begin
+  Result := Owner[Index];
+end;
+
+function TMethodList.TItemsEnumerator.GetEnumerator: TItemsEnumerator;
+begin
+  Result := Self;
+end;
+
+procedure TMethodList.TItemsEnumerator.Init(AOwner: TMethodList;
+  AReverse: Boolean);
+begin
+  Owner := AOwner;
+  Reverse := AReverse;
+  if Reverse then
+    Index := AOwner.Count
+  else
+    Index := -1;
+end;
+
+function TMethodList.TItemsEnumerator.MoveNext: Boolean;
+begin
+  if Reverse then
+  begin
+    Dec(Index);
+    Result := Index >= 0;
+  end else
+  begin
+    Inc(Index);
+    Result := Index < Owner.Count;
+  end;
+end;
 
 { TMethodList }
 
 function TMethodList.GetItems(Index: integer): TMethod;
 begin
   Result:=FItems[Index];
+end;
+
+function TMethodList.GetReversedEnumerator: TItemsEnumerator;
+begin
+  Result.Init(Self, True);
 end;
 
 procedure TMethodList.SetAllowDuplicates(AValue: boolean);
@@ -61,8 +138,7 @@ begin
       j:=i+1;
       while j<FCount do
       begin
-        if (FItems[i].Code=FItems[j].Code)
-        and (FItems[i].Data=FItems[j].Data) then
+        if CompareMethods(FItems[i], FItems[j]) then
           Delete(j)
         else
           inc(j);
@@ -105,6 +181,11 @@ begin
   inherited Destroy;
 end;
 
+function TMethodList.GetEnumerator: TItemsEnumerator;
+begin
+  Result.Init(Self, False);
+end;
+
 function TMethodList.Count: integer;
 begin
   if Self<>nil then
@@ -129,8 +210,8 @@ begin
   if Self<>nil then begin
     Result:=FCount-1;
     while Result>=0 do begin
-      if (FItems[Result].Code=AMethod.Code)
-      and (FItems[Result].Data=AMethod.Data) then exit;
+      if CompareMethods(FItems[Result], AMethod) then
+        Exit;
       dec(Result);
     end;
   end else

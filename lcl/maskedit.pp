@@ -74,7 +74,10 @@ const
   cMask_NumberPlusMin = '#'; // only a number or + or -, but not necessary
   cMask_HourSeparator = ':'; // automatically put the hour separator char
   cMask_DateSeparator = '/'; // automatically but the date separator char
-{ cMask_SpaceOnly     = '_'; // automatically put a space          //not Delphi compatible        }
+  cMask_Hex           = 'h'; // a hexadecimal character (['0'..'9','a'..'f']) but not necessary  (Lazarus extension, not supported by Delphi)
+  cMask_HexFixed      = 'H'; // a hexadecimal character                                          (Lazarus extension, not supported by Delphi)
+  cMask_Binary        = 'b'; // a binary character (['0'..'1']) but not necessary (Lazarus extension, not supported by Delphi)
+  cMask_BinaryFixed   = 'B'; // a binary character                                (Lazarus extension, not supported by Delphi)
   cMask_NoLeadingBlanks = '!'; //Trim leading blanks, otherwise trim trailing blanks from the data
 
   {Delphi compatibility: user can change these at runtime}
@@ -109,7 +112,15 @@ type
                 {Char_Space,                 //not Delphi compatible, see notes above  }
                  Char_HourSeparator,
                  Char_DateSeparator,
-                 Char_Stop);
+                 Char_Hex,                   //Lazarus extension, not supported by Delphi
+                 Char_HexFixed,              //Lazarus extension, not supported by Delphi
+                 Char_HexUpCase,             //Lazarus extension, not supported by Delphi
+                 Char_HexDownCase,           //Lazarus extension, not supported by Delphi
+                 Char_HexFixedUpCase,        //Lazarus extension, not supported by Delphi
+                 Char_HexFixedDownCase,      //Lazarus extension, not supported by Delphi
+                 Char_Binary,                //Lazarus extension, not supported by Delphi
+                 Char_BinaryFixed,           //Lazarus extension, not supported by Delphi
+                 Char_Stop); {currently we have 31 enums, I think we cannot add more  BB}
 
 
   TInternalMask = array[1..255] of TUtf8Char;
@@ -215,17 +226,18 @@ const
 
     procedure RealSetTextWhileMasked(const Value: TCaption); //See notes above!
     procedure InsertChar(Ch : TUtf8Char);
-    Function  CanInsertChar(Position : Integer; Var Ch : TUtf8Char) : Boolean;
+    Function  CanInsertChar(Position : Integer; Var Ch : TUtf8Char; IsPasting: Boolean = False) : Boolean;
     procedure DeleteSelected;
     procedure DeleteChars(NextChar : Boolean);
   protected
     function ApplyMaskToText(Value: TCaption): TCaption;
-    function CanShowTextHint: Boolean; override;
+    function CanShowEmulatedTextHint: Boolean; override;
     function DisableMask(const NewText: String): Boolean;
     function RestoreMask(const NewText: String): Boolean;
     procedure RealSetText(const AValue: TCaption); override;
     function RealGetText: TCaption; override;
     Function GetTextWithoutMask(Value: TCaption) : TCaption;
+    function GetTextWithoutSpaceChar(Value: TCaption) : TCaption;
     Procedure SetTextApplyMask(Value: TCaption);
     function  GetEditText: string; virtual;
     procedure SetEditText(const AValue: string);
@@ -333,8 +345,6 @@ const
     property EditMask;
     property Text;
     property TextHint;
-    property TextHintFontColor;
-    property TextHintFontStyle;
     property SpaceChar;
   end;
 
@@ -356,7 +366,7 @@ const
      cMask_Letter, cMask_LetterFixed, cMask_Letter, cMask_Letter, cMask_LetterFixed, cMask_LetterFixed,
      cMask_AlphaNum, cMask_AlphaNumFixed, cMask_AlphaNum, cMask_AlphaNum, cMask_AlphaNumFixed, cMask_AlphaNumFixed,
      cMask_AllChars, cMask_AllCharsFixed, cMask_AllChars, cMask_AllChars, cMask_AllCharsFixed, cMask_AllCharsFixed,
-     (*cMask_SpaceOnly,*) cMask_HourSeparator, cMask_DateSeparator, #0);
+     cMask_HourSeparator, cMask_DateSeparator, #0);
 {$endif}
 
 const
@@ -373,9 +383,9 @@ var
   Res: AnsiString; //intermediate needed for PChar -> String -> ShortString assignement
 begin
   Result := '';
-  p := UTF8CharStart(PChar(S), Length(S), Index - 1); //zero-based call
+  p := UTF8CodepointStart(PChar(S), Length(S), Index - 1); //zero-based call
   //determine the length in bytes of this UTF-8 character
-  PLen := UTF8CharacterLength(p);
+  PLen := UTF8CodepointSize(p);
   Res := p;
   //Set correct length for Result (otherwise it returns all chars up to the end of the original string)
   SetLength(Res,PLen);
@@ -415,7 +425,9 @@ begin
     if CME.IsMasked then
     begin
       Result := CME.ApplyMaskToText(Value);
-      Result := CME.GetTextWithoutMask(Result);
+      //Delphi 7 leaves in the mask regardless of the "MaskSave" value in the specified EditMaske
+      //but SpaceChar must be replaced by #32
+      Result := CME.GetTextWithoutSpaceChar(Result);
     end
     else
       Result := Value;
@@ -676,7 +688,32 @@ begin
 
              cMask_DateSeparator: AddToMask(MaskToChar(Char_DateSeparator));
 
-            {cMask_SpaceOnly: AddToMask(MaskToChar(Char_Space)); //not Delphi compatible, see remarks above}
+              cMask_Hex: begin
+                 if InUp
+                 then
+                   AddToMask(MaskToChar(Char_HexUpCase))
+                 else
+                   if InDown
+                   then
+                     AddToMask(MaskToChar(Char_HexDownCase))
+                   else
+                     AddToMask(MaskToChar(Char_Hex))
+              end;
+
+              cMask_HexFixed: begin
+                 if InUp
+                 then
+                   AddToMask(MaskToChar(Char_HexFixedUpCase))
+                 else
+                   if InDown
+                   then
+                     AddToMask(MaskToChar(Char_HexFixedDownCase))
+                   else
+                     AddToMask(MaskToChar(Char_HexFixed))
+              end;
+
+              cMask_Binary: AddToMask(MaskToChar(Char_Binary));
+              cMask_BinaryFixed: AddToMask(MaskToChar(Char_BinaryFixed));
 
              cMask_NoLeadingBlanks:
              begin
@@ -975,17 +1012,23 @@ begin
     Char_AlphaNumDownCase    : OK := (Length(Ch) = 1) and (Ch[1] in ['a'..'z', '0'..'9',#32]);
     Char_AlphaNumFixedUpCase : OK := (Length(Ch) = 1) and (Ch[1] in ['A'..'Z', '0'..'9']);
     Char_AlphaNumFixedDowncase:OK := (Length(Ch) = 1) and (Ch[1] in ['a'..'z', '0'..'9']);
-    //ToDo: make this UTF8 compatible, for now
-    //limit this to lower ASCII set
-    Char_All                 : OK := True; //Ch in [#32..#126]; //True;
-    Char_AllFixed            : OK := True; //Ch in [#32..#126]; //True;
-    Char_AllUpCase           : OK := True; //Ch in [#32..#126]; // (Utf8UpperCase(Ch) = Ch);             ???????
-    Char_AllDownCase         : OK := True; //Ch in [#32..#126]; // (Utf8LowerCase(Ch) = Ch);             ???????
-    Char_AllFixedUpCase      : OK := True; //Ch in [#32..#126]; // (Utf8UpperCase(Ch) = Ch);             ???????
-    Char_AllFixedDownCase    : OK := True; //Ch in [#32..#126]; // (Utf8LowerCase(Ch) = Ch);             ???????
+    Char_All                 : OK := True;
+    Char_AllFixed            : OK := True;
+    Char_AllUpCase           : OK := True;
+    Char_AllDownCase         : OK := True;
+    Char_AllFixedUpCase      : OK := True;
+    Char_AllFixedDownCase    : OK := True;
    {Char_Space               : OK := (Length(Ch) = 1) and (Ch in [' ', '_']);  //not Delphi compatible, see notes above}
     Char_HourSeparator       : OK := (Ch = DefaultFormatSettings.TimeSeparator);
     Char_DateSeparator       : OK := (Ch = DefaultFormatSettings.DateSeparator);
+    Char_Hex                 : OK := (Length(Ch) = 1) and (Ch[1] In ['0'..'9','a'..'f','A'..'F',#32]);
+    Char_HexFixed            : OK := (Length(Ch) = 1) and (Ch[1] In ['0'..'9','a'..'f','A'..'F']);
+    Char_HexUpCase           : OK := (Length(Ch) = 1) and (Ch[1] In ['0'..'9','A'..'F',#32]);
+    Char_HexDownCase         : OK := (Length(Ch) = 1) and (Ch[1] In ['0'..'9','a'..'f',#32]);
+    Char_HexFixedUpCase      : OK := (Length(Ch) = 1) and (Ch[1] In ['0'..'9','A'..'F']);
+    Char_HexFixedDownCase    : OK := (Length(Ch) = 1) and (Ch[1] In ['0'..'9','a'..'f']);
+    Char_Binary              : OK := (Length(Ch) = 1) and (Ch[1] In ['0'..'1',#32]);
+    Char_BinaryFixed         : OK := (Length(Ch) = 1) and (Ch[1] In ['0'..'1']);
     else//it's a literal
     begin
       OK := (Ch = FMask[Position]);
@@ -1171,7 +1214,15 @@ begin
     Char_AllUpCase,
     Char_AllDownCase,
     Char_AllFixedUpCase,
-    Char_AllFixedDownCase     : Result := FSpaceChar;
+    Char_AllFixedDownCase,
+    Char_Hex,
+    Char_HexFixed,
+    Char_HexUpCase,
+    Char_HexDownCase,
+    Char_HexFixedUpCase,
+    Char_HexFixedDownCase,
+    Char_Binary,
+    Char_BinaryFixed          : Result := FSpaceChar;
     {Char_Space               : Result := #32; //FSpaceChar?; //not Delphi compatible, see notes above}
      Char_HourSeparator       : Result := DefaultFormatSettings.TimeSeparator;
      Char_DateSeparator       : Result := DefaultFormatSettings.DateSeparator;
@@ -1208,8 +1259,8 @@ end;
 
 
 //Check if a Utf8 char can be inserted at position Position, also do case conversion if necessary
-function TCustomMaskEdit.CanInsertChar(Position: Integer; var Ch: TUtf8Char
-  ): Boolean;
+function TCustomMaskEdit.CanInsertChar(Position: Integer; var Ch: TUtf8Char;
+  IsPasting: Boolean = False): Boolean;
 Var
   Current : tMaskedType;
 Begin
@@ -1222,7 +1273,10 @@ Begin
      (Current = Char_AllUpCase        ) Or
      (Current = Char_AllFixedUpCase   ) or
      (Current = Char_AlphaNumUpcase   ) or
-     (Current = Char_AlphaNumFixedUpCase)
+     (Current = Char_AlphaNumFixedUpCase) or
+     (Current = Char_HexUpCase          ) or
+     (Current = Char_HexFixedUpCase     )
+
      then
        Ch := Utf8UpperCase(Ch);
 
@@ -1232,37 +1286,53 @@ Begin
      (Current = Char_AllDownCase        ) Or
      (Current = Char_AllFixedDownCase   ) or
      (Current = Char_AlphaNumDownCase   ) or
-     (Current = Char_AlphaNumFixedDownCase )
+     (Current = Char_AlphaNumFixedDownCase ) or
+     (Current = Char_HexDownCase           ) or
+     (Current = Char_HexFixedDownCase      )
      then
        Ch := Utf8LowerCase(Ch);
 
   // Check the input (check the valid range)
   case Current Of
-       Char_Number              : Result := (Length(Ch) = 1) and (Ch[1] In ['0'..'9']);
+       Char_Number,
        Char_NumberFixed         : Result := (Length(Ch) = 1) and (Ch[1] In ['0'..'9']);
-       Char_NumberPlusMin       : Result := (Length(Ch) = 1) and (Ch[1] in ['0'..'9','+','-']);
-       Char_Letter              : Result := (Length(Ch) = 1) and (Ch[1] In ['a'..'z', 'A'..'Z']);
+       Char_NumberPlusMin       : Result := (Length(Ch) = 1) and (Ch[1] in ['0'..'9','+','-',#32]); //yes Delphi allows a space here
+       Char_Letter,
        Char_LetterFixed         : Result := (Length(Ch) = 1) and (Ch[1] In ['a'..'z', 'A'..'Z']);
-       Char_LetterUpCase        : Result := (Length(Ch) = 1) and (Ch[1] In ['A'..'Z']);
-       Char_LetterDownCase      : Result := (Length(Ch) = 1) and (Ch[1] In ['a'..'z']);
+       Char_LetterUpCase,
        Char_LetterFixedUpCase   : Result := (Length(Ch) = 1) and (Ch[1] In ['A'..'Z']);
+       Char_LetterDownCase,
        Char_LetterFixedDownCase : Result := (Length(Ch) = 1) and (Ch[1] In ['a'..'z']);
-       Char_AlphaNum            : Result := (Length(Ch) = 1) and (Ch[1] in ['a'..'z', 'A'..'Z', '0'..'9']);
+       Char_AlphaNum,
        Char_AlphaNumFixed       : Result := (Length(Ch) = 1) and (Ch[1] in ['a'..'z', 'A'..'Z', '0'..'9']);
-       Char_AlphaNumUpCase      : Result := (Length(Ch) = 1) and (Ch[1] in ['A'..'Z', '0'..'9']);
-       Char_AlphaNumDownCase    : Result := (Length(Ch) = 1) and (Ch[1] in ['a'..'z', '0'..'9']);
+       Char_AlphaNumUpCase,
        Char_AlphaNumFixedUpCase : Result := (Length(Ch) = 1) and (Ch[1] in ['A'..'Z', '0'..'9']);
+       Char_AlphaNumDownCase,
        Char_AlphaNumFixedDowncase:Result := (Length(Ch) = 1) and (Ch[1] in ['a'..'z', '0'..'9']);
-       Char_All                 : Result := True;
-       Char_AllFixed            : Result := True;
-       Char_AllUpCase           : Result := True;
-       Char_AllDownCase         : Result := True;
-       Char_AllFixedUpCase      : Result := True;
+       Char_All,
+       Char_AllFixed,
+       Char_AllUpCase,
+       Char_AllDownCase,
+       Char_AllFixedUpCase,
        Char_AllFixedDownCase    : Result := True;
-      {Char_Space               : Result := Ch in [' ', '_'];  //not Delphi compatible, see notes above}
        Char_HourSeparator       : Result := (Ch = DefaultFormatSettings.TimeSeparator);
        Char_DateSeparator       : Result := (Ch = DefaultFormatSettings.DateSeparator);
+       Char_Hex,
+       Char_HexFixed            : Result := (Length(Ch) = 1) and (Ch[1] In ['0'..'9','a'..'f','A'..'F']);
+       Char_HexUpCase,
+       Char_HexFixedUpCase      : Result := (Length(Ch) = 1) and (Ch[1] In ['0'..'9','A'..'F']);
+       Char_HexDownCase,
+       Char_HexFixedDownCase    : Result := (Length(Ch) = 1) and (Ch[1] In ['0'..'9','a'..'f']);
+       Char_Binary,
+       Char_BinaryFixed         : Result := (Length(Ch) = 1) and (Ch[1] In ['0'..'1']);
+
   end;
+  //while typing a space is not allowed in these cases, whilst pasting Delphi allows it nevertheless
+  if not Result and IsPasting and (Ch = #32) and
+    (Current in [Char_Number, Char_Letter, Char_LetterUpCase, Char_LetterDownCase,
+                 Char_AlphaNum, Char_AlphaNumUpCase, Char_AlphaNumDownCase,
+                 Char_Hex, Char_HexUpCase, Char_HexDownCase, Char_Binary]) then
+    Result := True;
 end;
 
 
@@ -1514,12 +1584,12 @@ begin
   Result := S;
 end;
 
-function TCustomMaskEdit.CanShowTextHint: Boolean;
+function TCustomMaskEdit.CanShowEmulatedTextHint: Boolean;
 begin
   if IsMasked then
     Result := False
   else
-    Result := inherited CanShowTextHint;
+    Result := inherited CanShowEmulatedTextHint;
 end;
 
 
@@ -1558,6 +1628,26 @@ Begin
   end;
   Result := S;
 End;
+
+{
+  Replace al FSPaceChars with #32
+  Leave all mask literals in place
+  Needed by FormatMaskText
+}
+function TCustomMaskEdit.GetTextWithoutSpaceChar(Value: TCaption): TCaption;
+var
+  i: Integer;
+Begin
+  Result := StringReplace(Value, FSpaceChar, #32, [rfReplaceAll]);
+  //FSpaceChar can be used as a literal in the mask, so put it back
+  for i := 1 to FMaskLength do
+  begin
+    if IsLiteral(FMask[i]) and (FMask[i] = FSpaceChar) then
+    begin
+      SetCodePoint(Result, i, FSpaceChar);
+    end;
+  end;
+end;
 
 
 // Respond to Text Changed message
@@ -1755,7 +1845,9 @@ begin
         FValidationFailed := False;
       end ;
     finally
-      if FValidationFailed then
+      //also check if control can be focussed, otherwise risk an exception while
+      //handling an exception, issue #0030482
+      if FValidationFailed and CanSetFocus then
       begin
         //debugln('TCustomMaskedit.DoExit: Validation failed');
         SetFocus;
@@ -2038,12 +2130,12 @@ begin
        CP := GetCodePoint(ClipText,i);
        //Replace all control characters with spaces
        if (Length(CP) = 1) and (CP[1] in [#0..#31]) then CP := #32;
-       while (i < Utf8Length(ClipText)) and (not CanInsertChar(P, CP)) do
+       while (i < Utf8Length(ClipText)) and (not CanInsertChar(P, CP, True)) do
        begin
          Inc(i);
          CP := GetCodePoint(ClipText,i);
        end;
-       if CanInsertChar(P, CP) then
+       if CanInsertChar(P, CP, True) then
        begin
          SetCodePoint(S,P,CP);
          Inc(P);
@@ -2112,5 +2204,8 @@ begin
 end;
 
 
+initialization
+  RegisterPropertyToSkip(TCustomMaskEdit, 'TextHintFontColor','Used in a previous version of Lazarus','');
+  RegisterPropertyToSkip(TCustomMaskEdit, 'TextHintFontStyle','Used in a previous version of Lazarus','');
 
 end.

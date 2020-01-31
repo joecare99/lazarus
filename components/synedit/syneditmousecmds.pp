@@ -23,8 +23,8 @@
 
   A copy of the GNU General Public License is available on the World Wide Web
   at <http://www.gnu.org/copyleft/gpl.html>. You can also obtain it by writing
-  to the Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
-  MA 02111-1307, USA.
+  to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
+  Boston, MA 02110-1335, USA.
 
 }
 
@@ -35,8 +35,13 @@ unit SynEditMouseCmds;
 interface
 
 uses
-  LazSynEditMouseCmdsTypes, Classes, Controls, SysUtils, SynEditStrConst, SynEditPointClasses,
-  SynEditKeyCmds, Dialogs, LCLProc, Menus;
+  Classes, SysUtils,
+  // LCL
+  LCLProc, Controls, Dialogs, Menus,
+  // LazUtils
+  LazMethodList,
+  // SynEdit
+  LazSynEditMouseCmdsTypes, SynEditStrConst, SynEditPointClasses, SynEditKeyCmds;
 
 type
 
@@ -76,6 +81,8 @@ const
   mbXExtra2    =  LazSynEditMouseCmdsTypes.mbExtra2;
   mbXWheelUp   =  LazSynEditMouseCmdsTypes.mbWheelUp;
   mbXWheelDown =  LazSynEditMouseCmdsTypes.mbWheelDown;
+  mbXWheelLeft =  LazSynEditMouseCmdsTypes.mbWheelLeft;
+  mbXWheelRight=  LazSynEditMouseCmdsTypes.mbWheelRight;
 
   SynMouseButtonMap: Array [TMouseButton] of TSynMouseButton =
     (mbXLeft, mbXRight, mbXMiddle, mbXExtra1, mbXExtra2);
@@ -83,7 +90,7 @@ const
   SynMouseButtonBackMap: Array [TSynMouseButton] of TMouseButton =
     (Controls.mbLeft, Controls.mbRight, Controls.mbMiddle,
      Controls.mbExtra1, Controls.mbExtra2,
-     Controls.mbLeft, Controls.mbLeft);
+     Controls.mbLeft, Controls.mbLeft, Controls.mbLeft, Controls.mbLeft);
 
 type
 
@@ -299,7 +306,10 @@ const
   emcStartSelectWords         =  TSynEditorMouseCommand(28);    // Start BlockSelection, wordwise
   emcStartSelectLines         =  TSynEditorMouseCommand(29);    // Start BlockSelection, linewise (but not line mode)
 
-  emcMax = 29;
+  emcOverViewGutterGotoMark   = TSynEditorMouseCommand(30);
+  emcOverViewGutterScrollTo   = TSynEditorMouseCommand(31);
+
+  emcMax = 31;
 
   emcPluginFirstSyncro     = 19000;
   emcPluginFirstMultiCaret = 19010;
@@ -362,7 +372,7 @@ const
 implementation
 
 const
-  SynMouseCommandNames: array [0..28] of TIdentMapEntry = (
+  SynMouseCommandNames: array [0..30] of TIdentMapEntry = (
     (Value: emcNone;                  Name: 'emcNone'),
     (Value: emcStartSelections;       Name: 'emcStartSelections'),
     (Value: emcStartColumnSelections; Name: 'emcStartColumnSelections'),
@@ -400,7 +410,10 @@ const
 
     (Value: emcStartSelectTokens;     Name: 'emcStartSelectTokens'),
     (Value: emcStartSelectWords;      Name: 'emcStartSelectWords'),
-    (Value: emcStartSelectLines;      Name: 'emcStartSelectLines')
+    (Value: emcStartSelectLines;      Name: 'emcStartSelectLines'),
+
+    (Value: emcOverViewGutterGotoMark;Name: 'emcOverViewGutterGotoMark'),
+    (Value: emcOverViewGutterScrollTo;Name: 'emcOverViewGutterScrollTo')
 
   );
 
@@ -462,6 +475,9 @@ begin
     emcStartSelectWords:      Result := SYNS_emcStartSelectWords;
     emcStartSelectLines:      Result := SYNS_emcStartSelectLines;
 
+    emcOverViewGutterGotoMark: Result := SYNS_emcOverViewGutterGotoMark;
+    emcOverViewGutterScrollTo: Result := SYNS_emcOverViewGutterScrollTo;
+
     else begin
       Result := '';
       i := 0;
@@ -488,7 +504,7 @@ begin
     emcCodeFoldCollaps:       Result := SYNS_emcCodeFoldCollaps_opt;
     emcCodeFoldExpand:        Result := SYNS_emcCodeFoldExpand_opt;
     emcContextMenu:           Result := SYNS_emcContextMenuCaretMove_opt;
-    emcWheelScrollDown..emcWheelVertScrollUp:
+    emcWheelScrollDown..emcWheelHorizScrollUp:
                               Result := SYNS_emcWheelScroll_opt;
     else begin
       Result := '';
@@ -652,7 +668,7 @@ begin
   if Collection <> nil then
     TSynEditMouseActions(Collection).AssertNoConflict(self);
 
-  if FButton in [mbXWheelUp, mbXWheelDown] then
+  if FButton in [mbXWheelUp, mbXWheelDown, mbXWheelLeft, mbXWheelRight] then
     ClickDir := cdDown;
 end;
 
@@ -674,7 +690,7 @@ end;
 
 procedure TSynEditMouseAction.SetClickDir(AValue: TSynMAClickDir);
 begin
-  if FButton in [mbXWheelUp, mbXWheelDown] then
+  if FButton in [mbXWheelUp, mbXWheelDown, mbXWheelLeft, mbXWheelRight] then
     AValue := cdDown;
   if FClickDir = AValue then exit;
   FClickDir := AValue;
@@ -869,7 +885,6 @@ begin
       AssertNoConflict(Items[i]);
     except
       on E : ESynMouseCmdError do begin
-        Delete(i);
         if assigned(Owner) and (csDesigning in TComponent(Owner).ComponentState)
         then
           MessageDlg(SYNS_EDuplicateShortCut, E.Message + LineEnding + Items[i].DisplayName,

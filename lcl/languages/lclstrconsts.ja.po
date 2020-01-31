@@ -6,44 +6,42 @@ msgstr ""
 "Project-Id-Version: \n"
 "POT-Creation-Date: \n"
 "PO-Revision-Date: \n"
-"Last-Translator: Yuichiro Takahashi <yuichiro@pop07.odn.ne.jp>\n"
+"Last-Translator: Haruyuki Fujimaki<fujimaki_haruyuki@yahoo.co.jp>, from 1.8RC1\n"
 "Language-Team: Japanese Lazarus ML\n"
 "X-Generator: Poedit 1.5.7\n"
 "Language: ja\n"
 
 #: lclstrconsts.hhshelpbrowsernotexecutable
-#, fuzzy,badformat
-#| msgid "Browser %s%s%s not executable."
+#, object-pascal-format
 msgid "Browser \"%s\" not executable."
-msgstr "ブラウザ %s%s%s が起動できません。"
+msgstr "ブラウザ \"%s\"が起動できません。"
 
 #: lclstrconsts.hhshelpbrowsernotfound
-#, fuzzy,badformat
-#| msgid "Browser %s%s%s not found."
+#, object-pascal-format
 msgid "Browser \"%s\" not found."
-msgstr "ブラウザ %s%s%s が見つかりません。"
+msgstr "ブラウザ \"%s\"が見つかりません。"
 
 #: lclstrconsts.hhshelperrorwhileexecuting
-#, fuzzy,badformat
-#| msgid "Error while executing %s%s%s:%s%s"
+#, object-pascal-format
 msgid "Error while executing \"%s\":%s%s"
-msgstr "%s%s%s を実行中のエラー：%s%s"
+msgstr "\"%s\"を実行中のエラー：%s%s"
 
 #: lclstrconsts.hhshelpnohtmlbrowserfound
 msgid "Unable to find a HTML browser."
 msgstr "HTML ブラウザを見つけることができません。"
 
 #: lclstrconsts.hhshelpnohtmlbrowserfoundpleasedefineone
+#, object-pascal-format
 msgid "No HTML Browser found.%sPlease define one in Tools -> Options -> Help -> Help Options"
 msgstr "HTML ブラウザが見つかりません。%sツール → オプション → ヘルプ → ヘルプオプション でブラウザを設定してください。"
 
 #: lclstrconsts.hhshelpthehelpdatabasewasunabletofindfile
-#, fuzzy,badformat
-#| msgid "The help database %s%s%s was unable to find file %s%s%s."
+#, object-pascal-format
 msgid "The help database \"%s\" was unable to find file \"%s\"."
-msgstr "ヘルプデータベース %s%s%s においてファイル %s%s%s を見つけることができませんでした。"
+msgstr "ヘルプデータベース \"%s\"は\"%s\"を見つけることができませんでした。"
 
 #: lclstrconsts.hhshelpthemacrosinbrowserparamswillbereplacedbytheurl
+#, object-pascal-format
 msgid "The macro %s in BrowserParams will be replaced by the URL."
 msgstr "BrowserParams のマクロ %s は URL によって置き換えられます。"
 
@@ -55,212 +53,33 @@ msgstr "Alt"
 msgid "Ctrl"
 msgstr "Ctrl"
 
-#: lclstrconsts.ifsvk_accept
-msgid "Accept"
-msgstr "Accept"
-
-#: lclstrconsts.ifsvk_apps
-msgid "application key"
-msgstr "アプリケーションキー"
-
-#: lclstrconsts.ifsvk_back
-msgid "Backspace"
-msgstr "Backspace"
-
-#: lclstrconsts.ifsvk_cancel
-msgctxt "lclstrconsts.ifsvk_cancel"
-msgid "Cancel"
-msgstr "Cancel"
-
-#: lclstrconsts.ifsvk_capital
-msgid "Capital"
-msgstr "Caps Lock"
-
-#: lclstrconsts.ifsvk_clear
-msgid "Clear"
-msgstr "Clear"
-
 #: lclstrconsts.ifsvk_cmd
 msgid "Cmd"
 msgstr "Cmd"
 
-#: lclstrconsts.ifsvk_control
-msgid "Control"
-msgstr "Ctrl"
-
-#: lclstrconsts.ifsvk_convert
-msgid "Convert"
-msgstr "変換"
-
-#: lclstrconsts.ifsvk_delete
-msgctxt "lclstrconsts.ifsvk_delete"
-msgid "Delete"
-msgstr "Delete"
-
-#: lclstrconsts.ifsvk_down
-msgctxt "lclstrconsts.ifsvk_down"
-msgid "Down"
-msgstr "↓"
-
-#: lclstrconsts.ifsvk_end
-msgctxt "lclstrconsts.ifsvk_end"
-msgid "End"
-msgstr "End"
-
-#: lclstrconsts.ifsvk_escape
-msgid "Escape"
-msgstr "Escape"
-
-#: lclstrconsts.ifsvk_execute
-msgid "Execute"
-msgstr "Execute"
-
-#: lclstrconsts.ifsvk_final
-msgid "Final"
-msgstr "Final"
-
-#: lclstrconsts.ifsvk_hanja
-msgid "Hanja"
-msgstr "Hanja"
-
 #: lclstrconsts.ifsvk_help
+msgctxt "lclstrconsts.ifsvk_help"
 msgid "Help"
 msgstr "Help"
-
-#: lclstrconsts.ifsvk_home
-msgctxt "lclstrconsts.ifsvk_home"
-msgid "Home"
-msgstr "Home"
-
-#: lclstrconsts.ifsvk_insert
-msgctxt "lclstrconsts.ifsvk_insert"
-msgid "Insert"
-msgstr "Insert"
-
-#: lclstrconsts.ifsvk_junja
-msgid "Junja"
-msgstr "Junja"
-
-#: lclstrconsts.ifsvk_kana
-msgid "Kana"
-msgstr "カタカナ ひらがな"
-
-#: lclstrconsts.ifsvk_lbutton
-msgid "Mouse Button Left"
-msgstr "マウスの左ボタン"
-
-#: lclstrconsts.ifsvk_left
-msgctxt "lclstrconsts.ifsvk_left"
-msgid "Left"
-msgstr "←"
-
-#: lclstrconsts.ifsvk_lwin
-msgid "left windows key"
-msgstr "左 Windows キー"
-
-#: lclstrconsts.ifsvk_mbutton
-msgid "Mouse Button Middle"
-msgstr "マウスの中ボタン"
-
-#: lclstrconsts.ifsvk_menu
-msgctxt "lclstrconsts.ifsvk_menu"
-msgid "Menu"
-msgstr "Alt"
 
 #: lclstrconsts.ifsvk_meta
 msgid "Meta"
 msgstr "Meta"
 
-#: lclstrconsts.ifsvk_modechange
-msgid "Mode Change"
-msgstr "モード変更"
-
-#: lclstrconsts.ifsvk_next
-msgctxt "lclstrconsts.ifsvk_next"
-msgid "Next"
-msgstr "Page Down"
-
-#: lclstrconsts.ifsvk_nonconvert
-msgid "Nonconvert"
-msgstr "無変換"
-
-#: lclstrconsts.ifsvk_numlock
-msgid "Numlock"
-msgstr "Num Lock"
-
-#: lclstrconsts.ifsvk_numpad
-msgid "Numpad %d"
-msgstr "テンキーの %d"
-
-#: lclstrconsts.ifsvk_pause
-msgid "Pause key"
-msgstr "Pause"
-
-#: lclstrconsts.ifsvk_print
-msgid "Print"
-msgstr "Print"
-
-#: lclstrconsts.ifsvk_prior
-msgctxt "lclstrconsts.ifsvk_prior"
-msgid "Prior"
-msgstr "Page Up"
-
-#: lclstrconsts.ifsvk_rbutton
-msgid "Mouse Button Right"
-msgstr "マウスの右ボタン"
-
-#: lclstrconsts.ifsvk_return
-msgid "Return"
-msgstr "Enter"
-
-#: lclstrconsts.ifsvk_right
-msgctxt "lclstrconsts.ifsvk_right"
-msgid "Right"
-msgstr "→"
-
-#: lclstrconsts.ifsvk_rwin
-msgid "right windows key"
-msgstr "右 Windows キー"
-
-#: lclstrconsts.ifsvk_scroll
-msgid "Scroll"
-msgstr "Scroll Lock"
-
-#: lclstrconsts.ifsvk_select
-msgid "Select"
-msgstr "Select"
-
 #: lclstrconsts.ifsvk_shift
 msgid "Shift"
 msgstr "Shift"
-
-#: lclstrconsts.ifsvk_snapshot
-msgid "Snapshot"
-msgstr "Print Screen"
-
-#: lclstrconsts.ifsvk_space
-msgid "Space key"
-msgstr "スペースキー"
 
 #: lclstrconsts.ifsvk_super
 msgid "Super"
 msgstr "Super"
 
-#: lclstrconsts.ifsvk_tab
-msgctxt "lclstrconsts.ifsvk_tab"
-msgid "Tab"
-msgstr "Tab"
-
 #: lclstrconsts.ifsvk_unknown
 msgid "Unknown"
 msgstr "不明"
 
-#: lclstrconsts.ifsvk_up
-msgctxt "lclstrconsts.ifsvk_up"
-msgid "Up"
-msgstr "↑"
-
 #: lclstrconsts.lislclresourcesnotfound
+#, object-pascal-format
 msgctxt "lclstrconsts.lislclresourcesnotfound"
 msgid "Resource %s not found"
 msgstr "リソース %s が見つかりません"
@@ -286,6 +105,7 @@ msgid "Active Caption"
 msgstr "アクティブタイトルバーの色"
 
 #: lclstrconsts.rsallfiles
+#, object-pascal-format
 msgid "All files (%s)|%s|%s"
 msgstr "すべてのファイル (%s)|%s|%s"
 
@@ -296,6 +116,11 @@ msgstr "アプリケーションの作業領域色"
 #: lclstrconsts.rsaquacolorcaption
 msgid "Aqua"
 msgstr "水色"
+
+#: lclstrconsts.rsascannothaveasparent
+#, object-pascal-format
+msgid "Class %s cannot have %s as parent."
+msgstr "クラス%sは%sを親にできません"
 
 #: lclstrconsts.rsbackgroundcolorcaption
 msgid "Desktop"
@@ -363,24 +188,28 @@ msgid "Case sensitive"
 msgstr "大文字小文字を区別"
 
 #: lclstrconsts.rscontrolclasscantcontainchildclass
+#, object-pascal-format
 msgid "Control of class '%s' can't have control of class '%s' as a child"
 msgstr "コントロールクラス '%s' はコントロールクラス '%s' を子とすることはできません"
 
+#: lclstrconsts.rscontrolhasnoparentformorframe
+#, object-pascal-format
+msgid "Control '%s' has no parent form or frame"
+msgstr "コントロール'%s'は親フォームもしくは親フレームを持ちません"
+
 #: lclstrconsts.rscontrolhasnoparentwindow
+#, object-pascal-format
 msgid "Control '%s' has no parent window"
 msgstr "コントロール '%s' には親ウィンドウがありません"
 
 #: lclstrconsts.rscontrolisnotaparent
+#, object-pascal-format
 msgid "'%s' is not a parent of '%s'"
 msgstr "'%s' は '%s' の親ではありません"
 
 #: lclstrconsts.rscreamcolorcaption
 msgid "Cream"
 msgstr "クリーム色"
-
-#: lclstrconsts.rscreatinggdbcatchableerror
-msgid "Creating gdb catchable error:"
-msgstr "gdb で捕捉可能なエラーを生成："
 
 #: lclstrconsts.rscursor
 msgid "Cursor"
@@ -415,17 +244,13 @@ msgstr "方向"
 msgid "&Directory"
 msgstr "ディレクトリ(&D)"
 
-#: lclstrconsts.rsdocking
-msgid "Docking"
-msgstr "ドッキング"
-
 #: lclstrconsts.rsdocopy
 msgid "Copy"
-msgstr ""
+msgstr "コピー"
 
 #: lclstrconsts.rsdopaste
 msgid "Paste"
-msgstr ""
+msgstr "貼り付け"
 
 #: lclstrconsts.rsduplicateiconformat
 msgid "Duplicate icon format."
@@ -445,14 +270,12 @@ msgid "Error"
 msgstr "エラー"
 
 #: lclstrconsts.rserrorcreatingdevicecontext
+#, object-pascal-format
 msgid "Error creating device context for %s.%s"
 msgstr "%s.%s のデバイスコンテキスト生成中のエラー"
 
-#: lclstrconsts.rserrorinlcl
-msgid "ERROR in LCL: "
-msgstr "LCL 内エラー："
-
 #: lclstrconsts.rserroroccurredinataddressframe
+#, object-pascal-format
 msgid "Error occurred in %s at %sAddress %s%s Frame %s"
 msgstr "フレーム %4:s %1:sアドレス %2:s%3:s の %0:s においてエラーが発生しました"
 
@@ -469,10 +292,12 @@ msgid "Directory must exist"
 msgstr "ディレクトリの所在不明"
 
 #: lclstrconsts.rsfddirectorynotexist
+#, object-pascal-format
 msgid "The directory \"%s\" does not exist."
 msgstr "ディレクトリ\"%s\"が存在しません。"
 
 #: lclstrconsts.rsfdfilealreadyexists
+#, object-pascal-format
 msgid "The file \"%s\" already exists. Overwrite ?"
 msgstr "ファイル\"%s\"は既に存在しています。上書きしますか？"
 
@@ -481,10 +306,12 @@ msgid "File must exist"
 msgstr "ファイルの所在不明"
 
 #: lclstrconsts.rsfdfilenotexist
+#, object-pascal-format
 msgid "The file \"%s\" does not exist."
 msgstr "ファイル\"%s\"が存在しません。"
 
 #: lclstrconsts.rsfdfilereadonly
+#, object-pascal-format
 msgid "The file \"%s\" is not writable."
 msgstr "ファイル\"%s\"は書き込みできません。"
 
@@ -509,6 +336,7 @@ msgid "Path must exist"
 msgstr "パスの所在不明"
 
 #: lclstrconsts.rsfdpathnoexist
+#, object-pascal-format
 msgid "The path \"%s\" does not exist."
 msgstr "パス\"%s\"が存在しません。"
 
@@ -517,6 +345,7 @@ msgid "Select Directory"
 msgstr "ディレクトリの選択"
 
 #: lclstrconsts.rsfileinfofilenotfound
+#, object-pascal-format
 msgid "(file not found: \"%s\")"
 msgstr "(ファイルが見つかりません \"%s\")"
 
@@ -542,26 +371,24 @@ msgid "First"
 msgstr "最初へ"
 
 #: lclstrconsts.rsfixedcolstoobig
-#, fuzzy
-#| msgid "FixedCols can't be >= ColCount"
 msgid "FixedCols can't be > ColCount"
-msgstr "FixedCols は ColCount 以上にはできません"
+msgstr "FixedCols は ColCountより大きくはできません"
 
 #: lclstrconsts.rsfixedrowstoobig
-#, fuzzy
-#| msgid "FixedRows can't be >= RowCount"
 msgid "FixedRows can't be > RowCount"
-msgstr "FixedRows は RowCount 以上にはできません"
+msgstr "FixedRows は RowCountより大きくはできません"
 
 #: lclstrconsts.rsformcolorcaption
 msgid "Form"
 msgstr "フォームの背景色"
 
 #: lclstrconsts.rsformresourcesnotfoundforresourcelessformscreatenew
+#, object-pascal-format
 msgid "Form resource %s not found. For resourceless forms CreateNew constructor must be used. See the global variable RequireDerivedFormResource."
 msgstr "フォームリソース %s が見つかりません。リソース無しフォームにするには CreateNew コンストラクタを使用しなければなりません。グローバル変数 RequireDerivedFormResource を参照してください。"
 
 #: lclstrconsts.rsformstreamingerror
+#, object-pascal-format
 msgid "Form streaming \"%s\" error: %s"
 msgstr "フォームストリーム \"%s\" エラー：%s"
 
@@ -615,15 +442,15 @@ msgstr "緑色"
 
 #: lclstrconsts.rsgridfiledoesnotexist
 msgid "Grid file doesn't exist"
-msgstr ""
+msgstr "グリッドファイルが存在しません"
 
 #: lclstrconsts.rsgridhasnocols
 msgid "Cannot insert rows into a grid when it has no columns"
-msgstr ""
+msgstr "列を持たない場合、行をグリッドに挿入できません"
 
 #: lclstrconsts.rsgridhasnorows
 msgid "Cannot insert columns into a grid when it has no rows"
-msgstr ""
+msgstr "行を持たない場合、列をグリッドに挿入できません"
 
 #: lclstrconsts.rsgridindexoutofrange
 msgid "Grid index out of range."
@@ -677,7 +504,14 @@ msgstr "--no-xshm             X 共有メモリ拡張の使用を無効にしま
 msgid "--sync                Call XSynchronize (display, True) after the Xserver connection has been established. This makes debugging X protocol errors easier, because X request buffering will be disabled and X errors will be received immediately after the protocol request that generated the error has been processed by the X server."
 msgstr "--sync                X サーバの接続を確立した後、「XSynchronize (display, True)」を呼び出します。これは X プロトコルエラーのデバッグを容易にできるようにします。なぜなら、X リクエストバッファリングは無効であり、X サーバで稼動しているところより生成されたエラーをエラープロトコル要求されてすぐに受け取るからです。"
 
+#: lclstrconsts.rshelp
+#, fuzzy
+msgctxt "lclstrconsts.rshelp"
+msgid "Help"
+msgstr "Help"
+
 #: lclstrconsts.rshelpalreadyregistered
+#, object-pascal-format
 msgid "%s: Already registered"
 msgstr "%s は既に登録されています"
 
@@ -694,61 +528,54 @@ msgid "Help Error"
 msgstr "ヘルプエラー"
 
 #: lclstrconsts.rshelphelpcontextnotfound
+#, object-pascal-format
 msgid "Help context %s not found."
 msgstr "ヘルプコンテキスト %s が見つかりません"
 
 #: lclstrconsts.rshelphelpcontextnotfoundindatabase
-#, fuzzy,badformat
-#| msgid "Help context %s not found in Database %s%s%s."
+#, object-pascal-format
 msgid "Help context %s not found in Database \"%s\"."
-msgstr "ヘルプコンテキスト %s をデータベース %s%s%s から見つけることができませんでした。"
+msgstr "ヘルプコンテキスト %s をデータベース\"%s\"から見つけることができませんでした。"
 
 #: lclstrconsts.rshelphelpdatabasedidnotfoundaviewerforahelppageoftype
-#, fuzzy,badformat
-#| msgid "Help Database \"%s\" did not found a viewer for a help page of type %s"
+#, object-pascal-format
 msgid "Help Database \"%s\" did not find a viewer for a help page of type %s"
-msgstr "ヘルプデータベース %s%s%s のヘルプページタイプ %s に対するビューアが見つかりません"
+msgstr "ヘルプデータベース\"%s\"のヘルプページタイプ %s に対するビューアが見つかりません"
 
 #: lclstrconsts.rshelphelpdatabasenotfound
-#, fuzzy,badformat
-#| msgid "Help Database %s%s%s not found"
+#, object-pascal-format
 msgid "Help Database \"%s\" not found"
-msgstr "ヘルプデータベース %s%s%s が見つかりません"
+msgstr "ヘルプデータベース\"%s\"が見つかりません"
 
 #: lclstrconsts.rshelphelpfordirectivenotfound
-#, fuzzy,badformat
-#| msgid "Help for directive %s%s%s not found."
+#, object-pascal-format
 msgid "Help for directive \"%s\" not found."
-msgstr "ヘルプの %s%s%s 指令が見つかりません。"
+msgstr "ヘルプの\"%s\"指令が見つかりません。"
 
 #: lclstrconsts.rshelphelpfordirectivenotfoundindatabase
-#, fuzzy,badformat
-#| msgid "Help for directive %s%s%s not found in Database %s%s%s."
+#, object-pascal-format
 msgid "Help for directive \"%s\" not found in Database \"%s\"."
-msgstr "ヘルプの %s%s%s 指令をデータベース %s%s%s から見つけることができませんでした。"
+msgstr "ヘルプの\"%s\"指令をデータベース\"%s\"から見つけることができませんでした。"
 
 #: lclstrconsts.rshelphelpkeywordnotfound
-#, fuzzy,badformat
-#| msgid "Help keyword %s%s%s not found."
+#, object-pascal-format
 msgid "Help keyword \"%s\" not found."
-msgstr "ヘルプキーワード %s%s%s が見つかりません。"
+msgstr "ヘルプキーワード\"%s\"が見つかりません。"
 
 #: lclstrconsts.rshelphelpkeywordnotfoundindatabase
-#, fuzzy,badformat
-#| msgid "Help keyword %s%s%s not found in Database %s%s%s."
+#, object-pascal-format
 msgid "Help keyword \"%s\" not found in Database \"%s\"."
-msgstr "ヘルプキーワード %s%s%s をデータベース %s%s%s から見つけることができませんでした。"
+msgstr "ヘルプキーワード\"%s\"をデータベース\"%s\"から見つけることができませんでした。"
 
 #: lclstrconsts.rshelphelpnodehasnohelpdatabase
-#, fuzzy,badformat
-#| msgid "Help node %s%s%s has no Help Database"
+#, object-pascal-format
 msgid "Help node \"%s\" has no Help Database"
-msgstr "ヘルプノード %s%s%s にヘルプデータベースはありません"
+msgstr "ヘルプノード\"%s\"にヘルプデータベースはありません"
 
 #: lclstrconsts.rshelpnohelpfoundforsource
-#, fuzzy,badformat
+#, object-pascal-format, fuzzy, badformat
 msgid "No help found for line %d, column %d of %s."
-msgstr "%2:s の行 %0:d、列 %1:d のヘルプが見つかりませんでした。."
+msgstr "%sの行 %d、列 %d のヘルプが見つかりませんでした。"
 
 #: lclstrconsts.rshelpnohelpnodesavailable
 msgid "No help entries available for this topic"
@@ -759,6 +586,7 @@ msgid "No help found for this topic"
 msgstr "このトピックのヘルプが見つかりません。"
 
 #: lclstrconsts.rshelpnotregistered
+#, object-pascal-format
 msgid "%s: Not registered"
 msgstr "%s は登録されていません"
 
@@ -767,10 +595,9 @@ msgid "Help Selector Error"
 msgstr "ヘルプセレクタエラー"
 
 #: lclstrconsts.rshelpthereisnoviewerforhelptype
-#, fuzzy,badformat
-#| msgid "There is no viewer for help type %s%s%s"
+#, object-pascal-format
 msgid "There is no viewer for help type \"%s\""
-msgstr "ヘルプタイプ %s%s%s に対するビューアがありません"
+msgstr "ヘルプタイプ\"%s\"に対するビューアがありません"
 
 #: lclstrconsts.rshelpviewererror
 msgid "Help Viewer Error"
@@ -839,10 +666,12 @@ msgid "Inactive Caption"
 msgstr "非アクティブタイトルバーの文字色"
 
 #: lclstrconsts.rsindexoutofbounds
+#, object-pascal-format
 msgid "%s Index %d out of bounds 0 .. %d"
 msgstr "%s インデックスが %d、インデックス範囲外(0 .. %d)です"
 
 #: lclstrconsts.rsindexoutofrange
+#, object-pascal-format
 msgid "Index Out of range Cell[Col=%d Row=%d]"
 msgstr "セルインデックスが範囲を超えています [Col=%d Row=%d]"
 
@@ -860,10 +689,12 @@ msgid "Insert"
 msgstr "挿入"
 
 #: lclstrconsts.rsinvaliddate
+#, object-pascal-format
 msgid "Invalid Date : %s"
 msgstr "無効な日付：%s"
 
 #: lclstrconsts.rsinvaliddaterangehint
+#, object-pascal-format
 msgid "Invalid Date: %s. Must be between %s and %s"
 msgstr "無効な日付：%s。%s と %s の間でなければなりません"
 
@@ -880,6 +711,7 @@ msgid "Invalid stream format"
 msgstr "無効なストリーム形式"
 
 #: lclstrconsts.rsisalreadyassociatedwith
+#, object-pascal-format
 msgid "%s is already associated with %s"
 msgstr "%s は既に %s と関連付けられています"
 
@@ -896,12 +728,9 @@ msgid "Lime"
 msgstr "黄緑色"
 
 #: lclstrconsts.rslistindexexceedsbounds
+#, object-pascal-format
 msgid "List index exceeds bounds (%d)"
 msgstr "リストインデックスが範囲外です (%d)"
-
-#: lclstrconsts.rslistmustbeempty
-msgid "List must be empty"
-msgstr "ハッシュリストは空でなくてはなりません"
 
 #: lclstrconsts.rsmarooncolorcaption
 msgid "Maroon"
@@ -1075,9 +904,10 @@ msgstr "PNM ファイル"
 msgid "Post"
 msgstr "レコードの登録"
 
-#: lclstrconsts.rspressoktoignoreandriskdatacorruptionpresscanceltok
-msgid "%s%sPress OK to ignore and risk data corruption.%sPress Cancel to kill the program."
-msgstr "%s%sOK を押すと無視します。データは破損する危険があります。%sキャンセルを押すとプログラムは強制終了します。"
+#: lclstrconsts.rspressoktoignoreandriskdatacorruptionpressaborttok
+#, object-pascal-format
+msgid "%s%sPress OK to ignore and risk data corruption.%sPress Abort to kill the program."
+msgstr "%s%s無視してデータの破損のリスクを受け入れるのでしたらOKを押して下さい。%sプログラムを強制停止する場合は中止をクリックしてください。"
 
 #: lclstrconsts.rspriorrecordhint
 msgctxt "lclstrconsts.rspriorrecordhint"
@@ -1089,6 +919,7 @@ msgid "Prompt on replace"
 msgstr "置換を確認"
 
 #: lclstrconsts.rspropertydoesnotexist
+#, object-pascal-format
 msgid "Property %s does not exist"
 msgstr "プロパティ %s が存在しません"
 
@@ -1213,6 +1044,7 @@ msgid "Replace all"
 msgstr "すべて置換"
 
 #: lclstrconsts.rsresourcenotfound
+#, object-pascal-format
 msgctxt "lclstrconsts.rsresourcenotfound"
 msgid "Resource %s not found"
 msgstr "リソース %s が見つかりません"
@@ -1257,6 +1089,10 @@ msgstr "暗青緑色"
 msgid "Text"
 msgstr "テキスト"
 
+#: lclstrconsts.rsthebuiltinurlisreadonlychangethebaseurlinstead
+msgid "The built-in URL is read only. Change the BaseURL instead."
+msgstr ""
+
 #: lclstrconsts.rstiff
 msgid "Tagged Image File Format"
 msgstr "TIFF ファイル"
@@ -1297,26 +1133,32 @@ msgid "Unsupported bitmap format."
 msgstr "サポートされていないビットマップ形式です。"
 
 #: lclstrconsts.rsunsupportedclipboardformat
+#, object-pascal-format
 msgid "Unsupported clipboard format: %s"
 msgstr "サポートしていないクリップボード形式：%s"
 
 #: lclstrconsts.rswarningunreleaseddcsdump
+#, object-pascal-format
 msgid " WARNING: There are %d unreleased DCs, a detailed dump follows:"
 msgstr "警告：解放されていないデバイスコンテキストが %d 個あります。詳細は以下の通りです："
 
 #: lclstrconsts.rswarningunreleasedgdiobjectsdump
+#, object-pascal-format
 msgid " WARNING: There are %d unreleased GDIObjects, a detailed dump follows:"
 msgstr "警告：解放されてない GDI オブジェクトが %d 個あります。詳細は以下の通りです："
 
 #: lclstrconsts.rswarningunreleasedmessagesinqueue
+#, object-pascal-format
 msgid " WARNING: There are %d messages left in the queue! I'll free them"
 msgstr "警告：キューに %d 個のメッセージが残っています！それらを解放します"
 
 #: lclstrconsts.rswarningunreleasedtimerinfos
+#, object-pascal-format
 msgid " WARNING: There are %d TimerInfo structures left, I'll free them"
 msgstr "警告：%d 個のタイマー情報が残っています！それらを解放します"
 
 #: lclstrconsts.rswarningunremovedpaintmessages
+#, object-pascal-format
 msgid " WARNING: There are %s unremoved LM_PAINT/LM_GtkPAINT message links left."
 msgstr "警告：LM_PAINT/LM_GtkPAINT メッセージリンクが %s 個削除されずに残っています。"
 
@@ -1356,6 +1198,10 @@ msgstr "黄色"
 msgid "Cannot focus a disabled or invisible window"
 msgstr "無効または不可視ウィンドウにフォーカスはできません"
 
+#: lclstrconsts.scannotsetdesigntimeppi
+msgid "Cannot set design time PPI."
+msgstr "設計時PPIをセットできません"
+
 #: lclstrconsts.sduplicatemenus
 msgid "Duplicate menus"
 msgstr "メニューが重複しています"
@@ -1377,6 +1223,7 @@ msgid "Invalid action unregistration"
 msgstr "アクション登録解除が無効です"
 
 #: lclstrconsts.sinvalidcharset
+#, object-pascal-format
 msgid "The char set in mask \"%s\" is not valid!"
 msgstr "マスク \"%s\" のキャラクタセットが有効なものではありません！"
 
@@ -1487,31 +1334,32 @@ msgctxt "lclstrconsts.smkcup"
 msgid "Up"
 msgstr "↑"
 
-#: lclstrconsts.snomdiform
-msgid "No MDI form present."
-msgstr "MDI フォームが存在しません。"
-
 #: lclstrconsts.snotimers
 msgid "No timers available"
 msgstr "利用できるタイマーがありません"
 
 #: lclstrconsts.sparentrequired
+#, object-pascal-format
 msgid "Control \"%s\" has no parent window."
-msgstr ""
+msgstr "コントロール\"%s\"は親ウィンドウを持ちません。"
 
 #: lclstrconsts.sparexpected
+#, object-pascal-format
 msgid "Wrong token type: %s expected"
 msgstr "正しくないトークンタイプ：%sではありません"
 
 #: lclstrconsts.sparinvalidfloat
+#, object-pascal-format
 msgid "Invalid floating point number: %s"
 msgstr "無効な浮動小数点数値：%s"
 
 #: lclstrconsts.sparinvalidinteger
+#, object-pascal-format
 msgid "Invalid integer number: %s"
 msgstr "無効な整数値：%s"
 
 #: lclstrconsts.sparlocinfo
+#, object-pascal-format
 msgid " (at %d,%d, stream offset %d)"
 msgstr " (位置 %d,%d、ストリームオフセット %d)"
 
@@ -1524,62 +1372,95 @@ msgid "Unterminated string"
 msgstr "文字列が終端していません"
 
 #: lclstrconsts.sparwrongtokensymbol
+#, object-pascal-format
 msgid "Wrong token symbol: %s expected but %s found"
 msgstr "正しくないトークンシンボル：\"%s\"があるべきところに\"%s\"があります"
 
 #: lclstrconsts.sparwrongtokentype
+#, object-pascal-format
 msgid "Wrong token type: %s expected but %s found"
 msgstr "正しくないトークンタイプ：\"%s\"があるべきところに\"%s\"があります"
 
 #: lclstrconsts.sshellctrlsbytes
+#, object-pascal-format
 msgid "%s bytes"
-msgstr ""
+msgstr "%s バイト"
 
 #: lclstrconsts.sshellctrlsinvalidpath
+#, object-pascal-format, fuzzy
+#| msgid ""
+#| "Invalid pathname:\n"
+#| "\"%s\"\n"
 msgctxt "lclstrconsts.sshellctrlsinvalidpath"
 msgid ""
 "Invalid pathname:\n"
-"\"%s\"\n"
+"\"%s\""
 msgstr ""
+"無効なパス名:\n"
+"\"%s\"\n"
 
 #: lclstrconsts.sshellctrlsinvalidpathrelative
+#, object-pascal-format, fuzzy
+#| msgid ""
+#| "Invalid relative pathname:\n"
+#| "\"%s\"\n"
+#| "in relation to rootpath:\n"
+#| "\"%s\"\n"
 msgid ""
 "Invalid relative pathname:\n"
 "\"%s\"\n"
 "in relation to rootpath:\n"
-"\"%s\"\n"
+"\"%s\""
 msgstr ""
+"無効な相対パス名:\n"
+"\"%s\"\n"
+"以下のルートパスとの相互関係:\n"
+"\"%s\"\n"
 
 #: lclstrconsts.sshellctrlsinvalidroot
+#, object-pascal-format, fuzzy
+#| msgid ""
+#| "Invalid pathname:\n"
+#| "\"%s\"\n"
 msgctxt "lclstrconsts.sshellctrlsinvalidroot"
 msgid ""
 "Invalid pathname:\n"
-"\"%s\"\n"
+"\"%s\""
 msgstr ""
+"無効なパス名:\n"
+"\"%s\"\n"
 
 #: lclstrconsts.sshellctrlskb
+#, object-pascal-format
 msgid "%s kB"
-msgstr ""
+msgstr "%s kB"
 
 #: lclstrconsts.sshellctrlsmb
+#, object-pascal-format
 msgid "%s MB"
-msgstr ""
+msgstr "%s MB"
 
 #: lclstrconsts.sshellctrlsname
 msgid "Name"
-msgstr ""
+msgstr "名前"
 
 #: lclstrconsts.sshellctrlsselecteditemdoesnotexists
+#, object-pascal-format, fuzzy
+#| msgid ""
+#| "The selected item does not exist on disk:\n"
+#| "\"%s\"\n"
 msgid ""
 "The selected item does not exist on disk:\n"
-"\"%s\"\n"
+"\"%s\""
 msgstr ""
+"選択された項目は以下のディスク上に存在しません:\n"
+"\"%s\"\n"
 
 #: lclstrconsts.sshellctrlssize
 msgid "Size"
-msgstr ""
+msgstr "サイズ"
 
 #: lclstrconsts.sshellctrlstype
 msgid "Type"
-msgstr ""
+msgstr "型"
 

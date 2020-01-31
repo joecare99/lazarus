@@ -1241,6 +1241,10 @@ var
   
 begin
   //debugln(['TCanvas.TextRect ',DbgSName(Self),' Text="',Text,'" ',dbgs(ARect),' X=',X,',Y=',Y]);
+
+  if Font.Name = '' then      // Empty name is allowed in Delphi.
+    Font.Name := 'default';
+
   Changing;
   
   Options := 0;
@@ -1313,7 +1317,6 @@ begin
 
   if Style.Clipping then
   begin
-    IntersectRect(ARect, ARect, fRect);
     with ARect do
       InterSectClipRect(DC, Left, Top, Right, Bottom);
     Options := Options or DT_NOCLIP; // no clipping as we are handling it here
@@ -1357,6 +1360,8 @@ begin
   Flags := 0;
   if TextStyle.Opaque then
     Flags := ETO_Opaque;
+  if TextStyle.RightToLeft then
+    Flags := Flags or ETO_RTLREADING;
   ExtUTF8Out(FHandle, X, Y, Flags, nil, PChar(Text), Length(Text), nil);
   MoveTo(X + TextWidth(Text), Y);
   Changed;
@@ -1761,12 +1766,39 @@ end;
   Gets the width and height of a text
  ------------------------------------------------------------------------------}
 function TCanvas.TextExtent(const Text: string): TSize;
+var
+  DCIndex: Integer;
+  ARect: TRect;
+
+  procedure SaveState;
+  begin
+    if DCIndex <> 0 then exit;
+    DCIndex := SaveDC(FHandle);
+  end;
+
+  procedure RestoreState;
+  begin
+    if DCIndex = 0 then exit;
+    RestoreDC(FHandle, DCIndex);
+  end;
+
 begin
   Result.cX := 0;
   Result.cY := 0;
   if Text='' then exit;
   RequiredState([csHandleValid, csFontValid]);
+
+  DCIndex := 0;
+  if Font.IsDefault then
+  begin
+    SaveState;
+    SelectObject(FHandle, OnGetSystemFont());
+  end;
+
+  ARect := Rect(0, 0, 0, 0);
   GetTextExtentPoint(FHandle, PChar(Text), Length(Text), Result);
+
+  RestoreState;
 end;
 
 {------------------------------------------------------------------------------

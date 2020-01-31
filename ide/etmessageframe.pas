@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -32,13 +32,14 @@ unit etMessageFrame;
 interface
 
 uses
-  Math, strutils, Classes, SysUtils,
-  UTF8Process, FileProcs, LazFileCache,
-  LazUTF8Classes, LazFileUtils, LazUTF8, AvgLvlTree, SynEdit,
-  LResources, Forms, Buttons, ExtCtrls, Controls, LMessages,
-  LCLType, Graphics, LCLIntf, Themes, ImgList, GraphType, Menus, Clipbrd,
-  Dialogs, StdCtrls,
-  SynEditMarks,
+  Math, strutils, Classes, SysUtils, Laz_AVL_Tree,
+  // LCL
+  Forms, Buttons, ExtCtrls, Controls, LMessages, LCLType, LCLIntf,
+  Graphics, Themes, ImgList, GraphType, Menus, Clipbrd, Dialogs, StdCtrls,
+  // LazUtils
+  UTF8Process, FileProcs, LazFileCache, LazUTF8Classes, LazFileUtils, LazUTF8,
+  // SynEdit
+  SynEdit, SynEditMarks,
   // IDEIntf
   IDEExternToolIntf, IDEImagesIntf, MenuIntf, PackageIntf,
   IDECommands, IDEDialogs, ProjectIntf, CompOptsIntf, LazIDEIntf,
@@ -56,6 +57,7 @@ type
 
   TLMsgWndView = class(TLazExtToolView)
   private
+    FAsyncQueued: boolean;
     FControl: TMessagesCtrl;
     FFilter: TLMsgViewFilter;
     fPaintBottom: integer; // only valid if FPaintStamp=Control.FPaintStamp
@@ -64,10 +66,13 @@ type
     FPendingChanges: TETMultiSrcChanges;
     procedure SetFilter(AValue: TLMsgViewFilter);
     procedure OnMarksFixed(ListOfTMessageLine: TFPList); // (main thread) called after mlfFixed was added to these messages
+    procedure CallOnChangedInMainThread({%H-}Data: PtrInt); // (main thread)
   protected
     procedure SetToolState(AValue: TLMVToolState); override;
     procedure FetchAllPending; override; // (main thread)
     procedure ToolExited; override; // (main thread)
+    procedure QueueAsyncOnChanged; override; // (worker thread)
+    procedure RemoveAsyncOnChanged; override; // (worker thread)
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -170,8 +175,7 @@ type
     function GetActiveFilter: TLMsgViewFilter; inline;
     function GetHeaderBackground(aToolState: TLMVToolState): TColor;
     function GetSelectedLine: integer;
-    function GetUrgencyStyles(Urgency: TMessageLineUrgency
-      ): TMsgCtrlUrgencyStyle;
+    function GetUrgencyStyles(Urgency: TMessageLineUrgency): TMsgCtrlUrgencyStyle;
     function GetViews(Index: integer): TLMsgWndView;
     procedure OnViewChanged(Sender: TObject); // (main thread)
     procedure MsgUpdateTimerTimer(Sender: TObject);
@@ -202,6 +206,7 @@ type
     procedure ImageListChange(Sender: TObject);
     procedure OnIdle(Sender: TObject; var {%H-}Done: Boolean);
     procedure OnFilterChanged(Sender: TObject);
+    function GetPageScroll: integer;
   protected
     FViews: TFPList;// list of TMessagesViewMap
     FStates: TMsgCtrlStates;
@@ -353,10 +358,13 @@ type
     procedure RemoveFilterMsgTypeClick(Sender: TObject);
     procedure WndStayOnTopMenuItemClick(Sender: TObject);
   private
+    FImages: TLCLGlyphs;
     function AllMessagesAsString(const OnlyShown: boolean): String;
     function GetAboutView: TLMsgWndView;
     function GetViews(Index: integer): TLMsgWndView;
     procedure HideSearch;
+    procedure ImagesGetWidthForPPI(Sender: TCustomImageList; {%H-}AImageWidth,
+      {%H-}APPI: Integer; var AResultWidth: Integer);
     procedure SaveClicked(OnlyShown: boolean);
     procedure CopyAllClicked(OnlyShown: boolean);
     procedure CopyMsgToClipboard(OnlyFilename: boolean);
@@ -660,7 +668,7 @@ begin
   inherited ToolExited;
   if Tool.Terminated then begin
     ToolState:=lmvtsFailed;
-  end else if (ExitStatus<>0) then begin
+  end else if (ExitStatus<>0) or (ExitCode<>0) then begin
     // tool stopped with errors
     ErrCount:=0;
     EnterCriticalSection;
@@ -673,8 +681,8 @@ begin
     if ErrCount=0 then begin
       // parser did not add an error message
       // => add an error message
-      // add the last 3 lines of output with fatal urgency
-      Tool.EnterCriticalSection; // Note: always lock Tool before View
+      // add up the last 100 lines of output with panic urgency
+      Tool.EnterCriticalSection; // Note: always lock Tool *before* View
       try
         EnterCriticalSection;
         try
@@ -692,9 +700,14 @@ begin
           end;
           MsgLine:=PendingLines.CreateLine(-1);
           MsgLine.Urgency:=mluPanic;
-          MsgLine.Msg:=Format(
-            lisToolStoppedWithExitCodeUseContextMenuToGetMoreInfo, [IntToStr(
-            ExitStatus)]);
+          if ExitCode<>0 then
+            MsgLine.Msg:=Format(
+              lisToolStoppedWithExitCodeUseContextMenuToGetMoreInfo, [IntToStr(
+              ExitCode)])
+          else
+            MsgLine.Msg:=Format(
+              lisToolStoppedWithExitStatusUseContextMenuToGetMoreInfo, [
+              IntToStr(ExitStatus)]);
           PendingLines.Add(MsgLine);
         finally
           LeaveCriticalSection;
@@ -727,6 +740,30 @@ begin
     ToolState:=lmvtsFailed;
   end else
     ToolState:=lmvtsSuccess;
+end;
+
+procedure TLMsgWndView.CallOnChangedInMainThread(Data: PtrInt);
+begin
+  FAsyncQueued:=false;
+  if csDestroying in ComponentState then exit;
+  if Assigned(OnChanged) then
+    OnChanged(Self);
+end;
+
+procedure TLMsgWndView.QueueAsyncOnChanged;
+begin
+  if FAsyncQueued then exit;
+  FAsyncQueued:=true;
+  if Application<>nil then
+    Application.QueueAsyncCall(@CallOnChangedInMainThread,0);
+end;
+
+procedure TLMsgWndView.RemoveAsyncOnChanged;
+begin
+  if not FAsyncQueued then exit;
+  FAsyncQueued:=false;
+  if Application<>nil then
+    Application.RemoveAsyncCalls(Self);
 end;
 
 constructor TLMsgWndView.Create(AOwner: TComponent);
@@ -878,7 +915,7 @@ function TLMsgWndView.ApplySrcChanges(Changes: TETSingleSrcChanges): boolean;
 var
   Queue: TETSingleSrcChanges;
   Change: TETSrcChange;
-  Node: TAvgLvlTreeNode;
+  Node: TAvlTreeNode;
   aFilename: String;
 begin
   Result:=false;
@@ -1290,19 +1327,25 @@ end;
 procedure TMessagesCtrl.WMVScroll(var Msg: TLMScroll);
 begin
   case Msg.ScrollCode of
-      // Scrolls to start / end of the text
+    // Scrolls to start / end of the text
     SB_TOP:        ScrollTop := 0;
     SB_BOTTOM:     ScrollTop := ScrollTopMax;
+    {$IFDEF EnableMsgWndLineWrap}
+    // Scrolls one line up / down
+    SB_LINEDOWN:   ScrollTop := ScrollTop + 1;
+    SB_LINEUP:     ScrollTop := ScrollTop - 1;
+    {$ELSE}
       // Scrolls one line up / down
     SB_LINEDOWN:   ScrollTop := ScrollTop + ItemHeight div 2;
     SB_LINEUP:     ScrollTop := ScrollTop - ItemHeight div 2;
-      // Scrolls one page of lines up / down
-    SB_PAGEDOWN:   ScrollTop := ScrollTop + ClientHeight - ItemHeight;
-    SB_PAGEUP:     ScrollTop := ScrollTop - ClientHeight + ItemHeight;
-      // Scrolls to the current scroll bar position
+    {$ENDIF}
+    // Scrolls one page of lines up / down
+    SB_PAGEDOWN:   ScrollTop := ScrollTop + GetPageScroll;
+    SB_PAGEUP:     ScrollTop := ScrollTop - GetPageScroll;
+    // Scrolls to the current scroll bar position
     SB_THUMBPOSITION,
     SB_THUMBTRACK: ScrollTop := Msg.Pos;
-      // Ends scrolling
+    // Ends scrolling
     SB_ENDSCROLL:  SetCaptureControl(nil); // release scrollbar capture
   end;
 end;
@@ -1312,13 +1355,18 @@ begin
   if Mouse.WheelScrollLines=-1 then
   begin
     // -1 : scroll by page
-    ScrollTop := ScrollTop -
-              (Message.WheelDelta * (ClientHeight - ItemHeight)) div 120;
+    ScrollTop := ScrollTop - (Message.WheelDelta * GetPageScroll) div 120;
   end else begin
+    {$IFDEF EnableMsgWndLineWrap}
+    // scrolling one line -> see SB_LINEDOWN and SB_LINEUP handler in WMVScroll
+    ScrollTop := ScrollTop -
+        (Message.WheelDelta * Mouse.WheelScrollLines) div 240;
+    {$ELSE}
     // scrolling one line -> scroll half an item, see SB_LINEDOWN and SB_LINEUP
     // handler in WMVScroll
     ScrollTop := ScrollTop -
         (Message.WheelDelta * Mouse.WheelScrollLines*ItemHeight) div 240;
+    {$ENDIF}
   end;
   Message.Result := 1;
 end;
@@ -1392,6 +1440,15 @@ end;
 procedure TMessagesCtrl.OnFilterChanged(Sender: TObject);
 begin
   IdleConnected:=true;
+end;
+
+function TMessagesCtrl.GetPageScroll: integer;
+begin
+  {$IFDEF EnableMsgWndLineWrap}
+  Result:=Max(1,((ClientHeight-BorderWidth) div ItemHeight));
+  {$ELSE}
+  Result:=ClientHeight - ItemHeight;
+  {$ENDIF}
 end;
 
 function TMessagesCtrl.GetSelectedLine: integer;
@@ -1526,6 +1583,7 @@ var
   FirstLineIsNotSelectedMessage: Boolean;
   SecondLineIsNotSelectedMessage: Boolean;
   col: TColor;
+  ImgRes: TScaledImageListResolution;
 begin
   if Focused then
     Include(FStates,mcsFocused)
@@ -1542,7 +1600,11 @@ begin
   LoSearchText:=fLastLoSearchText;
 
   // paint from top to bottom
+  {$IFDEF EnableMsgWndLineWrap}
+  y:=-ScrollTop*ItemHeight;
+  {$ELSE}
   y:=-ScrollTop;
+  {$ENDIF}
   for i:=0 to ViewCount-1 do begin
     if y>ClientHeight then break;
     View:=Views[i];
@@ -1587,10 +1649,11 @@ begin
       ImgIndex:=fUrgencyStyles[Line.Urgency].ImageIndex;
       if (Images<>nil) and (mcoShowMsgIcons in Options)
       and (ImgIndex>=0) and (ImgIndex<Images.Count) then begin
-        Images.Draw(Canvas,
+        ImgRes := Images.ResolutionForControl[0, Self];
+        ImgRes.Draw(Canvas,
           NodeRect.Left + 1, (NodeRect.Top + NodeRect.Bottom - Images.Height) div 2,
           ImgIndex, gdeNormal);
-        inc(NodeRect.Left,Images.Width+2);
+        inc(NodeRect.Left, ImgRes.Width+2);
       end;
       // message text
       col:=UrgencyStyles[Line.Urgency].Color;
@@ -1744,13 +1807,13 @@ begin
 
   VK_PRIOR: // Page Up
     begin
-      SelectNextShown(-1-Max(0,ClientHeight div ItemHeight));
+      SelectNextShown(-Max(1,ClientHeight div ItemHeight));
       Key:=VK_UNKNOWN;
     end;
 
   VK_NEXT: // Page Down
     begin
-      SelectNextShown(1+Max(0,ClientHeight div ItemHeight));
+      SelectNextShown(Max(1,ClientHeight div ItemHeight));
       Key:=VK_UNKNOWN;
     end;
   end;
@@ -1786,6 +1849,48 @@ begin
 end;
 
 procedure TMessagesCtrl.DoAllViewsStopped;
+{off $DEFINE VerboseMsgFrame}
+
+  {$IFDEF VerboseMsgFrame}
+  procedure DbgViews;
+  var
+    i, j: Integer;
+    View: TLMsgWndView;
+    Tool: TAbstractExternalTool;
+    SrcMsg: TMessageLine;
+  begin
+    debugln(['TMessagesCtrl.DoAllViewsStopped ']);
+    debugln(['DbgViews===START========================================']);
+    for i:=0 to ViewCount-1 do
+    begin
+      View:=Views[i];
+      View.RebuildLines;
+      Tool:=View.Tool;
+      if Tool=nil then continue;
+      debugln(['DbgViews ',i,'/',ViewCount,' Tool.Title=',Tool.Title]);
+      Tool.EnterCriticalSection; // lock Tool before View
+      try
+        View.EnterCriticalSection;
+        try
+          for j:=0 to Tool.WorkerMessages.Count-1 do begin
+            SrcMsg:=Tool.WorkerMessages[j];
+            debugln(['WorkerMsg ',SrcMsg.Filename,'(',SrcMsg.Line,',',SrcMsg.Column,') ',UrgencyToStr(SrcMsg.Urgency),'/',SrcMsg.SubTool,': ',SrcMsg.Msg]);
+          end;
+          for j:=0 to View.Lines.Count-1 do begin
+            SrcMsg:=View.Lines[j];
+            debugln(['ViewMsg ',SrcMsg.Filename,'(',SrcMsg.Line,',',SrcMsg.Column,') ',UrgencyToStr(SrcMsg.Urgency),'/',SrcMsg.SubTool,': ',SrcMsg.Msg]);
+          end;
+        finally
+          View.LeaveCriticalSection;
+        end;
+      finally
+        Tool.LeaveCriticalSection;
+      end;
+    end;
+    debugln(['DbgViews===END==========================================']);
+  end;
+  {$ENDIF}
+
 var
   CurLine: TMessageLine;
 begin
@@ -1799,6 +1904,9 @@ begin
     if SelectFirstUrgentMessage(mluError,true) then
       OpenSelection;
   end;
+  {$IFDEF VerboseMsgFrame}
+  DbgViews;
+  {$ENDIF}
 end;
 
 function TMessagesCtrl.SearchNext(StartView: TLMsgWndView; StartLine: integer;
@@ -2317,6 +2425,8 @@ var
   MinScrollTop: integer;
   MaxScrollTop: Integer;
 begin
+  {$IFDEF EnableMsgWndLineWrap}
+  {$ELSE}
   y:=GetLineTop(View,LineNumber,false);
   if FullyVisible then begin
     MinScrollTop:=Max(0,y+ItemHeight-ClientHeight);
@@ -2325,6 +2435,7 @@ begin
     MinScrollTop:=Max(0,y-1-ClientHeight);
     MaxScrollTop:=y+ItemHeight-1;
   end;
+  {$ENDIF}
   //debugln(['TMessagesCtrl.ScrollToLine ',LineNumber,' y=',y,' Min=',MinScrollTop,' Max=',MaxScrollTop]);
   y:=Max(Min(ScrollTop,MaxScrollTop),MinScrollTop);
   //debugln(['TMessagesCtrl.ScrollToLine y=',y,' ScrollTopMax=',ScrollTopMax]);
@@ -2754,7 +2865,7 @@ var
   VisibleCnt: Integer;
 begin
   MessagesMenuRoot.MenuItem:=MsgCtrlPopupMenu.Items;
-  MessagesMenuRoot.BeginUpdate;
+  //MessagesMenuRoot.BeginUpdate;
   try
     HasText:=false;
     HasFilename:=false;
@@ -2892,7 +3003,7 @@ begin
 
     UpdateQuickFixes(Line);
   finally
-    MessagesMenuRoot.EndUpdate;
+    //MessagesMenuRoot.EndUpdate;
   end;
 end;
 
@@ -3145,6 +3256,13 @@ begin
   HideSearch;
 end;
 
+procedure TMessagesFrame.ImagesGetWidthForPPI(Sender: TCustomImageList;
+  AImageWidth, APPI: Integer; var AResultWidth: Integer);
+begin
+  if (16<=AResultWidth) and (AResultWidth<=20) then
+    AResultWidth := 16;
+end;
+
 procedure TMessagesFrame.MoreOptionsMenuItemClick(Sender: TObject);
 begin
   LazarusIDE.DoOpenIDEOptions(TMsgWndOptionsFrame);
@@ -3168,6 +3286,7 @@ var
   Tool: TAbstractExternalTool;
   Proc: TProcessUTF8;
   Memo: TMemo;
+  i: Integer;
 begin
   View:=GetAboutView;
   if View=nil then exit;
@@ -3181,8 +3300,13 @@ begin
     if Proc<>nil then begin
       if Proc.Executable<>'' then
         s+='Executable: '+LineEnding+Proc.Executable+LineEnding+LineEnding;
-      if Proc.CurrentDirectory<>'' then
-        s+='CurrentDirectory: '+LineEnding+Proc.CurrentDirectory+LineEnding+LineEnding;
+      if Proc.CurrentDirectory<>'' then begin
+        if Tool.CurrentDirectoryIsTestDir then
+          s+='CurrentDirectory is test build directory:'
+        else
+          s+='CurrentDirectory:';
+        s+=LineEnding+Proc.CurrentDirectory+LineEnding+LineEnding;
+      end;
       if Proc.Desktop<>'' then
         s+='Desktop: '+Proc.Desktop+LineEnding;
       if Tool.EnvironmentOverrides.Text<>'' then
@@ -3191,12 +3315,25 @@ begin
       s+='Parameters:'+LineEnding;
       s+=Proc.Parameters.Text+LineEnding;
       s+='Command Line:'+LineEnding;
-      s+=Tool.Process.Executable+' '+Tool.CmdLineParams+LineEnding+LineEnding;
+      s+=StrToCmdLineParam(Tool.Process.Executable)+' '+MergeCmdLineParams(Tool.Process.Parameters)+LineEnding+LineEnding;
+      s+='Parsers: ';
+      if Tool.ParserCount=0 then
+        s+='none'
+      else begin
+        for i:=0 to Tool.ParserCount-1 do begin
+          if i>0 then s+=', ';
+          s+=Tool.Parsers[i].GetLocalizedParserName;
+        end;
+      end;
+      s+=LineEnding+LineEnding;
+
       s+='ProcessID:'+LineEnding+IntToStr(Proc.ProcessID)+LineEnding+LineEnding;
       if Tool.Terminated then
         s+='Terminated'+LineEnding+LineEnding
-      else
+      else begin
+        s+='ExitCode:'+LineEnding+IntToStr(Proc.ExitCode)+LineEnding;
         s+='ExitStatus:'+LineEnding+IntToStr(Proc.ExitStatus)+LineEnding+LineEnding;
+      end;
     end;
     if Tool.ErrorMessage<>'' then
       s+=lisError+Tool.ErrorMessage+LineEnding+LineEnding;
@@ -3281,7 +3418,7 @@ var
   Filename: String;
   fs: TFileStreamUTF8;
 begin
-  Dlg:=TSaveDialog.Create(nil);
+  Dlg:=IDESaveDialogClass.Create(nil);
   try
     Dlg.Title:=lisSaveMessages;
     Dlg.FileName:='messages.txt';
@@ -3410,12 +3547,18 @@ begin
   inherited Create(TheOwner);
 
   MessagesCtrl:=TMessagesCtrl.Create(Self);
-  ImgIDInfo:=IDEImages.LoadImage(12, 'state12x12_information');
-  ImgIDHint:=IDEImages.LoadImage(12, 'state12x12_hint');
-  ImgIDNote:=IDEImages.LoadImage(12, 'state12x12_note');
-  ImgIDWarning:=IDEImages.LoadImage(12, 'state12x12_warning');
-  ImgIDError:=IDEImages.LoadImage(12, 'state12x12_error');
-  ImgIDFatal:=IDEImages.LoadImage(12, 'state12x12_fatal');
+  FImages := TLCLGlyphs.Create(Self);
+  FImages.Width := 12;
+  FImages.Height := 12;
+  FImages.RegisterResolutions([12, 16, 24]);
+  FImages.SetWidth100Suffix(16);
+  FImages.OnGetWidthForPPI := @ImagesGetWidthForPPI;
+  ImgIDInfo:=FImages.GetImageIndex('state_information');
+  ImgIDHint:=FImages.GetImageIndex('state_hint');
+  ImgIDNote:=FImages.GetImageIndex('state_note');
+  ImgIDWarning:=FImages.GetImageIndex('state_warning');
+  ImgIDError:=FImages.GetImageIndex('state_error');
+  ImgIDFatal:=FImages.GetImageIndex('state_fatal');
   with MessagesCtrl do begin
     Name:='MessagesCtrl';
     Align:=alClient;
@@ -3446,7 +3589,7 @@ begin
       EnvironmentOptions.MsgColors[mluFatal]);
     UrgencyStyles[mluPanic].SetValues(lisPanic, ImgIDFatal,
       EnvironmentOptions.MsgColors[mluPanic]);
-    Images:=IDEImages.Images_12;
+    Images:=Self.FImages;
     PopupMenu:=MsgCtrlPopupMenu;
   end;
   MessagesCtrl.SourceMarks:=ExtToolsMarks;
@@ -3454,11 +3597,11 @@ begin
   // search
   SearchPanel.Visible:=false; // by default the search is hidden
   HideSearchSpeedButton.Hint:=lisHideSearch;
-  HideSearchSpeedButton.LoadGlyphFromResourceName(HInstance, 'debugger_power_grey');
+  IDEImages.AssignImage(HideSearchSpeedButton, 'debugger_power_grey');
   SearchNextSpeedButton.Hint:=lisUDSearchNextOccurrenceOfThisPhrase;
-  SearchNextSpeedButton.LoadGlyphFromResourceName(HInstance, 'callstack_bottom');
+  IDEImages.AssignImage(SearchNextSpeedButton, 'callstack_bottom');
   SearchPrevSpeedButton.Hint:=lisUDSearchPreviousOccurrenceOfThisPhrase;
-  SearchPrevSpeedButton.LoadGlyphFromResourceName(HInstance, 'callstack_top');
+  IDEImages.AssignImage(SearchPrevSpeedButton, 'callstack_top');
   SearchEdit.TextHint:=lisUDSearch;
 end;
 
@@ -3518,7 +3661,7 @@ end;
 
 procedure TMessagesFrame.ApplyMultiSrcChanges(Changes: TETMultiSrcChanges);
 var
-  Node: TAvgLvlTreeNode;
+  Node: TAvlTreeNode;
 begin
   for Node in Changes.PendingChanges do
     ApplySrcChanges(TETSingleSrcChanges(Node.Data));
@@ -3581,7 +3724,8 @@ begin
     if not (CurMark is TETMark) then continue;
     Msg:=CurMark.MsgLine;
     CurHint:=MessagesCtrl.UrgencyToStr(Msg.Urgency)+': '+Msg.Msg;
-    if HintStr<>'' then HintStr:=HintStr+LineEnding;
+    if HintStr<>'' then
+      HintStr:=HintStr+LineEnding;
     HintStr:=HintStr+CurHint;
   end;
 end;

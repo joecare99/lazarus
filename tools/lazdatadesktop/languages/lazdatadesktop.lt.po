@@ -1,12 +1,13 @@
+# Valdas Jankunas <zmuogs@gmail.com>, 2017.
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Last-Translator: Valdas Jankunas <zmuogs@gmail.com>\n"
-"PO-Revision-Date: 2012-08-07 01:00+0300\n"
+"PO-Revision-Date: 2017-07-13 12:45+0200\n"
 "Project-Id-Version: \n"
 "Language-Team: Lithuanian <kde-i18n-lt@kde.org>\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Lokalize 1.5\n"
+"X-Generator: Lokalize 2.0\n"
 "MIME-Version: 1.0\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "Language: lt\n"
@@ -38,6 +39,10 @@ msgstr "Praleisti svetimus raktus"
 #: lazdatadeskstr.eouseoldinwhereparams
 msgid "Use OLD prefix in where parameters"
 msgstr "„where“ parametrams naudoti prefiksą „OLD“"
+
+#: lazdatadeskstr.sabortscript
+msgid "Abort the script"
+msgstr "Nutraukti scenarijų"
 
 #: lazdatadeskstr.sclose
 msgid "Close result"
@@ -75,9 +80,13 @@ msgid "Enter a descriptive name for the connection"
 msgstr "Įveskite pavadinimą, kuris apibūdintų ryšį"
 
 #: lazdatadeskstr.sconnectionnameexists
+#, object-pascal-format, fuzzy
+#| msgid ""
+#| "There is already a connection named \"%s\"\n"
+#| "Would you like to override the connection data ?\n"
 msgid ""
 "There is already a connection named \"%s\"\n"
-"Would you like to override the connection data ?\n"
+"Would you like to override the connection data ?"
 msgstr ""
 "Ryšys pavadinimu „%s“ jau egzistuoja.\n"
 "Ar nepaisyti ryšio duomenų?\n"
@@ -91,14 +100,19 @@ msgid "Would you like to create a new connection for this database ?"
 msgstr "Ar sukurti šiai duomenų bazei skirtą ryšį?"
 
 #: lazdatadeskstr.sddmodified
+#, object-pascal-format, fuzzy
+#| msgid ""
+#| "Data dictionary \"%s\" has changed.\n"
+#| "What do you want to do with the changes?\n"
 msgid ""
 "Data dictionary \"%s\" has changed.\n"
-"What do you want to do with the changes?\n"
+"What do you want to do with the changes?"
 msgstr ""
 "Duomenų žodynas „%s“ yra pakeistas.\n"
 "Kaip elgsitės su pokyčiais?\n"
 
 #: lazdatadeskstr.sdeleteobject
+#, object-pascal-format
 msgid "Delete this %s"
 msgstr "Ištrinti šį %s"
 
@@ -123,9 +137,33 @@ msgstr "Neįrašyti pakitimų"
 msgid "Engine"
 msgstr "Variklis"
 
+#: lazdatadeskstr.serrcommitnotsupported
+msgid "COMMIT Not supported yet"
+msgstr "„COMMIT“ dar neįgyvendintas"
+
+#: lazdatadeskstr.serrinscript
+msgid "Error in SQL script"
+msgstr "Klaida „SQL“ scenarijuje"
+
+#: lazdatadeskstr.serrinscriptchoice
+#, fuzzy
+#| msgid ""
+#| "An error occurred in the SQL script.\n"
+#| "How would you like to continue ?\n"
+msgid ""
+"An error occurred in the SQL script.\n"
+"How would you like to continue ?"
+msgstr ""
+"„SQL“ scenarijuje įvyko klaida.\n"
+"Ką daryti toliau?\n"
+
 #: lazdatadeskstr.serrnoengine
 msgid "No database engine !"
 msgstr "Nėra duomenų bazės variklio!"
+
+#: lazdatadeskstr.serrorexecutingsql
+msgid "Error executing SQL statement:"
+msgstr "Vykdant „SQL“ sakinį įvyko klaida:"
 
 #: lazdatadeskstr.serrselectfields
 msgid "No fields selected. Please select some fields"
@@ -135,13 +173,34 @@ msgstr "Nėra pažymėtų laukelių. Reiktų pažymėti nors vieną."
 msgid "No table selected. Please select a table"
 msgstr "Nėra pažymėtos lentelės. Pirma ją reiktų pažymėti."
 
+#: lazdatadeskstr.serrunknowndirective
+#, object-pascal-format
+msgid "Unknown directive: %s (args: %s)"
+msgstr "Nežinoma direktyva: %s (argumentai: %s)"
+
 #: lazdatadeskstr.serrunknowntype
+#, object-pascal-format
 msgid "Unknown object type: %d"
 msgstr "Nežinomas objekto tipas: %d"
 
 #: lazdatadeskstr.sexecute
 msgid "Execute SQL"
 msgstr "Vykdyti SQL"
+
+#: lazdatadeskstr.sexecutingsqlstatement
+#, object-pascal-format
+msgid "%s : Executing SQL statement:"
+msgstr "%s: Vykdomas „SQL“ sakinys:"
+
+#: lazdatadeskstr.sexecutingsqlstatementcount
+#, object-pascal-format
+msgid "%s : Executing script SQL statement nr. %d:"
+msgstr "%s: Vykdomas scenarijaus „SQL“ skainys nr. %d"
+
+#: lazdatadeskstr.sexecutiontime
+#, object-pascal-format
+msgid "Execution time: %s"
+msgstr "Vykdymas užtruko: %s"
 
 #: lazdatadeskstr.sexport
 msgid "Export data"
@@ -188,8 +247,6 @@ msgid "Save SQL statement to file"
 msgstr "SQL sakinį įrašyti failan"
 
 #: lazdatadeskstr.simportdictinto
-#, fuzzy
-#| msgid "Import datadictionary"
 msgid "Import data dictionary"
 msgstr "Importuoti duomenų žodyną"
 
@@ -355,8 +412,6 @@ msgid "Open"
 msgstr "Atverti"
 
 #: lazdatadeskstr.sld_actionopenrecentdatadicth
-#, fuzzy
-#| msgid "Open selected recent datadictionary"
 msgid "Open selected recent data dictionary"
 msgstr "Atverti pažymėtąjį paskiausiai naudotą duomenų žodyną"
 
@@ -377,8 +432,6 @@ msgid "Save &as"
 msgstr "Įrašyti &taip"
 
 #: lazdatadeskstr.sld_actionsaveash
-#, fuzzy
-#| msgid "Save datadictionary as"
 msgid "Save data dictionary as"
 msgstr "Duomenų žodyną įrašyti kitu pavadinimu"
 
@@ -417,9 +470,14 @@ msgctxt "lazdatadeskstr.sld_connections"
 msgid "Connections"
 msgstr "Ryšiai"
 
+#: lazdatadeskstr.sld_connectionsdictionaries
+msgid "Connections/Dictionaries"
+msgstr "Ryšiai/žodynai"
+
 #: lazdatadeskstr.sld_connecttoadatabase
-msgid "Connect to a database"
-msgstr "Užmegzti ryšį su duomenų baze"
+#, object-pascal-format
+msgid "Connect to a database of type %s"
+msgstr "Užmegzti ryšį su „%s“ tipo duomenų baze"
 
 #: lazdatadeskstr.sld_createfulltablecreationsql
 msgid "Create full table creation SQL"
@@ -443,6 +501,10 @@ msgstr "Paša&linti"
 msgid "Dictionaries"
 msgstr "Žodynai"
 
+#: lazdatadeskstr.sld_firststart
+msgid "First start of database desktop"
+msgstr "Duomenų darbalaukio pirmasis startas"
+
 #: lazdatadeskstr.sld_fromconnection
 msgid "From connection"
 msgstr "Iš ryšio"
@@ -460,8 +522,6 @@ msgid "Host"
 msgstr "Serveris"
 
 #: lazdatadeskstr.sld_importupdatedatadictionary
-#, fuzzy
-#| msgid "Import/Update datadictionary"
 msgid "Import/Update data dictionary"
 msgstr "Importuoti/naujinti duomenų žodyną"
 
@@ -480,6 +540,10 @@ msgstr "&Raktų laukeliai"
 #: lazdatadeskstr.sld_lazarusdatabasedesktop
 msgid "Lazarus Database Desktop"
 msgstr "Lazarus duomenų bazės darbalaukis"
+
+#: lazdatadeskstr.sld_legacyview
+msgid "Legacy List View"
+msgstr "Pasenusi sąrašo žiūryklė"
 
 #: lazdatadeskstr.sld_linelength
 msgid "Line Length"
@@ -512,8 +576,8 @@ msgstr "&Tinka"
 
 #: lazdatadeskstr.sld_opendatadictionaryfilter
 msgctxt "lazdatadeskstr.sld_opendatadictionaryfilter"
-msgid "Data dictionary files|*.fpd|Ini files|*.ini|All files|*.*"
-msgstr "Duomenų žodyno failai|*.fpd|„Ini“ failai|*.ini|Visi failai|*.*"
+msgid "Data dictionary files (fdd)|*.fdd|Ini files|*.ini|All files|*.*"
+msgstr "Duomenų žodyno failai (*.fdd)|*.fdd|„Ini“ failai (*.ini)|*.ini|Visi failai|*"
 
 #: lazdatadeskstr.sld_opendatadictionarytitle
 msgid "Open data dictionary"
@@ -543,8 +607,8 @@ msgstr "Paskiausia naudota"
 
 #: lazdatadeskstr.sld_savefileasfilter
 msgctxt "lazdatadeskstr.sld_savefileasfilter"
-msgid "Data dictionary files|*.fpd|Ini files|*.ini|All files|*.*"
-msgstr "Duomenų žodyno failai|*.fpd|„Ini“ failai|*.ini|Visi failai|*.*"
+msgid "Data dictionary files (fdd)|*.fdd|Ini files|*.ini|All files|*.*"
+msgstr "Duomenų žodyno failai (*.fdd)|*.fdd|„Ini“ failai (*.ini)|*.ini|Visi failai|*"
 
 #: lazdatadeskstr.sld_savefileastitle
 msgid "Save file as"
@@ -574,6 +638,22 @@ msgstr "Pažymėti/naujinti/įterpti laukelius"
 msgid "-"
 msgstr "-"
 
+#: lazdatadeskstr.sld_startempty
+msgid "Thanks, I know what to do"
+msgstr "Ačiū, aš žinau ką daryti"
+
+#: lazdatadeskstr.sld_startnewconnection
+msgid "Create new connection"
+msgstr "Kurti naują ryšį"
+
+#: lazdatadeskstr.sld_startnewdict
+msgid "Start new dictionary"
+msgstr "Pradėti naują žodyną"
+
+#: lazdatadeskstr.sld_succesconnecting
+msgid "Connection established successfully!"
+msgstr "Ryšys sukurtas sėkmingai!"
+
 #: lazdatadeskstr.sld_table
 msgid "Ta&ble"
 msgstr "&Lentelė"
@@ -581,6 +661,14 @@ msgstr "&Lentelė"
 #: lazdatadeskstr.sld_tableandfields
 msgid "Tables and &Fields"
 msgstr "Lentelės ir lau&keliai"
+
+#: lazdatadeskstr.sld_testconnection
+msgid "Test connection"
+msgstr "Testuoti ryšį"
+
+#: lazdatadeskstr.sld_unknowntype
+msgid "Unknown type"
+msgstr "Neinomas tipas"
 
 #: lazdatadeskstr.sld_update
 msgid "&Update"
@@ -594,15 +682,21 @@ msgstr "Naujinti egzistuojančias lenteles"
 msgid "Username"
 msgstr "Naudotojo vardas"
 
+#: lazdatadeskstr.sld_view
+msgid "View"
+msgstr "Rodymas"
+
 #: lazdatadeskstr.sload
 msgid "Load SQL"
 msgstr "Įkelti SQL"
 
 #: lazdatadeskstr.snamefor
+#, object-pascal-format
 msgid "Enter a name for the new %s"
 msgstr "%s, suteikite jam pavadinimą"
 
 #: lazdatadeskstr.snew
+#, object-pascal-format
 msgid "New %s"
 msgstr "Naujas %s"
 
@@ -611,10 +705,8 @@ msgid "New connection"
 msgstr "Naujas ryšys"
 
 #: lazdatadeskstr.snewdictionary
-#, fuzzy
-#| msgid "New database"
 msgid "New data dictionary"
-msgstr "Nauja duomenų bazė"
+msgstr "Naujas duomenų žodynas"
 
 #: lazdatadeskstr.snewdomain
 msgid "Create new domain"
@@ -625,6 +717,7 @@ msgid "Enter a name for the new domain:"
 msgstr "Įveskite naujosios srities pavadinimą:"
 
 #: lazdatadeskstr.snewfield
+#, object-pascal-format
 msgid "Create new field in table %s"
 msgstr "Lentelėje „%s“ sukurti naują laukelį"
 
@@ -633,6 +726,7 @@ msgid "Enter a name for the new field:"
 msgstr "Įveskite naujojo laukelio pavadinimą:"
 
 #: lazdatadeskstr.snewforeignkey
+#, object-pascal-format
 msgid "Create new foreign key in table %s"
 msgstr "Lentelėje „%s“ sukurti naują svetimą raktą"
 
@@ -641,6 +735,7 @@ msgid "Enter a name for the new foreign key:"
 msgstr "Įveskite naujojo svetimo rakto pavadinimą:"
 
 #: lazdatadeskstr.snewindex
+#, object-pascal-format
 msgid "Create new index on table %s"
 msgstr "Kurti naują lentelės „%s“ rodyklę"
 
@@ -649,6 +744,7 @@ msgid "Enter a name for the new index:"
 msgstr "Įveskite naujosios rodyklės pavadinimą:"
 
 #: lazdatadeskstr.snewobject
+#, object-pascal-format
 msgid "Create new %s"
 msgstr "Kurti naują %s"
 
@@ -678,8 +774,6 @@ msgid "Database"
 msgstr "Duomenų bazė"
 
 #: lazdatadeskstr.snodedatadictionary
-#, fuzzy
-#| msgid "Datadictionary"
 msgid "Data dictionary"
 msgstr "Duomenų žodynas"
 
@@ -732,15 +826,39 @@ msgstr "Parametras"
 msgid "Previous"
 msgstr "Ankstesnis"
 
+#: lazdatadeskstr.sql_noconnectionsfound
+#, fuzzy
+#| msgid ""
+#| "No connections or data dictionaries were found.\n"
+#| " Start by creating a new connection or data dictionary.\n"
+msgid ""
+"No connections or data dictionaries were found.\n"
+" Start by creating a new connection or data dictionary."
+msgstr ""
+"Nerasta ryšių ar duomenų žodynų.\n"
+"Pradžioje sukurkite naują ryšį ara duomenų žodyną.\n"
+
 #: lazdatadeskstr.squery
 msgid "Run query"
 msgstr "Vykdyti užklausą"
 
+#: lazdatadeskstr.sreadyforsql
+msgid "Ready to execute SQL statements"
+msgstr "Pasirengęs vykdyti „SQL“ sakinius"
+
+#: lazdatadeskstr.srecordsfetched
+#, object-pascal-format
+msgid "Records fetched: %d"
+msgstr "Įrašų paimta: %d"
+
+#: lazdatadeskstr.sretrystatement
+msgid "Retry the statement"
+msgstr "Kartoti sakinį"
+
 #: lazdatadeskstr.srowsaffected
-#, fuzzy
-#| msgid "Query executed succesfully: %d rows affected."
+#, object-pascal-format
 msgid "Query executed successfully: %d rows affected."
-msgstr "Užklausa įvykdyta sėkmingai. Paveikta eilučių: %d."
+msgstr "Užklausa įvykdyta sėkmingai: paveikta %d eilučių."
 
 #: lazdatadeskstr.ssave
 msgid "Save SQL"
@@ -749,6 +867,21 @@ msgstr "Įrašyti SQL"
 #: lazdatadeskstr.ssavedata
 msgid "Save changes"
 msgstr "Įrašyti pakeitimus"
+
+#: lazdatadeskstr.sscriptaborted
+#, object-pascal-format
+msgid "Script was aborted after %d statements"
+msgstr "Po %d sakinių scenarijaus veikimas nutrūko"
+
+#: lazdatadeskstr.sscriptcompleted
+#, object-pascal-format
+msgid "Executed %d statements from script"
+msgstr "Scenarijuje įvykdyta %d sakinių"
+
+#: lazdatadeskstr.sscripterrorcount
+#, object-pascal-format
+msgid "%d script statements resulted in errors"
+msgstr "%d scenarijaus sakynių vykdymas baigėsi klaida"
 
 #: lazdatadeskstr.sselectdbfdir
 msgid "Select a directory with DBF files"
@@ -762,19 +895,44 @@ msgstr "Pažymėti objektą"
 msgid "Sequence"
 msgstr "Seka"
 
+#: lazdatadeskstr.ssqlerrorcode
+#, object-pascal-format
+msgid "SQL Error code: %d"
+msgstr "„SQL“ klaidos kodas: %d"
+
+#: lazdatadeskstr.ssqlexecutedok
+#, object-pascal-format
+msgid "%s : Statement executed succesfully."
+msgstr "%s: Sakinys įvykdytas sėkmingai."
+
 #: lazdatadeskstr.ssqlfilters
 msgid "SQL files|*.sql|All files|*.*"
 msgstr "SQL failai|*.sql|Visi failai|*.*"
+
+#: lazdatadeskstr.ssqlstatus
+#, object-pascal-format
+msgid "SQL State: %s"
+msgstr "„SQL“ būsena: %s"
+
+#: lazdatadeskstr.sstopnoerror
+msgid "Continue, ignore all errors"
+msgstr "Tęsti nepaisant klaidų"
+
+#: lazdatadeskstr.sstoponnexterror
+msgid "Continue, stop on the next error"
+msgstr "Testi sustojant įvykus kitai klaidai"
 
 #: lazdatadeskstr.stable
 msgid "Table"
 msgstr "Lentelė"
 
 #: lazdatadeskstr.sunknownconnection
+#, object-pascal-format
 msgid "Unknown connection: %s"
 msgstr "Nežinomas ryšys: %s"
 
 #: lazdatadeskstr.sunknowndictionary
+#, object-pascal-format
 msgid "Unknown data dictionary: %s"
 msgstr "Nežinomas duomenų žodynas: %s"
 

@@ -55,6 +55,16 @@ type
     cpTitleYear     // year value in the title
   );
 
+  { In Windows since Vista native calendar control has four possible views.
+    In other widgetsets, as well as in older windows, calendar can only have
+    standard "month view" - grid with days representing a month. }
+  TCalendarView = (
+    cvMonth,  // grid with days in one month
+    cvYear,   // grid with months in one year
+    cvDecade, // grid with years from one decade
+    cvCentury // grid with decades of one century
+  );
+
   EInvalidDate = class(Exception);
 
   { TCustomCalendar }
@@ -90,6 +100,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     function HitTest(APoint: TPoint): TCalendarPart;
+    function GetCalendarView: TCalendarView;
     property Date: String read GetDate write SetDate stored False;
     property DateTime: TDateTime read GetDateTime write SetDateTime;
     property DisplaySettings: TDisplaySettings read GetDisplaySettings
@@ -111,6 +122,7 @@ type
     property Constraints;
     property DateTime;
     property DisplaySettings;
+    property DoubleBuffered;
     property Hint;
     property OnChange;
     property OnChangeBounds;
@@ -131,9 +143,13 @@ type
     property OnMouseWheel;
     property OnMouseWheelDown;
     property OnMouseWheelUp;
+    property OnMouseWheelHorz;
+    property OnMouseWheelLeft;
+    property OnMouseWheelRight;
     property OnResize;
     property OnUTF8KeyPress;
     property OnYearChanged;
+    property ParentDoubleBuffered;
     property PopupMenu;
     property ShowHint;
     property TabOrder;
@@ -173,6 +189,14 @@ begin
     Result := cpNoWhere;
 end;
 
+function TCustomCalendar.GetCalendarView: TCalendarView;
+begin
+  if HandleAllocated then
+    Result := TWSCustomCalendarClass(WidgetSetClass).GetCurrentView(Self)
+  else
+    Result := cvMonth;
+end;
+
 procedure TCustomCalendar.Loaded;
 begin
   inherited Loaded;
@@ -182,7 +206,8 @@ end;
 procedure TCustomCalendar.InitializeWnd;
 begin
   inherited InitializeWnd;
-  if FPropsChanged then SetProps;
+  //if FPropsChanged then   // removed to fix issue #0032379
+  SetProps;
 end;
 
 procedure TCustomCalendar.DestroyWnd;

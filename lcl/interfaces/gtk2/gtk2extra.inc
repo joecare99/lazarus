@@ -63,6 +63,7 @@ initialization
       pointer(gtk_tree_view_get_grid_lines):=GetProcAddress(gtkhandle,'gtk_tree_view_get_grid_lines');
       pointer(gtk_tree_view_set_grid_lines):=GetProcAddress(gtkhandle,'gtk_tree_view_set_grid_lines');
       pointer(gtk_window_get_group):=GetProcAddress(gtkhandle,'gtk_window_get_group');
+      pointer(gtk_adjustment_configure):=GetProcAddress(gtkhandle,'gtk_adjustment_configure');
       break;
     end;
   end;
@@ -76,8 +77,11 @@ initialization
     end;
   end;
   gdklibhandle := LoadLibrary(gdklib);
-  if gdklibhandle <> 0
-  then pointer(gdk_window_get_cursor):=GetProcAddress(gdklibhandle,'gdk_window_get_cursor');
+  if gdklibhandle <> 0 then
+  begin
+   pointer(gdk_window_get_cursor) := GetProcAddress(gdklibhandle,'gdk_window_get_cursor');
+   pointer(gdk_screen_get_primary_monitor) := GetProcAddress(gdklibhandle,'gdk_screen_get_primary_monitor');
+  end;
 
 finalization
   if gtkhandle <> 0 then

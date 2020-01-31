@@ -32,15 +32,24 @@ unit SynEditPointClasses;
 {$I synedit.inc}
 
 {off $DEFINE SynCaretDebug}
+{off $DEFINE SynCaretHideInSroll} // Old behaviour, before Lazarus 2.1 / Aug 2019
 
 interface
 
 uses
-  Classes, SysUtils, Controls, LCLProc, LCLType, LCLIntf, ExtCtrls, Graphics, Forms,
+  {$IFDEF windows}
+  windows,
+  {$ENDIF}
+  Classes, SysUtils,
+  // LCL
+  Controls, LCLProc, LCLType, LCLIntf, ExtCtrls, Graphics, Forms,
   {$IFDEF SYN_MBCSSUPPORT}
   Imm,
   {$ENDIF}
-  LazSynEditText, SynEditTypes, SynEditMiscProcs;//, SynEditTextBuffer;
+  // LazUtils
+  LazMethodList,
+  // SynEdit
+  LazSynEditText, SynEditTypes, SynEditMiscProcs;
 
 type
 
@@ -94,6 +103,7 @@ type
 
   TSynEditSelection = class(TSynEditPointBase)
   private
+    FFoldedView: TObject;
     FOnBeforeSetSelText: TSynBeforeSetSelTextList;
     FAutoExtend: Boolean;
     FCaret: TSynEditCaret;
@@ -123,6 +133,7 @@ type
     function  AdjustBytePosToCharacterStart(Line: integer; BytePos: integer): integer;
     function  GetFirstLineBytePos: TPoint;
     function  GetLastLineBytePos: TPoint;
+    function GetLastLineHasSelection: Boolean;
     procedure SetAutoExtend(AValue: Boolean);
     procedure SetCaret(const AValue: TSynEditCaret);
     procedure SetEnabled(const Value : Boolean);
@@ -186,6 +197,7 @@ type
     // First and Last Pos are ordered according to the text flow (LTR)
     property  FirstLineBytePos: TPoint read GetFirstLineBytePos;
     property  LastLineBytePos: TPoint read GetLastLineBytePos;
+    property  LastLineHasSelection: Boolean read GetLastLineHasSelection;
     property  InvalidateLinesMethod : TInvalidateLines write FInvalidateLinesMethod;
     property  Caret: TSynEditCaret read FCaret write SetCaret;
     property  Persistent: Boolean read FPersistent write SetPersistent;
@@ -194,6 +206,8 @@ type
     property  AutoExtend: Boolean read FAutoExtend write SetAutoExtend;
     property  StickyAutoExtend: Boolean read FStickyAutoExtend write FStickyAutoExtend;
     property  Hide: Boolean read FHide write SetHide;
+
+    property FoldedView: TObject read FFoldedView write FFoldedView; experimental; // until FoldedView becomes a TSynEditStrings
   end;
 
   { TSynEditCaret }
@@ -325,6 +339,7 @@ type
     procedure IncAutoMoveOnEdit;
     procedure DecAutoMoveOnEdit;
     procedure ChangeOnTouch;
+    procedure Touch(aChangeOnTouch: Boolean = False);
 
     function WasAtLineChar(aPoint: TPoint): Boolean;
     function WasAtLineByte(aPoint: TPoint): Boolean;
@@ -354,6 +369,7 @@ type
   TSynEditScreenCaretTimer = class
   private
     FDisplayCycle: Boolean;
+    FTimerEnabled: Boolean;
     FTimer: TTimer;
     FTimerList: TMethodList;
     FAfterPaintList: TMethodList;
@@ -361,6 +377,8 @@ type
     FLocFlags: set of (lfTimer, lfRestart);
     procedure DoTimer(Sender: TObject);
     procedure DoAfterPaint(Data: PtrInt);
+    function GetInterval: Integer;
+    procedure SetInterval(AValue: Integer);
   public
     constructor Create;
     destructor Destroy; override;
@@ -371,9 +389,11 @@ type
     procedure IncLock;
     procedure DecLock;
     procedure AfterPaintEvent;
+    procedure ResetInterval;
 
     procedure RestartCycle;
     property DisplayCycle: Boolean read FDisplayCycle;
+    property Interval: Integer read GetInterval write SetInterval;
   end;
 
   TSynEditScreenCaret = class;
@@ -428,7 +448,7 @@ type
 
   TSynEditScreenCaretPainterSystem = class(TSynEditScreenCaretPainter)
   protected
-    //procedure BeginScroll(dx, dy: Integer; const rcScroll, rcClip: TRect); override;
+    procedure BeginScroll(dx, dy: Integer; const rcScroll, rcClip: TRect); override;
     procedure FinishScroll(dx, dy: Integer; const rcScroll, rcClip: TRect; Success: Boolean); override;
     procedure BeginPaint(rcClip: TRect); override;
     //procedure FinishPaint(rcClip: TRect); override; // unhide, currently done by editor
@@ -455,7 +475,9 @@ type
     FOldX, FOldY, FOldW, FOldH: Integer;
     FState: TPainterStates;
     FCanPaint: Boolean;
+    FInRect: TIsInRectState;
 
+    function dbgsIRState(s: TIsInRectState): String;
     procedure DoTimer(Sender: TObject);
     procedure DoPaint(ACanvas: TCanvas; X, Y, H, W: Integer);
     procedure Paint;
@@ -539,6 +561,7 @@ type
     procedure SetPaintTimer(AValue: TSynEditScreenCaretTimer);
     procedure UpdateDisplayType;
     procedure UpdateDisplay;
+    function  ClippedPixelHeihgh(var APxTop: Integer): Integer; inline;
     procedure ShowCaret;
     procedure HideCaret;
     property HandleAllocated: Boolean read GetHandleAllocated;
@@ -584,6 +607,9 @@ type
   end;
 
 implementation
+
+uses
+  SynEditFoldedView;
 
 { TSynBeforeSetSelTextList }
 
@@ -1038,7 +1064,9 @@ begin
     CharWidthsArr := FLines.GetPhysicalCharWidths(Pchar(L), length(L), FLinePos-1);
     LogLen        := Length(CharWidthsArr);
     if LogLen > 0 then
-      CharWidths := @CharWidthsArr[0];
+      CharWidths := @CharWidthsArr[0]
+    else
+      CharWidths := Nil;
   end;
 
   ScreenPos := 1;
@@ -1339,6 +1367,13 @@ begin
     FTouched := False;
 end;
 
+procedure TSynEditCaret.Touch(aChangeOnTouch: Boolean);
+begin
+  if aChangeOnTouch then
+    ChangeOnTouch;
+  FTouched := True;
+end;
+
 
 function TSynEditCaret.WasAtLineChar(aPoint: TPoint): Boolean;
 begin
@@ -1515,15 +1550,14 @@ function TSynEditSelection.GetSelText : string;
       Result := Copy(S, Index, Count)
     else begin
       SetLength(Result, DstLen);
-      P := PChar(Pointer(Result));
+      P := PChar(Result);
       StrPCopy(P, Copy(S, Index, Count));
       Inc(P, SrcLen);
       FillChar(P^, DstLen - Srclen, $20);
     end;
   end;
 
-  procedure CopyAndForward(const S: string; Index, Count: Integer; var P:
-    PChar);
+  procedure CopyAndForward(const S: string; Index, Count: Integer; var P: PChar);
   var
     pSrc: PChar;
     SrcLen: Integer;
@@ -1563,9 +1597,9 @@ var
   Col, Len: array of Integer;
 
 begin
-  if not SelAvail then
-    Result := ''
-  else begin
+  Result := '';
+  if SelAvail then
+  begin
     if IsBackwardSel then begin
       ColFrom := FEndBytePos;
       First := FEndLinePos - 1;
@@ -1726,7 +1760,7 @@ begin
       FAltStartBytePos := -1;
     end
     else begin
-      StartLineBytePos := Point(FCaret.OldCharPos, FCaret.OldLinePos);
+      StartLineBytePos := FCaret.OldLineBytePos;
       EndLineBytePos := FCaret.LineBytePos;
       if Persistent and IsBackwardSel then
         SortSelectionPoints;
@@ -1809,14 +1843,21 @@ procedure TSynEditSelection.DoLinesEdited(Sender: TSynEditStrings; aLinePos, aBy
     end;
   end;
 
+var
+  empty, back: Boolean;
 begin
   if FIsSettingText then exit;
   if FPersistent or (FPersistentLock > 0) or
      ((FCaret <> nil) and (not FCaret.Locked))
   then begin
     if FActiveSelectionMode <> smColumn then begin // TODO: adjust ypos, height in smColumn mode
-      AdjustStartLineBytePos(AdjustPoint(StartLineBytePos, True));
-      EndLineBytePos := AdjustPoint(EndLineBytePos, False);
+      empty := (FStartBytePos = FEndBytePos) and (FStartLinePos = FEndLinePos);
+      back := IsBackwardSel;
+      AdjustStartLineBytePos(AdjustPoint(StartLineBytePos, not back));
+      if empty then
+        EndLineBytePos := StartLineBytePos
+      else
+        EndLineBytePos := AdjustPoint(EndLineBytePos, back);
     end;
     // Todo: Change Lines in smColumn
   end
@@ -1928,7 +1969,8 @@ var
             FInternalCaret.LineCharPos := Point(l, y);
             xb := FInternalCaret.BytePos;
             FInternalCaret.LineCharPos := Point(r, y);
-            xe := Min(FInternalCaret.BytePos, 1 + length(FInternalCaret.LineText));
+//            xe := Min(FInternalCaret.BytePos, 1 + length(FInternalCaret.LineText));
+            xe := FInternalCaret.BytePos;
             if xe > xb then
               FLines.EditDelete(xb, y, xe - xb);
           end;
@@ -1971,13 +2013,13 @@ var
         FLines.EditInsert(LogCaretXY.X, LogCaretXY.Y, Value);
         FInternalCaret.BytePos := FInternalCaret.BytePos + Length(Value);
       end else begin
+        FLines.EditLineBreak(LogCaretXY.X, LogCaretXY.Y);
         if (P <> Start) or (LogCaretXY.X > 1 + length(FLines[ToIdx(LogCaretXY.Y)])) then begin
           SetString(Str, Value, P - Start);
           FLines.EditInsert(LogCaretXY.X, LogCaretXY.Y, Str);
         end
         else
           Str := '';
-        FLines.EditLineBreak(LogCaretXY.X + (P - Start), LogCaretXY.Y);
         Result :=  CountLines(P);
         if Result > 1 then
           FLines.EditLinesInsert(LogCaretXY.Y + 1, Result - 1);
@@ -2149,7 +2191,7 @@ end;
 
 procedure TSynEditSelection.ConstrainStartLineBytePos(var Value: TPoint);
 begin
-  Value.y := MinMax(Value.y, 1, fLines.Count);
+  Value.y := MinMax(Value.y, 1, Max(fLines.Count, 1));
 
   if (FCaret = nil) or FCaret.AllowPastEOL then
     Value.x := Max(Value.x, 1)
@@ -2237,16 +2279,35 @@ var
 begin
   if FEnabled then begin
     FStickyAutoExtend := False;
-    Value.y := MinMax(Value.y, 1, fLines.Count);
+
+    Value.y := MinMax(Value.y, 1, Max(fLines.Count, 1));
+
+    // ensure folded block at bottom line is in selection
+    if (ActiveSelectionMode = smLine) and (FFoldedView <> nil) and
+       (FAutoExtend or FStickyAutoExtend)
+    then begin
+      if ( (FStartLinePos > Value.y) or
+           ( (FStartLinePos = Value.y) and (FStartBytePos > Value.x) )
+         ) and
+         (not SelAvail)
+      then
+        FStartLinePos := TSynEditFoldedView(FFoldedView).TextPosAddLines(FStartLinePos, 1) - 1
+      else
+      if (Value.y < fLines.Count) then
+        Value.y := TSynEditFoldedView(FFoldedView).TextPosAddLines(Value.y, 1) - 1;
+    end;
+
     if (FCaret = nil) or FCaret.AllowPastEOL then
       Value.x := Max(Value.x, 1)
     else
       Value.x := MinMax(Value.x, 1, length(Lines[Value.y - 1])+1);
+
     if (ActiveSelectionMode = smNormal) then
       if (Value.y >= 1) and (Value.y <= fLines.Count) then
         Value.x := AdjustBytePosToCharacterStart(Value.y,Value.x)
       else
         Value.x := 1;
+
     if (Value.X <> FEndBytePos) or (Value.Y <> FEndLinePos) then begin
       {$IFDEF SYN_MBCSSUPPORT}
       if Value.Y <= fLines.Count then begin
@@ -2299,8 +2360,19 @@ begin
   WasAvail := SelAvail;
   FForceSingleLineSelected := AValue;
 
-  if WasAvail <> SelAvail then
+  if WasAvail <> SelAvail then begin
+    // ensure folded block at bottom line is in selection
+    // only when selection is new (WasAvail = False)
+    if SelAvail and (FAutoExtend or FStickyAutoExtend) then begin
+      if IsBackwardSel then
+        FStartLinePos := TSynEditFoldedView(FFoldedView).TextPosAddLines(FStartLinePos, 1) - 1
+      else
+        FEndLinePos := TSynEditFoldedView(FFoldedView).TextPosAddLines(FEndLinePos, 1) - 1;
+    end;
+    FInvalidateLinesMethod(Min(FStartLinePos, FEndLinePos),
+                           Max(FStartLinePos, FEndLinePos) );
     fOnChangeList.CallNotifyEvents(self);
+  end;
 end;
 
 procedure TSynEditSelection.SetHide(const AValue: Boolean);
@@ -2349,6 +2421,11 @@ begin
     Result := StartLineBytePos
   else
     Result := EndLineBytePos;
+end;
+
+function TSynEditSelection.GetLastLineHasSelection: Boolean;
+begin
+  Result := (LastLineBytePos.x > 1) or ((FActiveSelectionMode = smLine) and FForceSingleLineSelected);
 end;
 
 procedure TSynEditSelection.SetAutoExtend(AValue: Boolean);
@@ -2469,6 +2546,29 @@ begin
     FAfterPaintList.Delete(FAfterPaintList.Count - 1);
 end;
 
+function TSynEditScreenCaretTimer.GetInterval: Integer;
+begin
+  Result := FTimer.Interval;
+end;
+
+procedure TSynEditScreenCaretTimer.SetInterval(AValue: Integer);
+begin
+  if AValue = FTimer.Interval then
+    exit;
+
+  if (AValue = 0) then begin
+    FTimer.Enabled := False;
+    FDisplayCycle := True;
+    FTimer.Interval := 0;
+  end
+  else begin
+    FTimer.Interval := AValue;
+    FTimer.Enabled := FTimerEnabled;
+  end;
+  if FTimerEnabled then
+    RestartCycle;
+end;
+
 procedure TSynEditScreenCaretTimer.DoTimer(Sender: TObject);
 begin
   if FLocCount > 0 then begin
@@ -2485,7 +2585,8 @@ begin
   FAfterPaintList := TMethodList.Create;
   FTimer := TTimer.Create(nil);
   FTimer.Enabled := False;
-  FTimer.Interval := 500;
+  FTimerEnabled := False;
+  ResetInterval;
   FTimer.OnTimer := @DoTimer;
 end;
 
@@ -2515,15 +2616,20 @@ end;
 procedure TSynEditScreenCaretTimer.RemoveHandler(AHandler: TNotifyEvent);
 begin
   FTimerList.Remove(TMethod(AHandler));
-  if FTimerList.Count = 0 then
+  if FTimerList.Count = 0 then begin
     FTimer.Enabled := False;
+    FTimerEnabled := False;
+  end;
 end;
 
 procedure TSynEditScreenCaretTimer.RemoveHandler(AHandlerOwner: TObject);
 begin
   FTimerList.RemoveAllMethodsOfObject(AHandlerOwner);
   FAfterPaintList.RemoveAllMethodsOfObject(AHandlerOwner);
-  if FTimerList.Count = 0 then FTimer.Enabled := False;
+  if FTimerList.Count = 0 then begin
+    FTimer.Enabled := False;
+    FTimerEnabled := False;
+  end;
 end;
 
 procedure TSynEditScreenCaretTimer.IncLock;
@@ -2553,17 +2659,40 @@ begin
   DoAfterPaint(0);
 end;
 
+procedure TSynEditScreenCaretTimer.ResetInterval;
+{$IFDEF windows}
+var
+  i: windows.UINT;
+{$ENDIF}
+begin
+  {$IFDEF windows}
+  i := GetCaretBlinkTime;
+  if (i = high(i)) then i := 0;
+  Interval := i;
+  {$ELSE}
+  Interval := 500;
+  {$ENDIF}
+  RestartCycle;
+end;
+
 procedure TSynEditScreenCaretTimer.RestartCycle;
 begin
   if FLocCount > 0 then begin
     include(FLocFlags, lfRestart);
     exit;
   end;
+  if FTimer.Interval = 0 then begin
+    FTimerList.CallNotifyEvents(Self);
+    exit;
+  end;
+
   if FTimerList.Count = 0 then exit;
   FTimer.Enabled := False;
+  FTimerEnabled := False;
   FDisplayCycle := False;
   DoTimer(nil);
   FTimer.Enabled := True;
+  FTimerEnabled := True;
 end;
 
 { TSynEditScreenCaretPainter }
@@ -2661,6 +2790,19 @@ end;
 
 { TSynEditScreenCaretPainterSystem }
 
+procedure TSynEditScreenCaretPainterSystem.BeginScroll(dx, dy: Integer;
+  const rcScroll, rcClip: TRect);
+begin
+  {$IFDEF LCLGTK1}
+  HideCaret;
+  {$ENDIF}
+  {$IFDEF LCLGTK2}
+  HideCaret;
+  {$ENDIF}
+
+  inherited BeginScroll(dx, dy, rcScroll, rcClip);
+end;
+
 procedure TSynEditScreenCaretPainterSystem.FinishScroll(dx, dy: Integer; const rcScroll,
   rcClip: TRect; Success: Boolean);
 begin
@@ -2726,6 +2868,12 @@ begin
 end;
 
 { TSynEditScreenCaretPainterInternal }
+
+function TSynEditScreenCaretPainterInternal.dbgsIRState(s: TIsInRectState
+  ): String;
+begin
+  WriteStr(Result, s);
+end;
 
 procedure TSynEditScreenCaretPainterInternal.DoTimer(Sender: TObject);
 begin
@@ -2864,14 +3012,10 @@ end;
 
 procedure TSynEditScreenCaretPainterInternal.Init;
 begin
-  {$IFDEF LCLCarbon}
-    FForcePaintEvents := True;
-  {$ELSE}
-  {$IFDEF LCLQt}
-    FForcePaintEvents := True;
-  {$ELSE}
+  {$IFDEF LCLWin32}
     FForcePaintEvents := False;
-  {$ENDIF}
+  {$ELSE}
+    FForcePaintEvents := True;
   {$ENDIF}
   FSavePen := TPen.Create;
   FColor := clBlack;
@@ -2882,25 +3026,32 @@ end;
 
 procedure TSynEditScreenCaretPainterInternal.BeginScroll(dx, dy: Integer; const rcScroll,
   rcClip: TRect);
-{$IFDEF SynCaretNoHideInSroll}
 var
-  rs: TIsInRectState;
-{$ENDIF}
+  NewTop, NewHeight: Integer;
 begin
   assert(not((FInPaint or FInScroll)), 'TSynEditScreenCaretPainterInternal.BeginScroll: not((FInPaint or FInScroll))');
   if (FState <> []) then
     ExecAfterPaint;
+  {$IFnDEF SynCaretHideInSroll}
+  if not FShowing then
+    exit;
+  {$ENDIF}
 
-  {$IFnDEF SynCaretNoHideInSroll}
+  {$IFDEF SynCaretHideInSroll}
   if not ((IsInRect(rcClip) = irOutside) and (IsInRect(rcScroll) = irOutside)) then begin
     HideCaret;
     inherited SetCaretPosEx(-1,-1);
   end;
   {$ELSE}
-  rs := IsInRect(rcScroll);
-  if not( ((IsInRect(rcClip) = irOutside) and (rs = irOutside)) or
-          ((IsInRect(rcClip, Left+dx, Top+dy, Width, Height) = irInside) and (rs = irInside))
-        )
+  FInRect     := IsInRect(rcScroll);
+  NewTop := Top + dy;
+  NewHeight := FOwner.ClippedPixelHeihgh(NewTop);
+  // Caret must either be all irInside or all irOutside (all the same / not mixed)
+  if (FInRect <> IsInRect(rcClip)) or
+     (FInRect <> IsInRect(rcClip, Left+dx, NewTop, Width, Height)) or
+     (FInRect = irPartInside) or
+     // or top/bottom most => might change height afterwards
+     (NewTop <> Top+dy) or (NewHeight <> Height)
   then begin
     HideCaret;
     inherited SetCaretPosEx(-1,-1);
@@ -2915,14 +3066,26 @@ end;
 procedure TSynEditScreenCaretPainterInternal.FinishScroll(dx, dy: Integer; const rcScroll,
   rcClip: TRect; Success: Boolean);
 begin
+  {$IFnDEF SynCaretHideInSroll}
+  if (not FShowing) then begin
+    if FInScroll then
+      inherited FinishScroll(dx, dy, rcScroll, rcClip, Success);
+    exit;
+  end;
+  {$ENDIF}
+
   assert(FInScroll, 'TSynEditScreenCaretPainterInternal.FinishScroll: FInScroll');
   assert((FState-[psAfterPaintAdded]) = [], 'TSynEditScreenCaretPainterInternal.FinishScroll: FState = []');
   inherited FinishScroll(dx, dy, rcScroll, rcClip, Success);
   FCanPaint := True;
-  {$IFDEF SynCaretNoHideInSroll}
-  if Success and ((IsInRect(rcClip) = irInside) or (IsInRect(rcScroll) = irInside)) then begin
-    inherited SetCaretPosEx(Left+dx, Top+dy);
-    FNeedPositionConfirmed := True;
+  {$IFnDEF SynCaretHideInSroll}
+  if (Top >= 0) and (FInRect <> irOutside) then begin
+    if Success then begin
+      inherited SetCaretPosEx(Left+dx, Top+dy);
+      FOwner.FDisplayPos.Offset(dx, dy);
+    end
+    else
+      FNeedPositionConfirmed := True;
   end;
   {$ENDIF}
 end;
@@ -2931,7 +3094,8 @@ procedure TSynEditScreenCaretPainterInternal.BeginPaint(rcClip: TRect);
 begin
   assert(not (FInPaint or FInScroll), 'TSynEditScreenCaretPainterInternal.BeginPaint: not (FInPaint or FInScroll)');
 
-  FCanPaint := IsInRect(rcClip)= irInside;
+  FInRect := IsInRect(rcClip);
+  FCanPaint := FInRect = irInside;
 
   if (psCleanOld in FState) and not FCanPaint then begin
     if IsInRect(rcClip, FOldX, FOldY, FOldW, FOldH) <> irInside then begin
@@ -2962,8 +3126,8 @@ begin
   if (psCleanOld in FState) and (not ForcePaintEvents) then
     DoPaint(CurrentCanvas, FOldX, FOldY, FOldH, FOldW);
 
-  // if changes where made, then FIsDrawn is alvays false
-  if FIsDrawn then
+  // if changes where made, then FIsDrawn is always false
+  if FIsDrawn and (FInRect <> irOutside) then
     DoPaint(CurrentCanvas, FLeft, FTop, FHeight, FWidth); // restore any part that is in the cliprect
 
   inherited FinishPaint(rcClip);
@@ -3070,7 +3234,7 @@ end;
 
 procedure TSynEditScreenCaret.ChangePainter(APainterClass: TSynEditScreenCaretPainterClass);
 begin
-  DestroyCaret;
+  DestroyCaret(True);
   FreeAndNil(FCaretPainter);
   FCaretPainter := APainterClass.Create(FHandleOwner, Self);
   UpdateDisplay;
@@ -3387,6 +3551,17 @@ begin
     HideCaret;
 end;
 
+function TSynEditScreenCaret.ClippedPixelHeihgh(var APxTop: Integer): Integer;
+begin
+  Result := FPixelHeight;
+  if APxTop + Result >= FClipBottom then
+    Result := FClipBottom - APxTop - 1;
+  if APxTop < FClipTop then begin
+    Result := Result - (FClipTop - APxTop);
+    APxTop := FClipTop;
+  end;
+end;
+
 procedure TSynEditScreenCaret.ShowCaret;
 var
   x, y, w, h: Integer;
@@ -3396,18 +3571,12 @@ begin
   x := FDisplayPos.x + FOffsetX;
   y := FDisplayPos.y + FOffsetY;
   w := FPixelWidth;
-  h := FPixelHeight;
+  h := ClippedPixelHeihgh(y);
   if x + w >= FClipRight then
     w := FClipRight - x - 1;
   if x < FClipLeft then begin
     w := w - (FClipLeft - w);
     x := FClipLeft;
-  end;
-  if y + h >= FClipBottom then
-    h := FClipBottom - y - 1;
-  if y < FClipTop then begin
-    h := h - (FClipTop - y);
-    y := FClipTop;
   end;
   if (w <= 0) or (h < 0) or
      (x < FClipLeft) or (x >= FClipRight) or

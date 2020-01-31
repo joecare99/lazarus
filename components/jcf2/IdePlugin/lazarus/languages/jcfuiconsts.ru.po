@@ -8,26 +8,28 @@ msgstr ""
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Language: ru\n"
+"X-Generator: Poedit 1.7.7\n"
 
 #: jcfuiconsts.lisaboutaboutjedicodeformat
 msgid "About JEDI Code Format"
 msgstr "О форматировании кода JEDI"
 
 #: jcfuiconsts.lisaboutfindmoreinformationonthewebat
+#, object-pascal-format
 msgid "Find more information on the web at: %s"
 msgstr "Более подробные сведения можно получить в сети по адресу: %s"
 
 #: jcfuiconsts.lisaboutthisprogramisopensource
-#| msgid "This program is open source software. It is released under the Mozilla Public licence (MPL).  http://www.mozilla.org/MPL"
 msgid "This program is open source software. It is released under the Mozilla Public Licence (MPL).  http://www.mozilla.org/MPL"
 msgstr "Это программное обеспечение с открытым исходным кодом. Оно распространяется на условиях Mozilla Public Licence (MPL).  http://www.mozilla.org/MPL"
 
 #: jcfuiconsts.lisaboutthisprogramisstillunderdevelopment
-#| msgid "This program is still under development.  In spite of thorough testing and removal of reported bugs, no guarantees are given. Please make backups, or better yet use a source control system."
 msgid "This program is still under development. In spite of thorough testing and removal of reported bugs, no guarantees are given. Please make backups, or better yet use a source control system."
 msgstr "Эта программа находится в стадии разработки. Несмотря на тщательное тестирование и устранение обнаруженных ошибок, гарантий её корректной работы не даётся. Делайте резервные копии, а ещё лучше - используйте систему контроля версий."
 
 #: jcfuiconsts.lisaboutversion
+#, object-pascal-format
 msgid "Version $VERSION$%s$DATE$%s%sThis program attempts to standardise and make readable the layout of any Delphi Object-Pascal source code.%s%sCopyright Anthony Steele 1999-2008"
 msgstr "Версия $VERSION$%s$DATE$%s%sЭта программа пытается стандартизовать и сделать более читаемым любой код на Объектном Паскале Delphi.%s%s(C) Anthony Steele 1999-2008"
 
@@ -132,7 +134,6 @@ msgid "After procedure header"
 msgstr "После заголовка процедуры"
 
 #: jcfuiconsts.lisblatstartandendofbeginendblock
-#| msgid "At start and end of begin...end block"
 msgid "At start and end of Begin...End block"
 msgstr "В начале и конце блока Begin...End"
 
@@ -364,6 +365,7 @@ msgid "Remove empty '//' comments"
 msgstr "Удалять пустые комментарии, начинающиеся с двух косых черт '//'"
 
 #: jcfuiconsts.lisedatlinecol
+#, object-pascal-format
 msgid "%sAt line %s col %s"
 msgstr "%sСтрока %s, столбец %s"
 
@@ -372,10 +374,12 @@ msgid "Error"
 msgstr "Ошибка"
 
 #: jcfuiconsts.lisedexception
+#, object-pascal-format
 msgid "Exception %s"
 msgstr "Исключение %s"
 
 #: jcfuiconsts.lisedin
+#, object-pascal-format
 msgid "%s in %s"
 msgstr "%s в %s"
 
@@ -384,18 +388,22 @@ msgid "JCF Parse error"
 msgstr "Ошибка анализа JCF"
 
 #: jcfuiconsts.lisednear
+#, object-pascal-format
 msgid "%s near %s"
 msgstr "%s в окрестности %s"
 
 #: jcfuiconsts.lisedtype
+#, object-pascal-format
 msgid "Type: %s%s"
 msgstr "Тип: %s%s"
 
 #: jcfuiconsts.liserrorwritingsettingsexception
+#, object-pascal-format
 msgid "Error writing settings file %s:%s%s"
 msgstr "Ошибка при записи файла параметров %s:%s%s"
 
 #: jcfuiconsts.liserrorwritingsettingsfilereadonly
+#, object-pascal-format
 msgid "Error writing settings file: %s is read only"
 msgstr "Ошибка при записи файла параметров: %s доступен только для чтения"
 
@@ -411,7 +419,12 @@ msgstr "Поиск и замена"
 msgid "Word list:"
 msgstr "Список слов:"
 
+#: jcfuiconsts.lisfrfileconfirmformat
+msgid "Show confirmation dialog before format"
+msgstr "Выводить диалог подтверждения перед форматированием"
+
 #: jcfuiconsts.lisfrfilesdatefilewritten
+#, object-pascal-format
 msgid "Date file written: %s"
 msgstr "Дата записи файла: %s"
 
@@ -431,15 +444,20 @@ msgstr "Файл доступен для записи"
 msgid "File not found"
 msgstr "Файл не найден"
 
-#: jcfuiconsts.lisfrfilesformatfile
-msgid "Format File"
-msgstr "Файл форматирования"
+#: jcfuiconsts.lisfrfilesopenfolder
+msgid "Open folder"
+msgstr "Открыть каталог"
 
-#: jcfuiconsts.lisfrfilesformatfileis
-msgid "Format file is %s"
-msgstr "Имя файла: %s"
+#: jcfuiconsts.lisfrfilessettingsfile
+msgid "Settings File"
+msgstr "Файл параметров"
+
+#: jcfuiconsts.lisfrfilessettingsfileis
+msgid "Settings file is:"
+msgstr "Файл параметров:"
 
 #: jcfuiconsts.lisfrfilesversionthatwrotethisfile
+#, object-pascal-format
 msgid "Version that wrote this file: %s"
 msgstr "Файл записан версией: %s"
 
@@ -507,12 +525,17 @@ msgstr "Параметры"
 msgid "JCF Format Settings"
 msgstr "Форматирование кода JEDI"
 
+#: jcfuiconsts.lisjedicodeformatallopenwindow
+msgid "JEDI Code Format of all open windows?"
+msgstr "Вы действительно хотите выполнить форматирование кода JEDI во всех открытых окнах?"
+
 #: jcfuiconsts.lisjedicodeformatofareyousurethatyouwanttoformatallfi
-#| msgid "JEDI Code Format of %sAre you sure that you want to format all %s files in the project."
+#, object-pascal-format
 msgid "JEDI Code Format of %sAre you sure that you want to format all %s files in the project?"
 msgstr "Форматирование кода JEDI для %sВы действительно хотите форматировать все (%s) файлы в проекте?"
 
 #: jcfuiconsts.lisjedicodeformatofstartformatting
+#, object-pascal-format
 msgid "JEDI Code Format of %sStart formatting?"
 msgstr "Форматирование кода JEDI для %sНачать?"
 
@@ -794,6 +817,7 @@ msgid "&Var declarations"
 msgstr "Об&ъявлений Var"
 
 #: jcfuiconsts.listhesettingsfiledoesnotexist
+#, object-pascal-format
 msgid "The settings file \"%s\" does not exist.%sThe formatter will work better if it is configured to use a valid settings file"
 msgstr "Файл параметров \"%s\" не существует.%sФорматирование будет работать лучше, если его настроить для использования корректного файла параметров"
 

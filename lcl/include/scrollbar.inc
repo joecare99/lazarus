@@ -123,8 +123,6 @@ begin
         SetScrollPos(Handle, SB_CTL, FMax - FPosition, True);
     Change;
   end;
-
-
   if HandleAllocated then
     TWSScrollBarClass(WidgetSetClass).SetParams(Self);
 end;
@@ -225,8 +223,11 @@ begin
     Exit;
   end;
 
+  {see issue #20127 +1 follows winapi bug otherwise under mswindows at max position
+  we'll have gap between slider and edge of scrollbar. Gtk2 and Qt are fine with this.}
+  if NewPos + 1 > (FMax - FPageSize) + 1 then NewPos := (FMax - FPageSize) + 1;
   if NewPos < FMin then NewPos := FMin;
-  if NewPos > FMax then NewPos := FMax;
+
   ScrollPos := NewPos;
   Scroll(ScrollCode, ScrollPos);
   SetPosition(ScrollPos);

@@ -19,7 +19,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -34,10 +34,15 @@ unit CompatibilityRestrictions;
 interface
 
 uses
-  Classes, SysUtils, Forms, LCLProc, InterfaceBase, StringHashList,
-  Laz2_DOM, Laz2_XMLRead, Laz2_XMLWrite,
-  ObjectInspector, OIFavoriteProperties, PackageIntf,
-  PackageSystem, PackageDefs, ComponentReg, LazConf;
+  Classes, SysUtils,
+  // LCL
+  Forms, LCLProc, LCLPlatformDef,
+  // LazUtils
+  Laz2_DOM, Laz2_XMLRead, Laz2_XMLWrite, StringHashList,
+  // IdeIntf
+  OIFavoriteProperties, PackageIntf, ComponentReg,
+  // IDE
+  PackageSystem, PackageDefs;
 
 type
   TReadRestrictedEvent = procedure (const RestrictedName, WidgetSetName: String) of object;
@@ -228,6 +233,7 @@ var
   AClass: TPersistentClass;
   AProperty: String;
   P: Integer;
+  Platform: TLCLPlatform;
 begin
   if RestrictedName = '' then Exit;
 
@@ -242,16 +248,18 @@ begin
     AClass := FClassList.Find(Copy(RestrictedName, 0, P - 1));
     AProperty := Copy(RestrictedName, P + 1, MaxInt);
   end;
-  
+
+  Platform:=DirNameToLCLPlatform(WidgetSetName);
   if AClass = nil then
   begin
     // add as generic widgetset issue
-    FRestrictedProperties.WidgetSetRestrictions[DirNameToLCLPlatform(WidgetSetName)] := FRestrictedProperties.WidgetSetRestrictions[DirNameToLCLPlatform(WidgetSetName)] + 1;
+    //debugln('TRestrictedManager.AddRestrictedProperty ',RestrictedName,' ',WidgetSetName);
+    inc(FRestrictedProperties.WidgetSetRestrictions[Platform]);
     Exit;
   end;
   
   Issue := TOIRestrictedProperty.Create(AClass, AProperty, True);
-  Issue.WidgetSets := [DirNameToLCLPlatform(WidgetSetName)];
+  Issue.WidgetSets := [Platform];
   FRestrictedProperties.Add(Issue);
 end;
 

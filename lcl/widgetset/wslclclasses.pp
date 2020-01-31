@@ -81,9 +81,12 @@ type
 
 
 function FindWSComponentClass(const AComponent: TComponentClass): TWSLCLComponentClass;
+function IsWSComponentInheritsFrom(const AComponent: TComponentClass;
+  InheritFromClass: TWSLCLComponentClass): Boolean;
 procedure RegisterWSComponent(const AComponent: TComponentClass;
                               const AWSComponent: TWSLCLComponentClass;
-                              const AWSPrivate: TWSPrivateClass = nil);
+                              const AWSPrivate: TWSPrivateClass = nil;
+                              const ANewRegistration: Boolean = False);
 // Only for non-TComponent based objects
 function GetWSLazAccessibleObject: TWSObjectClass;
 procedure RegisterWSLazAccessibleObject(const AWSObject: TWSObjectClass);
@@ -107,18 +110,11 @@ type
     WSClass: TWSLCLComponentClass;
     VClass: Pointer;
     VClassName: ShortString;
+    VClassNew: Boolean; // Indicates that VClass=WSClass, VClass is not created during runtime
     Parent: PClassNode;
     Child: PClassNode;
     Sibling: PClassNode;
   end;
-
-const
-  // To my knowledge there is no way to tell the size of the
-  // VMT of a given class.
-  // Assume we have no more than 100 virtual entries
-  // 12.10.2013 - changed to 128, since we cannot add more methods in ws classes.zeljko.
-  VIRTUAL_VMT_COUNT = 128;
-  VIRTUAL_VMT_SIZE = vmtMethodStart + VIRTUAL_VMT_COUNT * SizeOf(Pointer);
 
 const
   // vmtAutoTable is something Delphi 2 and not used, we 'borrow' the vmt entry
@@ -130,12 +126,10 @@ var
   WSLazAccessibleObjectClass: TWSObjectClass;
   WSLazDeviceAPIsClass: TWSObjectClass;
 
-function FindWSComponentClass(
-  const AComponent: TComponentClass): TWSLCLComponentClass;
+function FindClassNode(const AComponent: TComponentClass): PClassNode;
 var
   idx: Integer;
   cls: TClass;
-  Node: PClassNode;
 begin
   if MWSRegisterIndex = nil then
     DoInitialization;
@@ -145,14 +139,37 @@ begin
   while cls <> nil do
   begin
     idx := MWSRegisterIndex.IndexOf(cls.ClassName);
-    if idx <> -1
-    then begin
-      Node := PClassNode(MWSRegisterIndex.Objects[idx]);
-      Result := TWSLCLComponentClass(Node^.VClass);
-      Exit;
+    if idx <> -1 then
+    begin
+      Result := PClassNode(MWSRegisterIndex.Objects[idx]);
+      Break;
     end;
     cls := cls.ClassParent;
   end;
+end;
+
+function FindWSComponentClass(
+  const AComponent: TComponentClass): TWSLCLComponentClass;
+var
+  Node: PClassNode;
+begin
+  Node := FindClassNode(AComponent);
+  if Assigned(Node) then
+    Result := TWSLCLComponentClass(Node^.VClass)
+  else
+    Result := nil;
+end;
+
+function IsWSComponentInheritsFrom(const AComponent: TComponentClass;
+  InheritFromClass: TWSLCLComponentClass): Boolean;
+var
+  Node: PClassNode;
+begin
+  Node := FindClassNode(AComponent);
+  if Assigned(Node) then
+    Result := TWSLCLComponentClass(Node^.WSClass).InheritsFrom(InheritFromClass)
+  else
+    Result := false;
 end;
 
 type
@@ -170,9 +187,12 @@ type
   TPointerArray = packed array[0..9999999] of Pointer;
   PPointerArray = ^TPointerArray;
 
+// ANewRegistration - If true, VClass is not created during runtime,
+// but instead normal, Object Pascal class creation is used
 procedure RegisterWSComponent(const AComponent: TComponentClass;
   const AWSComponent: TWSLCLComponentClass;
-  const AWSPrivate: TWSPrivateClass = nil);
+  const AWSPrivate: TWSPrivateClass = nil;
+  const ANewRegistration: Boolean = False);
 
   function GetNode(const AClass: TClass): PClassNode;
   var
@@ -195,6 +215,7 @@ procedure RegisterWSComponent(const AComponent: TComponentClass;
       Result^.WSClass := nil;
       Result^.VClass := nil;
       Result^.VClassName := '';
+      Result^.VClassNew := False;
       Result^.Child := nil;
       Result^.Parent := GetNode(AClass.ClassParent);
       if Result^.Parent = nil
@@ -249,7 +270,9 @@ procedure RegisterWSComponent(const AComponent: TComponentClass;
     SearchAddr: Pointer;
     n, idx: Integer;
     WSPrivate, OrgPrivate: TClass;
-    Processed: array[0..VIRTUAL_VMT_COUNT-1] of Boolean;
+    Processed: array of Boolean;
+    VvmtCount,
+    VvmtSize : Integer;
     {$IFDEF VerboseWSRegistration}
     Indent: String;
     {$ENDIF}
@@ -258,9 +281,16 @@ procedure RegisterWSComponent(const AComponent: TComponentClass;
     then WSPrivate := TWSPrivate
     else WSPrivate := AWSPrivate;
 
+    // Determine VMT count and size => http://wiki.freepascal.org/Compiler-generated_data_and_data_structures
+    VvmtCount := 0;
+    Vvmt := Pointer(ANode^.WSClass) + vmtMethodStart; // AWSComponent is equal to ANode^.WSClass;
+    while (Vvmt^[VvmtCount] <> nil) do
+      Inc(VvmtCount);
+    VvmtSize := vmtMethodStart + VvmtCount * SizeOf(Pointer);
+
     if ANode^.VClass = nil
     then begin
-      ANode^.VClass := GetMem(VIRTUAL_VMT_SIZE)
+      ANode^.VClass := GetMem(VvmtSize)
     end
     else begin
       // keep original WSPrivate (only when different than default class)
@@ -276,8 +306,7 @@ procedure RegisterWSComponent(const AComponent: TComponentClass;
     end;
 
     // Initially copy the WSClass
-    // Tricky part, the source may get beyond read mem limit
-    Move(Pointer(ANode^.WSClass)^, ANode^.VClass^, VIRTUAL_VMT_SIZE);
+    Move(Pointer(ANode^.WSClass)^, ANode^.VClass^, VvmtSize);
 
     // Set WSPrivate class
     ParentWSNode := FindParentWSClassNode(ANode);
@@ -315,6 +344,7 @@ procedure RegisterWSComponent(const AComponent: TComponentClass;
 
     Vvmt := ANode^.VClass + vmtMethodStart;
     Pvmt := ParentWSNode^.VClass + vmtMethodStart;
+    SetLength(Processed, VvmtCount);
     FillChar(Processed[0], SizeOf(Processed), 0);
 
     while CommonClass <> nil do
@@ -328,7 +358,7 @@ procedure RegisterWSComponent(const AComponent: TComponentClass;
         {$ENDIF}
 
         Cvmt := Pointer(CommonClass) + vmtMethodStart;
-        Assert(Cmnt^.Count < VIRTUAL_VMT_COUNT, 'MethodTable count is larger than assumed VIRTUAL_VMT_COUNT');
+        Assert(Cmnt^.Count < VvmtCount, 'MethodTable count is larger than determined VvmtCount');
 
         // Loop through the VMT to see what is overridden
         for n := 0 to Cmnt^.Count - 1 do
@@ -338,7 +368,7 @@ procedure RegisterWSComponent(const AComponent: TComponentClass;
           DebugLn('%sSearch: %s (%p)', [Indent, Cmnt^.Entries[n].Name^, SearchAddr]);
           {$ENDIF}
 
-          for idx := 0 to VIRTUAL_VMT_COUNT - 1 do
+          for idx := 0 to VvmtCount - 1 do
           begin
             if Cvmt^[idx] = SearchAddr
             then begin
@@ -366,7 +396,7 @@ procedure RegisterWSComponent(const AComponent: TComponentClass;
 
               Break;
             end;
-            if idx = VIRTUAL_VMT_COUNT - 1
+            if idx = VvmtCount - 1
             then begin
               DebugLn('[WARNING] VMT entry "', Cmnt^.Entries[n].Name^, '" not found in "', CommonClass.ClassName, '"');
               Break;
@@ -381,7 +411,11 @@ procedure RegisterWSComponent(const AComponent: TComponentClass;
     ANode^.VClassName := '(V)' + ANode^.WSClass.ClassName;
     PPointer(ANode^.VClass + vmtClassName)^ := @ANode^.VClassName;
     // Adjust classparent
+    {$IF (FPC_FULLVERSION >= 30101)}
+    PPointer(ANode^.VClass + vmtParent)^ := @ParentWSNode^.WSClass;
+    {$ELSE}
     PPointer(ANode^.VClass + vmtParent)^ := ParentWSNode^.WSClass;
+    {$ENDIF}
     // Delete methodtable entry
     PPointer(ANode^.VClass + vmtMethodTable)^ := nil;
   end;
@@ -393,8 +427,8 @@ procedure RegisterWSComponent(const AComponent: TComponentClass;
     Node := ANode^.Child;
     while Node <> nil do
     begin
-      if Node^.WSClass <> nil
-      then begin
+      if (Node^.WSClass <> nil) and (not Node^.VClassNew) then
+      begin
         {$IFDEF VerboseWSRegistration}
         DebugLn('Update VClass for: ', Node^.WSClass.ClassName);
         {$ENDIF}
@@ -417,7 +451,14 @@ begin
   if Node^.WSClass = nil
   then MWSRegisterIndex.AddObject(AComponent.ClassName, TObject(Node));
   Node^.WSClass := AWSComponent;
-  
+
+  if ANewRegistration then
+  begin
+    Node^.VClass := AWSComponent;
+    Node^.VClassNew := True;
+    Exit;
+  end;
+
   // childclasses "inherit" the private from their parent
   // the child privates should only be updated when their private is still
   // the same as their parents
@@ -545,8 +586,8 @@ begin
   for n := 0 to MComponentIndex.Count - 1 do
   begin
     Node := PClassNode(MComponentIndex.Objects[n]);
-    if Node^.VClass <> nil
-    then Freemem(Node^.VClass);
+    if (Node^.VClass <> nil) and (not Node^.VClassNew) then
+      Freemem(Node^.VClass);
     Dispose(Node);
   end;
   FreeAndNil(MComponentIndex);

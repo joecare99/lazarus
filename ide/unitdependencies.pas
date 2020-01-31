@@ -14,7 +14,7 @@
 *   A copy of the GNU General Public License is available on the World    *
 *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
 *   obtain it by writing to the Free Software Foundation,                 *
-*   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+*   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
 *                                                                         *
 ***************************************************************************
 
@@ -35,19 +35,23 @@ unit UnitDependencies;
 interface
 
 uses
-  // RTL + FCL + LCL
-  Classes, SysUtils, types, math, AVL_Tree,
-  Forms, Controls, ExtCtrls, ComCtrls, StdCtrls, Buttons, Dialogs, Menus, Clipbrd,
+  // RTL + FCL
+  Classes, SysUtils, types, math, Laz_AVL_Tree,
+  // LCL
+  Forms, Controls, ExtCtrls, ComCtrls, StdCtrls, Buttons, Dialogs, Menus,
+  Clipbrd, CheckLst,
   // CodeTools
-  CodeToolManager, DefineTemplates, CodeToolsStructs, CTUnitGraph, CTUnitGroupGraph,
-  FileProcs, CodeCache,
+  CodeToolManager, DefineTemplates, CTUnitGraph, CTUnitGroupGraph,
+  FileProcs, CodeCache, AvgLvlTree,
   // LazUtils
-  LazLogger, LazFileUtils, LazFileCache, LazUtilities, LazUTF8, LvlGraphCtrl,
+  LazLoggerBase, LazFileUtils, LazFileCache, LazStringUtils, LazUTF8,
+  LvlGraphCtrl,
   // IDE interface
   LazIDEIntf, ProjectIntf, IDEWindowIntf, PackageIntf, SrcEditorIntf, IDEImagesIntf,
   IDEMsgIntf, IDEExternToolIntf, IDECommands, IDEDialogs,
   // IDE
-  IDEOptionDefs, LazarusIDEStrConsts, UnusedUnitsDlg;
+  IDEOptionDefs, LazarusIDEStrConsts, UnusedUnitsDlg, DependencyGraphOptions,
+  MainIntf, EnvironmentOpts;
 
 const
   GroupPrefixProject = '-Project-';
@@ -153,7 +157,14 @@ type
     AllUnitsShowDirsSpeedButton: TSpeedButton;
     AllUnitsShowGroupNodesSpeedButton: TSpeedButton;
     AllUnitsTreeView: TTreeView; // Node.Data is TUDNode
+    GraphPopupMenu: TPopupMenu;
+    GraphOptsMenuItem: TMenuItem;
+    PopupMenu1: TPopupMenu;
+    UnitGraphFilter: TCheckListBox;
     MainPageControl: TPageControl;
+    UnitGraphOptionSplitter: TSplitter;
+    UnitGraphOptionPanel: TPanel;
+    UnitGraphPanel: TPanel;
     UnitsTVOpenFileMenuItem: TMenuItem;
     RefreshButton: TButton;
     StatsLabel: TLabel;
@@ -187,10 +198,13 @@ type
     procedure AllUnitsShowDirsSpeedButtonClick(Sender: TObject);
     procedure AllUnitsShowGroupNodesSpeedButtonClick(Sender: TObject);
     procedure FormShow(Sender: TObject);
+    procedure GraphOptsMenuItemClick(Sender: TObject);
     procedure RefreshButtonClick(Sender: TObject);
     procedure SelUnitsTreeViewExpanding(Sender: TObject; Node: TTreeNode;
       var AllowExpansion: Boolean);
     procedure Timer1Timer(Sender: TObject);
+    procedure UnitGraphFilterItemClick(Sender: TObject; {%H-}Index: integer);
+    procedure UnitGraphFilterSelectionChange(Sender: TObject; User: boolean);
     procedure UnitsLvlGraphMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure UnitsLvlGraphSelectionChanged(Sender: TObject);
@@ -217,6 +231,8 @@ type
     procedure UnitsTVPopupMenuPopup(Sender: TObject);
     procedure UnitsTVUnusedUnitsMenuItemClick(Sender: TObject);
   private
+    FPackageGraphOpts: TLvlGraphOptions;
+    FUnitGraphOpts: TLvlGraphOptions;
     FCurrentUnit: TUGUnit;
     FIdleConnected: boolean;
     FPendingUnitDependencyRoute: TStrings;
@@ -231,14 +247,17 @@ type
     fImgIndexProject: integer;
     fImgIndexUnit: integer;
     fImgIndexPackage: integer;
+    fImgIndexPackageRequired: integer;
     fImgIndexDirectory: integer;
     fImgIndexOverlayImplUses: integer;
     fImgIndexOverlayIntfCycle: integer;
     fImgIndexOverlayImplCycle: integer;
     fAllUnitsTVSearchStartNode: TTreeNode;
     fSelUnitsTVSearchStartNode: TTreeNode;
+    FGroupLvlGraphSelectionsList: TStringList;
     function CreateAllUnitsTree: TUDNode;
     function CreateSelUnitsTree: TUDNode;
+    procedure DoLoadedOpts(Sender: TObject);
     procedure ExpandPendingUnitDependencyRoute(RootNode: TUDNode);
     procedure ConvertUnitNameRouteToPath(Route: TStrings); // inserts missing links
     procedure AddUsesSubNodes(UDNode: TUDNode);
@@ -246,6 +265,8 @@ type
       ParentTVNode: TTreeNode; ParentUDNode: TUDNode; Expand: boolean);
     procedure FreeUsesGraph;
     function GetPopupTV_UDNode(out UDNode: TUDNode): boolean;
+    procedure GraphOptsApplyClicked(AnOpts: TLvlGraphOptions; AGraph: TLvlGraph
+      );
     procedure SelectNextSearchTV(TV: TTreeView; StartTVNode: TTreeNode;
       SearchNext, SkipStart: boolean);
     function FindNextTVNode(StartNode: TTreeNode;
@@ -267,6 +288,7 @@ type
     procedure AddAdditionalFilesAsStartUnits;
     procedure SetupGroupsTabSheet;
     procedure SetupUnitsTabSheet;
+    procedure StoreGroupLvlGraphSelections;
     procedure UpdateUnitsButtons;
     procedure UpdateAll;
     procedure UpdateGroupsLvlGraph;
@@ -542,26 +564,36 @@ procedure TUnitDependenciesWindow.FormCreate(Sender: TObject);
 begin
   Name := NonModalIDEWindowNames[nmiwUnitDependenciesName];
 
+  FGroupLvlGraphSelectionsList := TStringList.Create;
   FPendingUnitDependencyRoute:=TStringList.Create;
   CreateUsesGraph(FUsesGraph,FGroups);
 
-  fImgIndexProject   := IDEImages.LoadImage(16, 'item_project');
-  fImgIndexUnit      := IDEImages.LoadImage(16, 'item_unit');
-  fImgIndexPackage   := IDEImages.LoadImage(16, 'pkg_required');
-  fImgIndexDirectory := IDEImages.LoadImage(16, 'pkg_files');
-  fImgIndexOverlayImplUses := IDEImages.LoadImage(16, 'pkg_core_overlay');
-  fImgIndexOverlayIntfCycle := IDEImages.LoadImage(16, 'ce_cycleinterface');
-  fImgIndexOverlayImplCycle := IDEImages.LoadImage(16, 'ce_cycleimplementation');
+  fImgIndexProject   := IDEImages.LoadImage('item_project');
+  fImgIndexUnit      := IDEImages.LoadImage('item_unit');
+  fImgIndexPackage          := IDEImages.LoadImage('item_package');
+  fImgIndexPackageRequired   := IDEImages.LoadImage('pkg_required');
+  fImgIndexDirectory := IDEImages.LoadImage('pkg_files');
+  fImgIndexOverlayImplUses := IDEImages.LoadImage('pkg_core_overlay');
+  fImgIndexOverlayIntfCycle := IDEImages.LoadImage('ce_cycleinterface');
+  fImgIndexOverlayImplCycle := IDEImages.LoadImage('ce_cycleimplementation');
   AllUnitsTreeView.Images:=IDEImages.Images_16;
   SelUnitsTreeView.Images:=IDEImages.Images_16;
 
   Caption:=lisMenuViewUnitDependencies;
   RefreshButton.Caption:=dlgUnitDepRefresh;
+  GraphOptsMenuItem.Caption := ShowOptions;
 
   MainPageControl.ActivePage:=UnitsTabSheet;
 
   SetupUnitsTabSheet;
   SetupGroupsTabSheet;
+
+  FPackageGraphOpts := TLvlGraphOptions.Create;
+  FPackageGraphOpts.OnLoaded := @DoLoadedOpts;
+  FUnitGraphOpts := TLvlGraphOptions.Create;
+  FUnitGraphOpts.OnLoaded := @DoLoadedOpts;
+  EnvironmentOptions.RegisterSubConfig(FPackageGraphOpts, 'UnitDependencies/PackageGraph');
+  EnvironmentOptions.RegisterSubConfig(FUnitGraphOpts, 'UnitDependencies/UnitGraph');
 
   StartParsing;
 end;
@@ -603,6 +635,27 @@ begin
   SelUnitsSearchEdit.TextHint:=ResStrSearch;
 end;
 
+procedure TUnitDependenciesWindow.GraphOptsMenuItemClick(Sender: TObject);
+begin
+  if GraphPopupMenu.PopupComponent = GroupsLvlGraph then begin
+    if ShowDependencyGraphOptions(FPackageGraphOpts, GroupsLvlGraph.Graph,
+      UnitDepOptionsForPackage, @GraphOptsApplyClicked) = mrOK then begin
+      FPackageGraphOpts.WriteToGraph(GroupsLvlGraph);
+      UpdateGroupsLvlGraph;
+      MainIDEInterface.SaveEnvironment;
+    end;
+  end
+  else
+  begin
+    if ShowDependencyGraphOptions(FUnitGraphOpts, UnitsLvlGraph.Graph,
+      UnitDepOptionsForUnit, @GraphOptsApplyClicked) = mrOK then begin
+      FUnitGraphOpts.WriteToGraph(UnitsLvlGraph);
+      UpdateUnitsLvlGraph;
+      MainIDEInterface.SaveEnvironment;
+    end;
+  end;
+end;
+
 procedure TUnitDependenciesWindow.RefreshButtonClick(Sender: TObject);
 begin
   if udwParsing in FFlags then exit;
@@ -635,6 +688,24 @@ begin
   StatsLabel.Caption:=Format(lisUDScanningUnits, [IntToStr(Cnt)]);
 end;
 
+procedure TUnitDependenciesWindow.UnitGraphFilterItemClick(Sender: TObject;
+  Index: integer);
+begin
+  UpdateUnitsLvlGraph;
+end;
+
+procedure TUnitDependenciesWindow.UnitGraphFilterSelectionChange(
+  Sender: TObject; User: boolean);
+var
+  n: TLvlGraphNode;
+begin
+  if not User then
+    exit;
+  n := UnitsLvlGraph.Graph.GetNode(UnitGraphFilter.GetSelectedText, False);
+  if n <> nil then
+    UnitsLvlGraph.SelectedNode := n;
+end;
+
 procedure TUnitDependenciesWindow.UnitsLvlGraphMouseDown(Sender: TObject;
   Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 var
@@ -654,8 +725,14 @@ procedure TUnitDependenciesWindow.UnitsLvlGraphSelectionChanged(Sender: TObject)
 var
   GraphNode: TLvlGraphNode;
   UGUnit: TUGUnit;
+  i: Integer;
 begin
   GraphNode:=UnitsLvlGraph.Graph.FirstSelected;
+  if GraphNode <> nil then begin
+    i := UnitGraphFilter.Items.IndexOf(TUGUnit(GraphNode.Data).TheUnitName);
+    if i >= 0 then
+      UnitGraphFilter.ItemIndex := i;
+  end;
   while GraphNode<>nil do begin
     UGUnit:=TUGUnit(GraphNode.Data);
     if UGUnit<>nil then begin
@@ -776,6 +853,13 @@ begin
   FreeAndNil(FNewGroups);
   FreeAndNil(FNewUsesGraph);
   FreeAndNil(FPendingUnitDependencyRoute);
+  FreeAndNil(FGroupLvlGraphSelectionsList);
+  if EnvironmentOptions <> nil then begin
+    EnvironmentOptions.UnRegisterSubConfig(FPackageGraphOpts);
+    EnvironmentOptions.UnRegisterSubConfig(FUnitGraphOpts);
+  end;
+  FreeAndNil(FPackageGraphOpts);
+  FreeAndNil(FUnitGraphOpts);
 end;
 
 procedure TUnitDependenciesWindow.GroupsLvlGraphSelectionChanged(Sender: TObject
@@ -1439,6 +1523,14 @@ begin
   Result:=RootNode;
 end;
 
+procedure TUnitDependenciesWindow.DoLoadedOpts(Sender: TObject);
+begin
+  if Sender = FPackageGraphOpts then
+    FPackageGraphOpts.WriteToGraph(GroupsLvlGraph)
+  else
+    FUnitGraphOpts.WriteToGraph(UnitsLvlGraph);
+end;
+
 procedure TUnitDependenciesWindow.ExpandPendingUnitDependencyRoute(RootNode: TUDNode);
 var
   i: Integer;
@@ -1650,6 +1742,8 @@ var
   Pkg: TIDEPackage;
   j: Integer;
   PkgFile: TLazPackageFile;
+  GraphGroup: TLvlGraphNode;
+  UnitGroup: TUGGroup;
 begin
   FNewUsesGraph.TargetAll:=true;
 
@@ -1683,6 +1777,31 @@ begin
       AFilename:=SrcEdit.FileName;
       if FilenameIsPascalUnit(AFilename) then
         FNewUsesGraph.AddStartUnit(AFilename);
+    end;
+  end;
+
+  if udwNeedUpdateUnitsLvlGraph in FFlags then begin
+    GraphGroup:=GroupsLvlGraph.Graph.FirstSelected;
+    while GraphGroup<>nil do begin
+      UnitGroup:=TUGGroup(GraphGroup.Data);
+      if UnitGroup<>nil then begin
+        if UnitGroup.Units.FindLowest = nil then begin
+          Pkg := PackageEditingInterface.FindPackageWithName(UnitGroup.Name);
+          if (Pkg <> nil) and (Pkg.FileCount > 0) and (FilenameIsAbsolute(Pkg.Filename)) then begin
+            for j:=0 to Pkg.FileCount-1 do begin
+              PkgFile:=Pkg.Files[j];
+              if PkgFile.Removed then continue;
+              if not (PkgFile.FileType in PkgFileRealUnitTypes) then continue;
+              if not PkgFile.InUses then continue;
+              aFilename:=PkgFile.GetFullFilename;
+              if FilenameIsAbsolute(AFilename)
+              and FilenameIsPascalUnit(AFilename) then
+                FNewUsesGraph.AddStartUnit(AFilename);
+            end;
+          end;
+        end;
+      end;
+      GraphGroup:=GraphGroup.NextSelected;
     end;
   end;
 
@@ -1740,7 +1859,10 @@ begin
     Height:=200;
     NodeStyle.GapBottom:=5;
     Parent:=GroupsTabSheet;
+    Options := Options + [lgoMinimizeEdgeLens];
     OnSelectionChanged:=@GroupsLvlGraphSelectionChanged;
+    Images:=IDEImages.Images_16;
+    PopupMenu := GraphPopupMenu;
   end;
 
   GroupsSplitter.Top:=GroupsLvlGraph.Height;
@@ -1752,9 +1874,12 @@ begin
     Caption:='';
     Align:=alClient;
     NodeStyle.GapBottom:=5;
-    Parent:=GroupsTabSheet;
+    Parent:=UnitGraphPanel;
+    Options := Options + [lgoMinimizeEdgeLens];
     OnSelectionChanged:=@UnitsLvlGraphSelectionChanged;
     OnMouseDown:=@UnitsLvlGraphMouseDown;
+    Images:=IDEImages.Images_16;
+    PopupMenu := GraphPopupMenu;
   end;
 end;
 
@@ -1776,23 +1901,23 @@ begin
   AllUnitsGroupBox.Caption:=lisUDAllUnits;
 
   AllUnitsShowDirsSpeedButton.Hint:=lisUDShowNodesForDirectories;
-  AllUnitsShowDirsSpeedButton.LoadGlyphFromResourceName(HInstance, 'pkg_hierarchical');
+  IDEImages.AssignImage(AllUnitsShowDirsSpeedButton, 'pkg_hierarchical');
   AllUnitsShowDirsSpeedButton.Down:=true;
   AllUnitsShowGroupNodesSpeedButton.Hint:=lisUDShowNodesForProjectAndPackages;
-  AllUnitsShowGroupNodesSpeedButton.LoadGlyphFromResourceName(HInstance, 'pkg_hierarchical');
+  IDEImages.AssignImage(AllUnitsShowGroupNodesSpeedButton, 'pkg_hierarchical');
   AllUnitsShowGroupNodesSpeedButton.Down:=true;
 
   AllUnitsSearchNextSpeedButton.Hint:=lisUDSearchNextOccurrenceOfThisPhrase;
-  AllUnitsSearchNextSpeedButton.LoadGlyphFromResourceName(HInstance, 'arrow_down');
+  IDEImages.AssignImage(AllUnitsSearchNextSpeedButton, 'arrow_down');
   AllUnitsSearchPrevSpeedButton.Hint:=lisUDSearchPreviousOccurrenceOfThisPhrase;
-  AllUnitsSearchPrevSpeedButton.LoadGlyphFromResourceName(HInstance, 'arrow_up');
+  IDEImages.AssignImage(AllUnitsSearchPrevSpeedButton, 'arrow_up');
 
   // selected units
   SelectedUnitsGroupBox.Caption:=lisUDSelectedUnits;
   SelUnitsSearchNextSpeedButton.Hint:=lisUDSearchNextUnitOfThisPhrase;
-  SelUnitsSearchNextSpeedButton.LoadGlyphFromResourceName(HInstance, 'arrow_down');
+  IDEImages.AssignImage(SelUnitsSearchNextSpeedButton, 'arrow_down');
   SelUnitsSearchPrevSpeedButton.Hint:=lisUDSearchPreviousUnitOfThisPhrase;
-  SelUnitsSearchPrevSpeedButton.LoadGlyphFromResourceName(HInstance, 'arrow_up');
+  IDEImages.AssignImage(SelUnitsSearchPrevSpeedButton, 'arrow_up');
 
   // popup menu
   UnitsTVCopyFilenameMenuItem.Caption:=uemCopyFilename;
@@ -1801,6 +1926,20 @@ begin
   UnitsTVCollapseAllMenuItem.Caption:=lisUDCollapseAllNodes;
 
   UpdateUnitsButtons;
+end;
+
+procedure TUnitDependenciesWindow.StoreGroupLvlGraphSelections;
+var
+  SelNode: TLvlGraphNode;
+begin
+  SelNode := GroupsLvlGraph.Graph.FirstSelected;
+  if SelNode = nil then
+    exit;
+  FGroupLvlGraphSelectionsList.Clear;
+  while SelNode <> nil do begin
+    FGroupLvlGraphSelectionsList.Add(SelNode.Caption);
+    SelNode := SelNode.NextSelected;
+  end;
 end;
 
 procedure TUnitDependenciesWindow.UpdateUnitsButtons;
@@ -1825,29 +1964,37 @@ var
   i: Integer;
   RequiredPkg: TIDEPackage;
   GroupObj: TObject;
-  GraphGroup: TLvlGraphNode;
+  GraphGroup, ReqNode: TLvlGraphNode;
   UnitNode: TAVLTreeNode;
   GrpUnit: TUDUnit;
   UsedUnit: TUDUnit;
 begin
   Exclude(FFlags,udwNeedUpdateGroupsLvlGraph);
   GroupsLvlGraph.BeginUpdate;
+  GroupsLvlGraph.OnSelectionChanged:=nil;
   Graph:=GroupsLvlGraph.Graph;
+
+  StoreGroupLvlGraphSelections;
   Graph.Clear;
   AVLNode:=Groups.Groups.FindLowest;
   while AVLNode<>nil do begin
     Group:=TUGGroup(AVLNode.Data);
     AVLNode:=Groups.Groups.FindSuccessor(AVLNode);
     GraphGroup:=Graph.GetNode(Group.Name,true);
+    if FGroupLvlGraphSelectionsList.IndexOf(Group.Name) >= 0 then
+      GraphGroup.Selected := True;
     GraphGroup.Data:=Group;
     GroupObj:=nil;
     if IsProjectGroup(Group) then begin
       // project
       GroupObj:=LazarusIDE.ActiveProject;
-      GraphGroup.Selected:=true;
+      GraphGroup.Selected:=(FGroupLvlGraphSelectionsList.Count=0) or
+        (FGroupLvlGraphSelectionsList.IndexOf(Group.Name)>= 0);
+      GraphGroup.ImageIndex := fImgIndexProject;
     end else begin
       // package
       GroupObj:=PackageEditingInterface.FindPackageWithName(Group.Name);
+      GraphGroup.ImageIndex := fImgIndexPackage;
     end;
     if GroupObj<>nil then begin
       // add lpk dependencies
@@ -1858,7 +2005,11 @@ begin
           // add for each dependency an edge in the Graph
           for i:=0 to PkgList.Count-1 do begin
             RequiredPkg:=TIDEPackage(PkgList[i]);
-            Graph.GetEdge(GraphGroup,Graph.GetNode(RequiredPkg.Name,true),true);
+            ReqNode:=Graph.GetNode(RequiredPkg.Name,true);
+            if FGroupLvlGraphSelectionsList.IndexOf(RequiredPkg.Name) >= 0 then
+              ReqNode.Selected := True;
+            ReqNode.ImageIndex := fImgIndexPackage;
+            Graph.GetEdge(GraphGroup,ReqNode,true);
           end;
         end;
       finally
@@ -1874,12 +2025,17 @@ begin
         for i:=0 to GrpUnit.UsesUnits.Count-1 do begin
           UsedUnit:=TUDUnit(TUDUses(GrpUnit.UsesUnits[i]).UsesUnit);
           if (UsedUnit.Group=nil) or (UsedUnit.Group=Group) then continue;
-          Graph.GetEdge(GraphGroup,Graph.GetNode(UsedUnit.Group.Name,true),true);
+          ReqNode := Graph.GetNode(UsedUnit.Group.Name,true);
+            if FGroupLvlGraphSelectionsList.IndexOf(UsedUnit.Group.Name) >= 0 then
+              ReqNode.Selected := True;
+          Graph.GetEdge(GraphGroup,ReqNode,true);
         end;
       end;
     end;
   end;
   GroupsLvlGraph.EndUpdate;
+  GroupsLvlGraph.OnSelectionChanged:=@GroupsLvlGraphSelectionChanged;
+  FGroupLvlGraphSelectionsList.Clear;
 end;
 
 procedure TUnitDependenciesWindow.UpdateUnitsLvlGraph;
@@ -1895,7 +2051,7 @@ var
   UnitGroup: TUGGroup;
   AVLNode: TAVLTreeNode;
   GroupUnit: TUDUnit;
-  i: Integer;
+  i, j: Integer;
   HasChanged: Boolean;
   Graph: TLvlGraph;
   CurUses: TUDUses;
@@ -1903,6 +2059,8 @@ var
   TargetGraphNode: TLvlGraphNode;
   NewGroups: TStringToPointerTree;
   UsedUnit: TUDUnit;
+  Pkg: TIDEPackage;
+  c: String;
 begin
   Exclude(FFlags,udwNeedUpdateUnitsLvlGraph);
   NewGroups:=TStringToPointerTree.Create(false);
@@ -1915,6 +2073,17 @@ begin
       if UnitGroup<>nil then begin
         NewGroups[UnitGroup.Name]:=UnitGroup;
         AVLNode:=UnitGroup.Units.FindLowest;
+        if AVLNode = nil then begin
+          if IsProjectGroup(UnitGroup.Name) and (LazarusIDE.ActiveProject.FileCount <> 0) then begin
+            Include(FFlags,udwNeedUpdateUnitsLvlGraph)
+          end
+          else begin
+            Pkg := PackageEditingInterface.FindPackageWithName(UnitGroup.Name);
+            if (Pkg <> nil) and (Pkg.FileCount > 0) and (FilenameIsAbsolute(Pkg.Filename))
+            then
+              Include(FFlags,udwNeedUpdateUnitsLvlGraph);
+          end
+        end;
         while AVLNode<>nil do begin
           GroupUnit:=TUDUnit(AVLNode.Data);
           NewUnits[GroupUnit.Filename]:=GroupUnit;
@@ -1923,6 +2092,8 @@ begin
       end;
       GraphGroup:=GraphGroup.NextSelected;
     end;
+    if udwNeedUpdateUnitsLvlGraph in FFlags then
+      StartParsing;
 
     // check if something changed
     Graph:=UnitsLvlGraph.Graph;
@@ -1945,23 +2116,59 @@ begin
     // units changed -> update level graph of units
     UnitsLvlGraph.BeginUpdate;
     Graph.Clear;
+    for j := 0 to UnitGraphFilter.Count - 1 do
+      UnitGraphFilter.Items.Objects[j] := TObject(1);
     AVLNode:=NewUnits.Tree.FindLowest;
     while AVLNode<>nil do begin
       GroupUnit:=TUDUnit(NewUnits.GetNodeData(AVLNode)^.Value);
-      SourceGraphNode:=Graph.GetNode(UnitToCaption(GroupUnit),true);
+      c := UnitToCaption(GroupUnit);
+      j := UnitGraphFilter.Items.IndexOf(c);
+      if (j >= 0) then begin
+        UnitGraphFilter.Items.Objects[j] := nil;
+        if (not UnitGraphFilter.Checked[j]) then begin
+          AVLNode:=NewUnits.Tree.FindSuccessor(AVLNode);
+          Continue;
+        end;
+      end
+      else begin
+        j := UnitGraphFilter.Items.Add(c);
+        UnitGraphFilter.Checked[j] := True;
+      end;
+      SourceGraphNode:=Graph.GetNode(c,true);
       SourceGraphNode.Data:=GroupUnit;
+      SourceGraphNode.ImageIndex := fImgIndexUnit;
       if GroupUnit.UsesUnits<>nil then begin
         for i:=0 to GroupUnit.UsesUnits.Count-1 do begin
           CurUses:=TUDUses(GroupUnit.UsesUnits[i]);
           UsedUnit:=TUDUnit(CurUses.UsesUnit);
           if UsedUnit.Group=nil then continue;
           if not NewGroups.Contains(UsedUnit.Group.Name) then continue;
-          TargetGraphNode:=Graph.GetNode(UnitToCaption(UsedUnit),true);
+          c := UnitToCaption(UsedUnit);
+          j := UnitGraphFilter.Items.IndexOf(c);
+          if (j >= 0) then begin
+            UnitGraphFilter.Items.Objects[j] := nil;
+            if (not UnitGraphFilter.Checked[j]) then begin
+              AVLNode:=NewUnits.Tree.FindSuccessor(AVLNode);
+              Continue;
+            end;
+          end
+          else begin
+            j := UnitGraphFilter.Items.Add(c);
+            UnitGraphFilter.Checked[j] := True;
+          end;
+          TargetGraphNode:=Graph.GetNode(c,true);
           TargetGraphNode.Data:=UsedUnit;
+          TargetGraphNode.ImageIndex := fImgIndexUnit;
           Graph.GetEdge(SourceGraphNode,TargetGraphNode,true);
         end;
       end;
       AVLNode:=NewUnits.Tree.FindSuccessor(AVLNode);
+    end;
+    j := UnitGraphFilter.Count - 1;
+    while j >= 0 do begin
+      if UnitGraphFilter.Items.Objects[j] <> nil then
+        UnitGraphFilter.Items.Delete(j);
+      dec(j);
     end;
 
     UnitsLvlGraph.EndUpdate;
@@ -2006,7 +2213,10 @@ procedure TUnitDependenciesWindow.FreeUsesGraph;
 begin
   FreeAndNil(FAllUnitsRootUDNode);
   FreeAndNil(FSelUnitsRootUDNode);
+  StoreGroupLvlGraphSelections;
+  GroupsLvlGraph.OnSelectionChanged:=nil;
   GroupsLvlGraph.Clear;
+  GroupsLvlGraph.OnSelectionChanged:=@GroupsLvlGraphSelectionChanged;
   UnitsLvlGraph.Clear;
   FreeAndNil(FGroups);
   FreeAndNil(FUsesGraph);
@@ -2026,6 +2236,22 @@ begin
   if (TVNode=nil) or not (TObject(TVNode.Data) is TUDNode) then exit;
   UDNode:=TUDNode(TVNode.Data);
   Result:=true;
+end;
+
+procedure TUnitDependenciesWindow.GraphOptsApplyClicked(
+  AnOpts: TLvlGraphOptions; AGraph: TLvlGraph);
+begin
+  if AGraph = GroupsLvlGraph.Graph then begin
+    AnOpts.WriteToGraph(GroupsLvlGraph);
+    UpdateGroupsLvlGraph;
+    GroupsLvlGraph.AutoLayout;
+  end
+  else begin
+    AnOpts.WriteToGraph(UnitsLvlGraph);
+    UpdateUnitsLvlGraph;
+    UnitsLvlGraph.AutoLayout;
+  end;
+  MainIDEInterface.SaveEnvironment;
 end;
 
 procedure TUnitDependenciesWindow.UpdateAllUnitsTreeView;
@@ -2172,7 +2398,7 @@ begin
     if IsProjectGroup(Node.Group) then
       Result:=fImgIndexProject
     else
-      Result:=fImgIndexPackage;
+      Result:=fImgIndexPackageRequired;
   udnDirectory: Result:=fImgIndexDirectory;
   //udnInterface: ;
   //udnImplementation: ;

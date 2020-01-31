@@ -14,7 +14,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -28,9 +28,13 @@ unit OI_options;
 interface
 
 uses
-  Classes, SysUtils, FileUtil, Forms, StdCtrls, Dialogs, Spin, LCLProc,
-  ObjectInspector, LazarusIDEStrConsts, EnvironmentOpts, IDEOptionsIntf,
-  ColorBox, Graphics;
+  Classes, SysUtils,
+  // LCL
+  LCLProc, Forms, StdCtrls, Dialogs, Spin, ColorBox, Graphics, Buttons,
+  // IdeIntf
+  ObjectInspector, IDEOptionsIntf, IDEOptEditorIntf, IDEImagesIntf,
+  // IDE
+  LazarusIDEStrConsts, EnvironmentOpts;
 
 type
   TOIColor = (
@@ -42,6 +46,7 @@ type
     ocPropName,
     ocValue,
     ocDefValue,
+    ocValueDifferBackgrnd,
     ocSubProp,
     ocReference,
     ocReadOnly
@@ -56,7 +61,8 @@ type
     ooDrawGridLines,
     ooShowGutter,
     ooShowStatusBar,
-    ooShowInfoBox
+    ooShowInfoBox,
+    ooShowPropertyFilter
   );
 
   TSpeedOISettings = record
@@ -68,8 +74,8 @@ type
   { TOIOptionsFrame }
 
   TOIOptionsFrame = class(TAbstractIDEOptionsEditor)
-    BtnUseDefaultDelphiSettings: TButton;
-    BtnUseDefaultLazarusSettings: TButton;
+    BtnUseDefaultDelphiSettings: TBitBtn;
+    BtnUseDefaultLazarusSettings: TBitBtn;
     OIOptsCenterLabel: TLabel;
     OIMiscGroupBox: TGroupBox;
     ObjectInspectorSpeedSettingsGroupBox: TGroupBox;
@@ -88,6 +94,7 @@ type
     OIShowStatusBarCheckBox: TCheckBox;
     OICheckboxForBooleanCheckBox: TCheckBox;
     OIShowInfoBoxCheckBox: TCheckBox;
+    OIShowPropertyFilterCheckBox: TCheckBox;
     procedure BtnUseDefaultDelphiSettingsClick(Sender: TObject);
     procedure BtnUseDefaultLazarusSettingsClick(Sender: TObject);
     procedure ColorBoxChange(Sender: TObject);
@@ -113,17 +120,18 @@ const
   DefaultOISettings: TSpeedOISettings = (
     Name: 'Default';
     Colors: (
-      { ocBackground    } DefBackgroundColor,
-      { ocGutter        } DefGutterColor,
-      { ocGutterEdge    } DefGutterEdgeColor,
-      { ocHighlight     } DefHighlightColor,
-      { ocHighlightFont } DefHighlightFontColor,
-      { ocPropName      } DefNameColor,
-      { ocValue         } DefValueColor,
-      { ocDefValue      } DefDefaultValueColor,
-      { ocSubProp       } DefSubPropertiesColor,
-      { ocReference     } DefReferencesColor,
-      { ocReadOnly      } DefReadOnlyColor
+      { ocBackground         } DefBackgroundColor,
+      { ocGutter             } DefGutterColor,
+      { ocGutterEdge         } DefGutterEdgeColor,
+      { ocHighlight          } DefHighlightColor,
+      { ocHighlightFont      } DefHighlightFontColor,
+      { ocPropName           } DefNameColor,
+      { ocValue              } DefValueColor,
+      { ocDefValue           } DefDefaultValueColor,
+      { ocValueDifferBackgrnd} DefValueDifferBackgrndColor,
+      { ocSubProp            } DefSubPropertiesColor,
+      { ocReference          } DefReferencesColor,
+      { ocReadOnly           } DefReadOnlyColor
       );
     Options: (
       { ooShowComponentTree  } True,
@@ -134,24 +142,26 @@ const
       { ooDrawGridLines      } True,
       { ooShowGutter         } True,
       { ooShowStatusBar      } True,
-      { ooShowInfoBox        } True
+      { ooShowInfoBox        } True,
+      { ooShowPropertyFilter } True
     );
   );
 
   DelphiOISettings: TSpeedOISettings = (
     Name: 'Delphi';
     Colors: (
-      { ocBackground    } clWindow,
-      { ocGutter        } clCream,
-      { ocGutterEdge    } clGray,
-      { ocHighlight     } $E0E0E0,
-      { ocHighlightFont } clBlack,
-      { ocPropName      } clBtnText,
-      { ocValue         } clNavy,
-      { ocDefValue      } clNavy,
-      { ocSubProp       } clGreen,
-      { ocReference     } clMaroon,
-      { ocReadOnly      } clGrayText
+      { ocBackground         } clWindow,
+      { ocGutter             } clCream,
+      { ocGutterEdge         } clGray,
+      { ocHighlight          } $E0E0E0,
+      { ocHighlightFont      } clBlack,
+      { ocPropName           } clBtnText,
+      { ocValue              } clNavy,
+      { ocDefValue           } clNavy,
+      { ocValueDifferBackgrnd} clWindow,
+      { ocSubProp            } clGreen,
+      { ocReference          } clMaroon,
+      { ocReadOnly           } clGrayText
       );
     Options: (
       { ooShowComponentTree  } True,
@@ -162,7 +172,8 @@ const
       { ooDrawGridLines      } False,
       { ooShowGutter         } True,
       { ooShowStatusBar      } True,
-      { ooShowInfoBox        } False
+      { ooShowInfoBox        } False,
+      { ooShowPropertyFilter } True
     );
   );
 
@@ -174,9 +185,10 @@ begin
   OIMiscGroupBox.Caption := dlgOIMiscellaneous;
   OIOptionsGroupBox.Caption := lisOptions;
   ObjectInspectorSpeedSettingsGroupBox.Caption := dlgOISpeedSettings;
-
   BtnUseDefaultLazarusSettings.Caption := dlgOIUseDefaultLazarusSettings;
+  IDEImages.AssignImage(BtnUseDefaultLazarusSettings, 'restore_defaults');
   BtnUseDefaultDelphiSettings.Caption := dlgOIUseDefaultDelphiSettings;
+  IDEImages.AssignImage(BtnUseDefaultDelphiSettings, 'restore_defaults');
   OIDefaultItemHeightLabel.Caption := dlgOIItemHeight;
   OIDefaultItemHeightSpinEdit.Hint := dlgHeightOfOnePropertyInGrid;
 
@@ -190,6 +202,7 @@ begin
   OIShowStatusBarCheckBox.Hint := lisStatusBarShowsPropertysNameAndClass;
   OIShowHintCheckBox.Caption := lisShowHintsInObjectInspector;
   OIShowHintCheckBox.Hint := lisHintAtPropertysNameShowsDescription;
+  OIShowPropertyFilterCheckBox.Caption := lisShowPropertyFilterInObjectInspector;
 
   OICheckboxForBooleanCheckBox.Caption := lisUseCheckBoxForBooleanValues;
   OICheckboxForBooleanCheckBox.Hint := lisDefaultIsComboboxWithTrueAndFalse;
@@ -213,6 +226,7 @@ begin
   Items.Add(dlgPropNameColor);
   Items.Add(dlgValueColor);
   Items.Add(dlgDefValueColor);
+  Items.Add(dlgDifferentValueBackgroundColor);
   Items.Add(dlgSubPropColor);
   Items.Add(dlgReferenceColor);
   Items.Add(dlfReadOnlyColor)
@@ -239,6 +253,7 @@ begin
   OIShowGutterCheckBox.Checked := ASettings.Options[ooShowGutter];
   OIShowStatusBarCheckBox.Checked := ASettings.Options[ooShowStatusBar];
   OIShowInfoBoxCheckBox.Checked := ASettings.Options[ooShowInfoBox];
+  OIShowPropertyFilterCheckBox.Checked := ASettings.Options[ooShowPropertyFilter];
 end;
 
 procedure TOIOptionsFrame.ColorBoxChange(Sender: TObject);
@@ -286,6 +301,7 @@ begin
   ASettings.Colors[ocPropName] := o.PropertyNameColor;
   ASettings.Colors[ocValue] := o.ValueColor;
   ASettings.Colors[ocDefValue] := o.DefaultValueColor;
+  ASettings.Colors[ocValueDifferBackgrnd] := o.ValueDifferBackgrndColor;
   ASettings.Colors[ocSubProp] := o.SubPropertiesColor;
   ASettings.Colors[ocReference] := o.ReferencesColor;
   ASettings.Colors[ocReadOnly] := o.ReadOnlyColor;
@@ -299,6 +315,7 @@ begin
   ASettings.Options[ooShowGutter] := o.ShowGutter;
   ASettings.Options[ooShowStatusBar] := o.ShowStatusBar;
   ASettings.Options[ooShowInfoBox] := o.ShowInfoBox;
+  ASettings.Options[ooShowPropertyFilter] := o.ShowPropertyFilter;
   ApplyOISettings(ASettings);
   OIDefaultItemHeightSpinEdit.Value := o.DefaultItemHeight;
   FLoaded := True;
@@ -317,6 +334,7 @@ begin
   o.PropertyNameColor := ColorsListBox.Colors[Ord(ocPropName)];
   o.ValueColor := ColorsListBox.Colors[Ord(ocValue)];
   o.DefaultValueColor := ColorsListBox.Colors[Ord(ocDefValue)];
+  o.ValueDifferBackgrndColor := ColorsListBox.Colors[Ord(ocValueDifferBackgrnd)];
   o.SubPropertiesColor := ColorsListBox.Colors[Ord(ocSubProp)];
   o.ReferencesColor := ColorsListBox.Colors[Ord(ocReference)];
   o.ReadOnlyColor := ColorsListBox.Colors[Ord(ocReadOnly)];
@@ -330,6 +348,7 @@ begin
   o.ShowGutter := OIShowGutterCheckBox.Checked;
   o.ShowStatusBar := OIShowStatusBarCheckBox.Checked;
   o.ShowInfoBox := OIShowInfoBoxCheckBox.Checked;
+  o.ShowPropertyFilter := OIShowPropertyFilterCheckBox.Checked;
   o.DefaultItemHeight := RoundToInt(OIDefaultItemHeightSpinEdit.Value);
 end;
 

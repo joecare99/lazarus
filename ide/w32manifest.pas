@@ -23,7 +23,7 @@
  *   A copy of the GNU General Public License is available on the World    *
  *   Wide Web at <http://www.gnu.org/copyleft/gpl.html>. You can also      *
  *   obtain it by writing to the Free Software Foundation,                 *
- *   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.        *
+ *   Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1335, USA.   *
  *                                                                         *
  ***************************************************************************
 
@@ -40,7 +40,10 @@ uses
   Classes, SysUtils, FileUtil, Laz2_XMLCfg, LCLProc, Controls, Forms,
   CodeToolManager, LazConf, LResources,
   ProjectResourcesIntf, resource;
-   
+
+const
+  DefaultXPManifestTextName = 'CompanyName.ProductName.AppName';
+  DefaultXPManifestTextDesc = 'Your application description.';
 type
   TXPManifestExecutionLevel = (
     xmelAsInvoker,
@@ -48,28 +51,46 @@ type
     xmelRequireAdministrator
   );
 
+  TXPManifestDpiAware = (
+    xmdaFalse,
+    xmdaTrue,
+    xmdaPerMonitor,
+    xmdaTruePM,
+    xmdaPerMonitorV2
+  );
+
+type
   { TProjectXPManifest }
 
   TProjectXPManifest = class(TAbstractProjectResource)
   private
     FExecutionLevel: TXPManifestExecutionLevel;
-    FIsDpiaAware: boolean;
+    FDpiAware: TXPManifestDpiAware;
     FUIAccess: Boolean;
     FUseManifest: boolean;
-    procedure SetDpiAware(const AValue: boolean);
+    FLongPathAware: Boolean;
+    FTextName: string;
+    FTextDesc: string;
+    procedure SetDpiAware(AValue: TXPManifestDpiAware);
     procedure SetExecutionLevel(AValue: TXPManifestExecutionLevel);
     procedure SetUIAccess(AValue: Boolean);
     procedure SetUseManifest(const AValue: boolean);
+    procedure SetLongPathAware(AValue: Boolean);
+    procedure SetTextName(const AValue: string);
+    procedure SetTextDesc(const AValue: string);
   public
     constructor Create; override;
     function UpdateResources(AResources: TAbstractProjectResources; const {%H-}MainFilename: string): Boolean; override;
-    procedure WriteToProjectFile(AConfig: {TXMLConfig}TObject; Path: String); override;
-    procedure ReadFromProjectFile(AConfig: {TXMLConfig}TObject; Path: String); override;
+    procedure WriteToProjectFile(AConfig: {TXMLConfig}TObject; const Path: String); override;
+    procedure ReadFromProjectFile(AConfig: {TXMLConfig}TObject; const Path: String); override;
 
     property UseManifest: boolean read FUseManifest write SetUseManifest;
-    property DpiAware: boolean read FIsDpiaAware write SetDpiAware;
+    property DpiAware: TXPManifestDpiAware read FDpiAware write SetDpiAware;
     property ExecutionLevel: TXPManifestExecutionLevel read FExecutionLevel write SetExecutionLevel;
     property UIAccess: Boolean read FUIAccess write SetUIAccess;
+    property LongPathAware: Boolean read FLongPathAware write SetLongPathAware;
+    property TextName: string read FTextName write SetTextName;
+    property TextDesc: string read FTextDesc write SetTextDesc;
   end;
 
 const
@@ -78,14 +99,31 @@ const
     'highestAvailable',
     'requireAdministrator'
   );
+
+  ManifestDpiAwareValues: array[TXPManifestDpiAware] of string = (
+    'False',
+    'True',
+    'Per-monitor',
+    'True/PM',
+    'True/PM_V2'
+  );
+
+  ManifestDpiAwarenessValues: array[TXPManifestDpiAware] of string = (
+    '',
+    '',
+    '',
+    '',
+    '<dpiAwareness>PerMonitorV2, PerMonitor</dpiAwareness>'
+  );
+
 implementation
 
 const
-  sManifestFileDataStart: String =
+  sManifestFileData: String =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'#$D#$A+
     '<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">'#$D#$A+
-    ' <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="CompanyName.ProductName.YourApp" type="win32"/>'#$D#$A+
-    ' <description>Your application description here.</description>'#$D#$A+
+    ' <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="%s" type="win32"/>'#$D#$A+
+    ' <description>%s</description>'#$D#$A+
     ' <dependency>'#$D#$A+
     '  <dependentAssembly>'#$D#$A+
     '   <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>'#$D#$A+
@@ -111,15 +149,31 @@ const
     '   <!-- Windows 10 -->'#$D#$A+
     '   <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />'#$D#$A+
     '   </application>'#$D#$A+
-    '  </compatibility>'#$D#$A;
-  sManifestFileDataEnd: String =
-    '</assembly>';
-  sManifestFileDataDpiAware: String =
+    '  </compatibility>'#$D#$A+
     ' <asmv3:application xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">'#$D#$A+
     '  <asmv3:windowsSettings xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">'#$D#$A+
-    '   <dpiAware>true</dpiAware>'#$D#$A+
+    '   <dpiAware>%s</dpiAware>'#$D#$A+
     '  </asmv3:windowsSettings>'#$D#$A+
-    ' </asmv3:application>'#$D#$A;
+    '  <asmv3:windowsSettings xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">'#$D#$A+
+    '   %s'#$D#$A+
+    '   <longPathAware>%s</longPathAware>'#$D#$A+
+    '  </asmv3:windowsSettings>'#$D#$A+
+    ' </asmv3:application>'#$D#$A+
+    '</assembly>';
+
+function StrToXPManifestDpiAware(const s: string): TXPManifestDpiAware;
+begin
+  for Result:=Low(TXPManifestDpiAware) to High(TXPManifestDpiAware) do
+    if CompareText(s,ManifestDpiAwareValues[Result])=0 then exit;
+  Result:=xmdaFalse;
+end;
+
+function StrToXPManifestExecutionLevel(const s: string): TXPManifestExecutionLevel;
+begin
+  for Result:=Low(TXPManifestExecutionLevel) to High(TXPManifestExecutionLevel) do
+    if CompareText(s,ExecutionLevelToStr[Result])=0 then exit;
+  Result:=xmelAsInvoker;
+end;
 
 procedure TProjectXPManifest.SetUseManifest(const AValue: boolean);
 begin
@@ -128,10 +182,17 @@ begin
   Modified := True;
 end;
 
-procedure TProjectXPManifest.SetDpiAware(const AValue: boolean);
+procedure TProjectXPManifest.SetLongPathAware(AValue: Boolean);
 begin
-  if FIsDpiaAware = AValue then exit;
-  FIsDpiaAware := AValue;
+  if FLongPathAware = AValue then exit;
+  FLongPathAware := AValue;
+  Modified := True;
+end;
+
+procedure TProjectXPManifest.SetDpiAware(AValue: TXPManifestDpiAware);
+begin
+  if FDpiAware = AValue then Exit;
+  FDpiAware := AValue;
   Modified := True;
 end;
 
@@ -139,6 +200,20 @@ procedure TProjectXPManifest.SetExecutionLevel(AValue: TXPManifestExecutionLevel
 begin
   if FExecutionLevel = AValue then Exit;
   FExecutionLevel := AValue;
+  Modified := True;
+end;
+
+procedure TProjectXPManifest.SetTextDesc(const AValue: string);
+begin
+  if FTextDesc = AValue then Exit;
+  FTextDesc := AValue;
+  Modified := True;
+end;
+
+procedure TProjectXPManifest.SetTextName(const AValue: string);
+begin
+  if FTextName = AValue then Exit;
+  FTextName := AValue;
   Modified := True;
 end;
 
@@ -154,9 +229,12 @@ begin
   inherited Create;
   FIsDefaultOption := True;
   UseManifest := False;
-  DpiAware := False;
+  DpiAware := xmdaFalse;
   ExecutionLevel := xmelAsInvoker;
   UIAccess := False;
+  LongPathAware := False;
+  TextName := DefaultXPManifestTextName;
+  TextDesc := DefaultXPManifestTextDesc;
 end;
 
 function TProjectXPManifest.UpdateResources(AResources: TAbstractProjectResources;
@@ -174,29 +252,59 @@ begin
     Res := TGenericResource.Create(RType, RName);
     RType.Free; //no longer needed
     RName.Free;
-    ManifestFileData := Format(sManifestFileDataStart, [ExecutionLevelToStr[ExecutionLevel], BoolToStr(UIAccess, 'true', 'false')]);
-    if DpiAware then
-      ManifestFileData := ManifestFileData + sManifestFileDataDpiAware;
-    ManifestFileData := ManifestFileData + sManifestFileDataEnd;
+    ManifestFileData := Format(sManifestFileData, [
+      TextName,
+      TextDesc,
+      ExecutionLevelToStr[ExecutionLevel],
+      BoolToStr(UIAccess, 'true', 'false'),
+      ManifestDpiAwareValues[DpiAware],
+      ManifestDpiAwarenessValues[DpiAware],
+      BoolToStr(LongPathAware, 'true', 'false')
+      ]);
     Res.RawData.Write(ManifestFileData[1], Length(ManifestFileData));
     AResources.AddSystemResource(Res);
   end;
 end;
 
-procedure TProjectXPManifest.WriteToProjectFile(AConfig: TObject; Path: String);
+procedure TProjectXPManifest.WriteToProjectFile(AConfig: TObject;
+  const Path: String);
 begin
   TXMLConfig(AConfig).SetDeleteValue(Path+'General/UseXPManifest/Value', UseManifest, False);
-  TXMLConfig(AConfig).SetDeleteValue(Path+'General/XPManifest/DpiAware/Value', DpiAware, False);
-  TXMLConfig(AConfig).SetDeleteValue(Path+'General/XPManifest/ExecutionLevel/Value', Ord(ExecutionLevel), 0);
+  TXMLConfig(AConfig).SetDeleteValue(Path+'General/XPManifest/DpiAware/Value', ManifestDpiAwareValues[DpiAware], ManifestDpiAwareValues[xmdaFalse]);
+  TXMLConfig(AConfig).SetDeleteValue(Path+'General/XPManifest/ExecutionLevel/Value', ExecutionLevelToStr[ExecutionLevel], ExecutionLevelToStr[xmelAsInvoker]);
   TXMLConfig(AConfig).SetDeleteValue(Path+'General/XPManifest/UIAccess/Value', UIAccess, False);
+  TXMLConfig(AConfig).SetDeleteValue(Path+'General/XPManifest/LongPathAware/Value', LongPathAware, False);
+  TXMLConfig(AConfig).SetDeleteValue(Path+'General/XPManifest/TextName/Value', TextName, DefaultXPManifestTextName);
+  TXMLConfig(AConfig).SetDeleteValue(Path+'General/XPManifest/TextDesc/Value', TextDesc, DefaultXPManifestTextDesc);
 end;
 
-procedure TProjectXPManifest.ReadFromProjectFile(AConfig: TObject; Path: String);
+procedure TProjectXPManifest.ReadFromProjectFile(AConfig: TObject;
+  const Path: String);
+var
+  Cfg: TXMLConfig;
 begin
-  UseManifest := TXMLConfig(AConfig).GetValue(Path+'General/UseXPManifest/Value', False);
-  DpiAware := TXMLConfig(AConfig).GetValue(Path+'General/XPManifest/DpiAware/Value', False);
-  ExecutionLevel := TXPManifestExecutionLevel(TXMLConfig(AConfig).GetValue(Path+'General/XPManifest/ExecutionLevel/Value', 0));
-  UIAccess := TXMLConfig(AConfig).GetValue(Path+'General/XPManifest/UIAccess/Value', False);
+  Cfg := TXMLConfig(AConfig);
+  UseManifest := Cfg.GetValue(Path+'General/UseXPManifest/Value', False);
+
+  //support prev values "True/False"
+  if Cfg.GetValue(Path+'Version/Value',0)<=9 then
+  begin
+    if Cfg.GetValue(Path+'General/XPManifest/DpiAware/Value', False) then
+      DpiAware := xmdaTrue
+    else
+      DpiAware := xmdaFalse;
+  end else
+    DpiAware := StrToXPManifestDpiAware(Cfg.GetValue(Path+'General/XPManifest/DpiAware/Value', ''));
+
+  if Cfg.GetValue(Path+'Version/Value',0)<=9 then
+    ExecutionLevel := TXPManifestExecutionLevel(Cfg.GetValue(Path+'General/XPManifest/ExecutionLevel/Value', 0))
+  else
+    ExecutionLevel := StrToXPManifestExecutionLevel(Cfg.GetValue(Path+'General/XPManifest/ExecutionLevel/Value', ''));
+
+  UIAccess := Cfg.GetValue(Path+'General/XPManifest/UIAccess/Value', False);
+  LongPathAware := Cfg.GetValue(Path+'General/XPManifest/LongPathAware/Value', False);
+  TextName := Cfg.GetValue(Path+'General/XPManifest/TextName/Value', TextName);
+  TextDesc := Cfg.GetValue(Path+'General/XPManifest/TextDesc/Value', TextDesc);
 end;
 
 initialization

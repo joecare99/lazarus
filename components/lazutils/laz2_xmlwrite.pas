@@ -1,6 +1,7 @@
 {
  **********************************************************************
-  This file is based on the FCL unit xmlwrite svn revision 15251.
+  This file is part of LazUtils.
+  It is based on the FCL unit xmlwrite svn revision 15251.
 
   See the file COPYING.FPC, included in this distribution,
   for details about the license.
@@ -24,7 +25,7 @@ unit laz2_XMLWrite;
 
 interface
 
-uses Classes, laz2_DOM, SysUtils, laz2_xmlutils, lazutf8classes;
+uses Classes, LazUTF8, laz2_DOM, SysUtils, laz2_xmlutils, lazutf8classes;
 
 type
   TXMLWriterFlag = (
@@ -45,9 +46,6 @@ procedure WriteXML(Element: TDOMNode; AStream: TStream; Flags: TXMLWriterFlags =
 // ===================================================================
 
 implementation
-
-uses
-  LazUTF8;
 
 type
   TXMLWriter = class;
@@ -172,13 +170,14 @@ end;
 
 const
   AttrSpecialChars : array[boolean] of TSetOfChar = (
-    ['<', '"', '&', #0..#31], // false: default
-    ['<', '"', '&']  // true: write special characters
+    ['<', '"', '''', '&', #0..#31], // false: default
+    ['<', '"', '''', '&']  // true: write special characters
     );
   TextSpecialChars = ['<', '>', '&', #0..#31];
   CDSectSpecialChars = [']'];
   LineEndingChars = [#13, #10];
   QuotStr = '&quot;';
+  AposStr = '&apos;';
   AmpStr = '&amp;';
   ltStr = '&lt;';
   gtStr = '&gt;';
@@ -360,6 +359,7 @@ procedure AttrSpecialCharCallback(Sender: TXMLWriter; const s: DOMString;
 begin
   case s[idx] of
     '"': Sender.wrtStr(QuotStr);
+    '''': Sender.wrtStr(AposStr);
     '&': Sender.wrtStr(AmpStr);
     '<': Sender.wrtStr(ltStr);
     // Escape whitespace using CharRefs to be consistent with W3 spec § 3.3.3
